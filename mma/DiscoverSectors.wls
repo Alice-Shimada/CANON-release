@@ -1,5 +1,7 @@
 (*
 CANON_neu interface-only template: DISCOVER
+Corresponding agent skill:
+  ../skills/canon-discover-sectors/SKILL.md
 
 Invocation:
   wolframscript -file DiscoverSectors.wls <input.json> <output_dir>

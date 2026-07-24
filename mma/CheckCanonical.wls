@@ -1,5 +1,7 @@
 (*
 CANON_neu interface-only template: CHECK_CANONICAL
+Corresponding agent skill:
+  ../skills/canon-check-canonical/SKILL.md
 
 Invocation:
   wolframscript -file CheckCanonical.wls <input.json> <output_dir>

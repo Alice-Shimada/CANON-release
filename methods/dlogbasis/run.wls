@@ -1,5 +1,9 @@
 (*
 CANON_neu interface-only provider template: SEARCH_CORE / DlogBasis route
+Workflow step skill:
+  ../../skills/canon-search-core/SKILL.md
+Provider card:
+  SKILL.md
 
 Invocation:
   wolframscript -file run.wls <input.json> <output_dir>

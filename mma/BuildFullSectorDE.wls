@@ -1,5 +1,7 @@
 (*
 CANON_neu interface-only template: BUILD_FULL_DE
+Corresponding agent skill:
+  ../skills/canon-build-full-de/SKILL.md
 
 Invocation:
   wolframscript -file BuildFullSectorDE.wls <input.json> <output_dir>

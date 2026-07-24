@@ -1,5 +1,7 @@
 (*
 CANON_neu interface-only template: PREPARE
+Corresponding agent skill:
+  ../skills/canon-prepare-family/SKILL.md
 
 Invocation:
   wolframscript -file PrepareFamily.wls <input.json> <output_dir>

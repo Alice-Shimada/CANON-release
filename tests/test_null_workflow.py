@@ -187,6 +187,10 @@ class NullWorkflowTest(unittest.TestCase):
         )
         self.assertEqual(packet["task_id"], self.task()["task_id"])
         self.assertEqual(packet["commands"][0][0:2], ["wolframscript", "-file"])
+        self.assertEqual(
+            packet["skill"], "skills/canon-prepare-family/SKILL.md"
+        )
+        self.assertTrue(Path(packet["skill_path"]).is_file())
 
         self.complete("PREPARE")
         self.complete(
@@ -320,6 +324,25 @@ class NullWorkflowTest(unittest.TestCase):
                 imported.add(node.module.split(".")[0])
         self.assertNotIn("subprocess", imported)
 
+    def test_every_stage_has_a_placeholder_skill(self) -> None:
+        spec = importlib.util.spec_from_file_location("canon_neu_workflow", WORKFLOW)
+        self.assertIsNotNone(spec)
+        module = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(module)
+
+        self.assertEqual(len(module.STAGES), 10)
+        for step, stage in module.STAGES.items():
+            skill = ROOT / stage["skill"]
+            self.assertTrue(skill.is_file(), step)
+            text = skill.read_text(encoding="utf-8")
+            self.assertTrue(text.startswith("---\n"), skill)
+            self.assertIn("description:", text, skill)
+            self.assertIn("<!--", text, skill)
+            self.assertIn("Placeholder skill:", text, skill)
+            self.assertIn("Input payload:", text, skill)
+            self.assertIn("output", text.lower(), skill)
+
     def test_wls_files_are_comment_only_interfaces(self) -> None:
         scripts = sorted((ROOT / "mma").glob("*.wls"))
         scripts.extend(sorted((ROOT / "methods").glob("*/run.wls")))
@@ -328,6 +351,9 @@ class NullWorkflowTest(unittest.TestCase):
             text = script.read_text(encoding="utf-8").strip()
             self.assertTrue(text.startswith("(*"), script)
             self.assertTrue(text.endswith("*)"), script)
+            self.assertIn("Input envelope:", text, script)
+            self.assertIn("Required output:", text, script)
+            self.assertIn("skill:", text.lower(), script)
             self.assertIn(
                 "Scientific implementation is intentionally absent.", text
             )

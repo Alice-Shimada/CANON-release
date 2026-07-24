@@ -48,20 +48,22 @@ wolframscript -file <script.wls> <input.json> <output_dir>
 
 `status` 只能是 `PASS`、`FAIL` 或 `ERROR`。artifact 路径相对于 `result.json` 所在目录；状态机会把它规范化为绝对路径，但不会检查或解析文件内容。
 
-## 各步骤 payload 与输出
+## 各步骤 SKILL、payload 与输出
 
-| step | 脚本 | payload keys | PASS artifact keys |
-|---|---|---|---|
-| `PREPARE` | `mma/PrepareFamily.wls` | `family_spec` | `prepared_family` |
-| `DISCOVER` | `mma/DiscoverSectors.wls` | `prepared_family` | `sector_manifest`, `master_basis` |
-| `BUILD_CUT_DE` | `mma/BuildSectorCutDE.wls` | `prepared_family`, `master_basis`, `sector_manifest` | `sector_basis`, `sector_cut_de` |
-| `SEARCH_CORE` | `methods/*/run.wls` | `prepared_family`, `sector_basis`, `sector_cut_de`, `method_options` | `core_candidates` |
-| `CHECK_CORE` | `mma/CheckSectorCore.wls` | `sector_basis`, `sector_cut_de`, `core_candidates` | `core_transform` |
-| `BUILD_FULL_DE` | `mma/BuildFullSectorDE.wls` | `prepared_family`, `master_basis`, `sector_manifest`, `core_transform`, `accepted_prefix` | `full_sector_de` |
-| `SOLVE_TAIL` | `mma/SolveTail.wls` | `full_sector_de`, `core_transform`, `accepted_prefix`, `tail_options` | `sector_transform` |
-| `CHECK_CANONICAL` | `mma/CheckCanonical.wls` | `full_sector_de`, `sector_transform`, `accepted_prefix` | `canonical_sector_de` |
-| `COMMIT_SECTOR` | `mma/CommitSector.wls` | `previous_accepted_prefix`, `sector_basis`, `sector_transform`, `canonical_sector_de` | `accepted_prefix` |
-| `FINAL_CHECK` | `mma/CheckFullSystem.wls` | `prepared_family`, `master_basis`, `sector_manifest`, `accepted_prefix` | `canonical_basis`, `canonical_de` |
+| step | SKILL | 脚本 | payload keys | PASS artifact keys |
+|---|---|---|---|---|
+| `PREPARE` | `canon-prepare-family` | `mma/PrepareFamily.wls` | `family_spec` | `prepared_family` |
+| `DISCOVER` | `canon-discover-sectors` | `mma/DiscoverSectors.wls` | `prepared_family` | `sector_manifest`, `master_basis` |
+| `BUILD_CUT_DE` | `canon-build-cut-de` | `mma/BuildSectorCutDE.wls` | `prepared_family`, `master_basis`, `sector_manifest` | `sector_basis`, `sector_cut_de` |
+| `SEARCH_CORE` | `canon-search-core` | `methods/*/run.wls` | `prepared_family`, `sector_basis`, `sector_cut_de`, `method_options` | `core_candidates` |
+| `CHECK_CORE` | `canon-check-core` | `mma/CheckSectorCore.wls` | `sector_basis`, `sector_cut_de`, `core_candidates` | `core_transform` |
+| `BUILD_FULL_DE` | `canon-build-full-de` | `mma/BuildFullSectorDE.wls` | `prepared_family`, `master_basis`, `sector_manifest`, `core_transform`, `accepted_prefix` | `full_sector_de` |
+| `SOLVE_TAIL` | `canon-solve-tail` | `mma/SolveTail.wls` | `full_sector_de`, `core_transform`, `accepted_prefix`, `tail_options` | `sector_transform` |
+| `CHECK_CANONICAL` | `canon-check-canonical` | `mma/CheckCanonical.wls` | `full_sector_de`, `sector_transform`, `accepted_prefix` | `canonical_sector_de` |
+| `COMMIT_SECTOR` | `canon-commit-sector` | `mma/CommitSector.wls` | `previous_accepted_prefix`, `sector_basis`, `sector_transform`, `canonical_sector_de` | `accepted_prefix` |
+| `FINAL_CHECK` | `canon-final-check` | `mma/CheckFullSystem.wls` | `prepared_family`, `master_basis`, `sector_manifest`, `accepted_prefix` | `canonical_basis`, `canonical_de` |
+
+这些 SKILL 当前只有 frontmatter 和 HTML 注释中的职责/I/O 提示，没有科学实现。
 
 首个 sector 的 `accepted_prefix` 或 `previous_accepted_prefix` 是 `null`。
 

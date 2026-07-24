@@ -58,7 +58,8 @@ READY -> RUNNING -> DONE
 
 典型交互是：
 
-1. 主 agent 用 `status` 或 `next` 查询看板和动态生成的任务包。
+1. 主 agent 用 `status` 或 `next` 查询看板和动态生成的任务包；任务包明确给出
+   当前步骤的 `SKILL.md`、脚本、输入和输出位置。
 2. 主 agent 用 `start` 领取任务。
 3. 如果任务要求 delegation，主 agent 用 `delegate` 指定 subagent、角色和脚本。
 4. subagent 运行被指定的脚本，只写标准 `script-result/v1`；它不写 `state.json`。
@@ -112,6 +113,7 @@ CANON_neu/
 ├── README.md
 ├── project.example.json
 ├── interfaces/
+├── skills/               # 每个 workflow step 的空白 agent SKILL
 ├── mma/
 ├── methods/
 │   ├── dlogbasis/

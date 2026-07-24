@@ -6,6 +6,7 @@
 当前完成的是框架层：
 
 - Python workflow 已实现完整状态转移、sector 排序、任务板、artifact 路由和 subagent gate；
+- 每个 workflow step 都有一个由任务包引用的空白 `skills/*/SKILL.md`；
 - 所有 `.wls` 只有输入/输出契约，没有科学实现；
 - null test 用模拟结果文件验证整个 workflow，不运行 Mathematica。
 
@@ -27,7 +28,8 @@ python3 -m unittest -v tests.test_null_workflow
 python3 workflow.py init project.json
 ```
 
-命令会打印生成的 `state.json` 路径。之后主 agent 的最小循环是：
+命令会打印生成的 `state.json` 路径。`next` 同时给出当前步骤的 SKILL、输入、
+候选脚本命令和输出位置。之后主 agent 的最小循环是：
 
 ```bash
 python3 workflow.py status <state.json>

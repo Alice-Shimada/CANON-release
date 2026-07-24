@@ -1,5 +1,14 @@
 #!/usr/bin/env python3
-"""Single agent-facing state machine for CANON_neu."""
+"""Single agent-facing state machine for CANON_neu.
+
+This file is deliberately an orchestration layer only.  It creates task
+packets, records agent/subagent reports, carries artifact paths forward, and
+applies the fixed transition table.  It never launches Mathematica and never
+decides whether an integral basis is UT or canonical.
+
+Scientific work belongs to the step SKILL.md named in each task and to the
+stateless Mathematica script selected by the agent.
+"""
 
 from __future__ import annotations
 
@@ -20,18 +29,24 @@ STATE_SCHEMA = "canon-neu/state/v1"
 INPUT_SCHEMA = "canon-neu/script-input/v1"
 RESULT_SCHEMA = "canon-neu/script-result/v1"
 
+# Declarative step contract.  Adding scientific code here would cross the
+# architecture boundary: this table may name inputs, outputs, skills, scripts,
+# and delegation roles, but it may not inspect Mathematica expressions.
 STAGES: dict[str, dict[str, Any]] = {
     "PREPARE": {
+        "skill": "skills/canon-prepare-family/SKILL.md",
         "scripts": ["mma/PrepareFamily.wls"],
         "inputs": {"family_spec": "project:family_spec"},
         "outputs": ["prepared_family"],
     },
     "DISCOVER": {
+        "skill": "skills/canon-discover-sectors/SKILL.md",
         "scripts": ["mma/DiscoverSectors.wls"],
         "inputs": {"prepared_family": "artifact:prepared_family"},
         "outputs": ["sector_manifest", "master_basis"],
     },
     "BUILD_CUT_DE": {
+        "skill": "skills/canon-build-cut-de/SKILL.md",
         "scripts": ["mma/BuildSectorCutDE.wls"],
         "inputs": {
             "prepared_family": "artifact:prepared_family",
@@ -41,6 +56,7 @@ STAGES: dict[str, dict[str, Any]] = {
         "outputs": ["sector_basis", "sector_cut_de"],
     },
     "SEARCH_CORE": {
+        "skill": "skills/canon-search-core/SKILL.md",
         "scripts": [
             "methods/dlogbasis/run.wls",
             "methods/gram-baikov/run.wls",
@@ -56,6 +72,7 @@ STAGES: dict[str, dict[str, Any]] = {
         "roles": ["candidate_route"],
     },
     "CHECK_CORE": {
+        "skill": "skills/canon-check-core/SKILL.md",
         "scripts": ["mma/CheckSectorCore.wls"],
         "inputs": {
             "sector_basis": "artifact:sector_basis",
@@ -65,6 +82,7 @@ STAGES: dict[str, dict[str, Any]] = {
         "outputs": ["core_transform"],
     },
     "BUILD_FULL_DE": {
+        "skill": "skills/canon-build-full-de/SKILL.md",
         "scripts": ["mma/BuildFullSectorDE.wls"],
         "inputs": {
             "prepared_family": "artifact:prepared_family",
@@ -76,6 +94,7 @@ STAGES: dict[str, dict[str, Any]] = {
         "outputs": ["full_sector_de"],
     },
     "SOLVE_TAIL": {
+        "skill": "skills/canon-solve-tail/SKILL.md",
         "scripts": ["mma/SolveTail.wls"],
         "inputs": {
             "full_sector_de": "artifact:full_sector_de",
@@ -86,6 +105,7 @@ STAGES: dict[str, dict[str, Any]] = {
         "outputs": ["sector_transform"],
     },
     "CHECK_CANONICAL": {
+        "skill": "skills/canon-check-canonical/SKILL.md",
         "scripts": ["mma/CheckCanonical.wls"],
         "inputs": {
             "full_sector_de": "artifact:full_sector_de",
@@ -95,6 +115,7 @@ STAGES: dict[str, dict[str, Any]] = {
         "outputs": ["canonical_sector_de"],
     },
     "COMMIT_SECTOR": {
+        "skill": "skills/canon-commit-sector/SKILL.md",
         "scripts": ["mma/CommitSector.wls"],
         "inputs": {
             "previous_accepted_prefix": "artifact?:accepted_prefix",
@@ -105,6 +126,7 @@ STAGES: dict[str, dict[str, Any]] = {
         "outputs": ["accepted_prefix"],
     },
     "FINAL_CHECK": {
+        "skill": "skills/canon-final-check/SKILL.md",
         "scripts": ["mma/CheckFullSystem.wls"],
         "inputs": {
             "prepared_family": "artifact:prepared_family",
@@ -116,7 +138,12 @@ STAGES: dict[str, dict[str, Any]] = {
     },
 }
 
+# Global steps receive sector=null.  Every other step is tied to the current
+# sector chosen from the DISCOVER metadata.
 GLOBAL_STEPS = {"PREPARE", "DISCOVER", "FINAL_CHECK"}
+
+# Result codes are protocol tokens reported by scripts.  They are not computed
+# or inferred by Python.
 PASS_CODES = {
     "PREPARE": "OK",
     "DISCOVER": "SECTORS_READY",
@@ -129,6 +156,9 @@ PASS_CODES = {
     "COMMIT_SECTOR": "OK",
     "FINAL_CHECK": "ALL_PASS",
 }
+
+# Only these failures have an explicit recovery edge.  Any other FAIL/ERROR
+# blocks the run instead of asking Python to guess a scientific remedy.
 FAIL_ROUTES = {
     ("SEARCH_CORE", "NO_CANDIDATE"): "SEARCH_CORE",
     ("CHECK_CORE", "CORE_FAIL"): "SEARCH_CORE",
@@ -139,14 +169,20 @@ FAIL_ROUTES = {
 
 
 class WorkflowError(Exception):
+    """A malformed command or protocol document that should stop cleanly."""
+
     pass
 
 
 def timestamp() -> str:
+    """Return an ISO timestamp for state-file bookkeeping."""
+
     return datetime.now(timezone.utc).isoformat()
 
 
 def load_json(path: Path) -> dict[str, Any]:
+    """Read one JSON object from disk."""
+
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
@@ -157,6 +193,12 @@ def load_json(path: Path) -> dict[str, Any]:
 
 
 def save_json(path: Path, value: dict[str, Any]) -> None:
+    """Atomically replace a JSON file.
+
+    Only the coordinator writes state.json, but atomic replacement still keeps
+    an interrupted write from leaving half a JSON document.
+    """
+
     path.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(
         "w", encoding="utf-8", dir=path.parent, delete=False
@@ -168,11 +210,15 @@ def save_json(path: Path, value: dict[str, Any]) -> None:
 
 
 def absolute(base: Path, raw: str) -> str:
+    """Resolve a path relative to the document that declared it."""
+
     path = Path(raw).expanduser()
     return str((path if path.is_absolute() else base / path).resolve())
 
 
 def read_project(path: Path) -> dict[str, Any]:
+    """Load the small project envelope and normalize its declared paths."""
+
     raw = load_json(path)
     try:
         family = copy.deepcopy(raw["inputs"]["family_spec"])
@@ -191,6 +237,8 @@ def read_project(path: Path) -> dict[str, Any]:
 
 
 def load_state(path: Path) -> dict[str, Any]:
+    """Load a CANON_neu workflow state."""
+
     state = load_json(path)
     if state.get("schema") != STATE_SCHEMA:
         raise WorkflowError(f"state schema must be {STATE_SCHEMA}")
@@ -198,11 +246,15 @@ def load_state(path: Path) -> dict[str, Any]:
 
 
 def save_state(path: Path, state: dict[str, Any]) -> None:
+    """Persist the coordinator-owned workflow state."""
+
     state["updated_at"] = timestamp()
     save_json(path, state)
 
 
 def current_task(state: dict[str, Any], task_id: str | None = None) -> dict[str, Any]:
+    """Return the one dispatchable task and optionally verify its id."""
+
     current_id = state.get("current_task")
     if current_id is None:
         raise WorkflowError("workflow has no current task")
@@ -212,11 +264,24 @@ def current_task(state: dict[str, Any], task_id: str | None = None) -> dict[str,
 
 
 def current_sector(state: dict[str, Any]) -> dict[str, int] | None:
+    """Return copied sector metadata; never derive it from scientific data."""
+
     index = state["sector_index"]
     return None if index is None else copy.deepcopy(state["sectors"][index])
 
 
 def build_payload(state: dict[str, Any], step: str) -> dict[str, Any]:
+    """Resolve a step's named inputs from project data or prior artifacts.
+
+    Source prefixes in STAGES have one purpose:
+      project:  immutable project input
+      artifact: latest reported artifact with that logical name
+      option:   opaque user options
+
+    A trailing '?' makes the source optional, for example the absent accepted
+    prefix in the first sector.
+    """
+
     payload = {}
     for name, source in STAGES[step]["inputs"].items():
         kind, key = source.split(":", 1)
@@ -235,6 +300,8 @@ def build_payload(state: dict[str, Any], step: str) -> dict[str, Any]:
 
 
 def new_task(state: dict[str, Any], step: str) -> dict[str, Any]:
+    """Create one READY task and its exact script input.json."""
+
     state["next_task"] += 1
     task_id = f"T{state['next_task']:04d}-{step}"
     sector = None if step in GLOBAL_STEPS else current_sector(state)
@@ -266,6 +333,7 @@ def new_task(state: dict[str, Any], step: str) -> dict[str, Any]:
         "owner": None,
         "input": str(input_path),
         "output_dir": str(output_dir),
+        "skill": STAGES[step]["skill"],
         "scripts": copy.deepcopy(STAGES[step]["scripts"]),
         "expected_outputs": copy.deepcopy(STAGES[step]["outputs"]),
         "delegation": {
@@ -281,7 +349,14 @@ def new_task(state: dict[str, Any], step: str) -> dict[str, Any]:
 
 
 def task_packet(task: dict[str, Any]) -> dict[str, Any]:
+    """Render agent instructions without executing any command.
+
+    The returned wolframscript command is metadata for the agent.  There is no
+    subprocess call anywhere in this workflow.
+    """
+
     packet = copy.deepcopy(task)
+    packet["skill_path"] = str(ROOT / task["skill"])
     packet["commands"] = [
         [
             "wolframscript",
@@ -299,6 +374,8 @@ def task_packet(task: dict[str, Any]) -> dict[str, Any]:
 def normalize_artifacts(
     value: Any, result_path: Path, task: dict[str, Any]
 ) -> dict[str, Any]:
+    """Normalize reported artifact paths while leaving contents opaque."""
+
     if not isinstance(value, dict):
         raise WorkflowError("result artifacts must be an object")
     artifacts = {}
@@ -317,6 +394,8 @@ def normalize_artifacts(
 
 
 def read_result(path: Path, task: dict[str, Any]) -> dict[str, Any]:
+    """Validate only the shared result envelope, never scientific content."""
+
     result = load_json(path)
     if result.get("schema") != RESULT_SCHEMA:
         raise WorkflowError(f"result schema must be {RESULT_SCHEMA}")
@@ -338,6 +417,8 @@ def read_result(path: Path, task: dict[str, Any]) -> dict[str, Any]:
 
 
 def sorted_sectors(summary: dict[str, Any]) -> list[dict[str, int]]:
+    """Sort script-reported metadata by propagator count, then sector id."""
+
     sectors = summary.get("sectors")
     if not isinstance(sectors, list) or not sectors:
         raise WorkflowError("DISCOVER/PASS requires summary.sectors")
@@ -365,6 +446,8 @@ def sorted_sectors(summary: dict[str, Any]) -> list[dict[str, int]]:
 
 
 def delegation_ready(task: dict[str, Any]) -> tuple[bool, list[str]]:
+    """Check whether every required role has one completed subreport."""
+
     missing = [
         role
         for role in task["delegation"]["required_roles"]
@@ -377,6 +460,12 @@ def delegation_ready(task: dict[str, Any]) -> tuple[bool, list[str]]:
 
 
 def route(state: dict[str, Any], task: dict[str, Any], result: dict[str, Any]) -> str:
+    """Apply the fixed workflow transition table.
+
+    The script owns PASS/FAIL and CORE_FAIL/TAIL_FAIL classification.  Python
+    only maps those already-reported tokens to the next step.
+    """
+
     step, status, code = task["step"], result["status"], result["code"]
     if status == "ERROR":
         return "BLOCKED"
@@ -413,6 +502,8 @@ def route(state: dict[str, Any], task: dict[str, Any], result: dict[str, Any]) -
 
 
 def board(state: dict[str, Any]) -> dict[str, Any]:
+    """Build the compact progress view returned by the status command."""
+
     task = None if state["current_task"] is None else current_task(state)
     ready, missing = (True, []) if task is None else delegation_ready(task)
     return {
@@ -430,6 +521,7 @@ def board(state: dict[str, Any]) -> dict[str, Any]:
             "status": task["status"],
             "owner": task["owner"],
             "attempt": task["attempt"],
+            "skill": task["skill"],
             "scripts": task["scripts"],
             "delegation_ready": ready,
             "missing_delegation_roles": missing,
@@ -439,6 +531,8 @@ def board(state: dict[str, Any]) -> dict[str, Any]:
 
 
 def command_init(args: argparse.Namespace) -> None:
+    """Initialize state.json and create the first PREPARE task."""
+
     project_path = Path(args.project).expanduser().resolve()
     project = read_project(project_path)
     state_path = (
@@ -470,6 +564,8 @@ def command_init(args: argparse.Namespace) -> None:
 
 
 def command_status(args: argparse.Namespace) -> None:
+    """Show the current workflow board without mutating it."""
+
     value = board(load_state(Path(args.state).expanduser().resolve()))
     if args.json:
         print(json.dumps(value, indent=2))
@@ -485,12 +581,15 @@ def command_status(args: argparse.Namespace) -> None:
         f"current task: {task['task_id']}  {task['status']}  "
         f"attempt {task['attempt']}"
     )
+    print(f"skill: {task['skill']}")
     print(f"scripts: {', '.join(task['scripts'])}")
     if task["missing_delegation_roles"]:
         print("delegation required: " + ", ".join(task["missing_delegation_roles"]))
 
 
 def command_next(args: argparse.Namespace) -> None:
+    """Dispatch the current task packet to an agent."""
+
     state = load_state(Path(args.state).expanduser().resolve())
     if state["status"] != "ACTIVE":
         raise WorkflowError(f"workflow is {state['status']}")
@@ -500,6 +599,7 @@ def command_next(args: argparse.Namespace) -> None:
         return
     print(f"task: {packet['task_id']} ({packet['step']})")
     print(f"sector: {packet['sector']}")
+    print(f"skill: {packet['skill_path']}")
     print(f"input: {packet['input']}")
     print(f"result: {packet['result_path']}")
     for command in packet["commands"]:
@@ -509,6 +609,8 @@ def command_next(args: argparse.Namespace) -> None:
 
 
 def command_start(args: argparse.Namespace) -> None:
+    """Claim the READY task for one main agent."""
+
     state_path = Path(args.state).expanduser().resolve()
     state = load_state(state_path)
     task = current_task(state, args.task_id)
@@ -520,6 +622,8 @@ def command_start(args: argparse.Namespace) -> None:
 
 
 def command_delegate(args: argparse.Namespace) -> None:
+    """Record a required subagent role and its assigned script."""
+
     state_path = Path(args.state).expanduser().resolve()
     state = load_state(state_path)
     task = current_task(state, args.task_id)
@@ -545,6 +649,8 @@ def command_delegate(args: argparse.Namespace) -> None:
 
 
 def command_subreport(args: argparse.Namespace) -> None:
+    """Attach a standard script result to one subagent assignment."""
+
     state_path = Path(args.state).expanduser().resolve()
     result_path = Path(args.result).expanduser().resolve()
     state = load_state(state_path)
@@ -565,6 +671,8 @@ def command_subreport(args: argparse.Namespace) -> None:
 
 
 def command_report(args: argparse.Namespace) -> None:
+    """Record the main result, route it, and create the next task."""
+
     state_path = Path(args.state).expanduser().resolve()
     result_path = Path(args.result).expanduser().resolve()
     state = load_state(state_path)
@@ -600,6 +708,8 @@ def command_report(args: argparse.Namespace) -> None:
 
 
 def parser() -> argparse.ArgumentParser:
+    """Define the intentionally small agent-facing CLI."""
+
     root = argparse.ArgumentParser(description=__doc__)
     commands = root.add_subparsers(dest="command", required=True)
     specs = {
@@ -638,6 +748,8 @@ def parser() -> argparse.ArgumentParser:
 
 
 def main() -> int:
+    """Run one CLI command and present protocol errors without a traceback."""
+
     args = parser().parse_args()
     try:
         args.handler(args)

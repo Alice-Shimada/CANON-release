@@ -1,5 +1,7 @@
 (*
 CANON_neu interface-only template: SOLVE_TAIL
+Corresponding agent skill:
+  ../skills/canon-solve-tail/SKILL.md
 
 Invocation:
   wolframscript -file SolveTail.wls <input.json> <output_dir>

@@ -1,5 +1,7 @@
 (*
 CANON_neu interface-only template: BUILD_CUT_DE
+Corresponding agent skill:
+  ../skills/canon-build-cut-de/SKILL.md
 
 Invocation:
   wolframscript -file BuildSectorCutDE.wls <input.json> <output_dir>

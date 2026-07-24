@@ -1,5 +1,7 @@
 (*
 CANON_neu interface-only template: CHECK_CORE
+Corresponding agent skill:
+  ../skills/canon-check-core/SKILL.md
 
 Invocation:
   wolframscript -file CheckSectorCore.wls <input.json> <output_dir>

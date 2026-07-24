@@ -1,5 +1,7 @@
 (*
 CANON_neu interface-only template: COMMIT_SECTOR
+Corresponding agent skill:
+  ../skills/canon-commit-sector/SKILL.md
 
 Invocation:
   wolframscript -file CommitSector.wls <input.json> <output_dir>

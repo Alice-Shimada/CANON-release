@@ -1,5 +1,7 @@
 (*
 CANON_neu interface-only template: FINAL_CHECK
+Corresponding agent skill:
+  ../skills/canon-final-check/SKILL.md
 
 Invocation:
   wolframscript -file CheckFullSystem.wls <input.json> <output_dir>
