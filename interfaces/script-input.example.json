@@ -1,0 +1,23 @@
+{
+  "schema": "canon-neu/script-input/v1",
+  "task_id": "T0006-CHECK_CORE",
+  "step": "CHECK_CORE",
+  "sector": {
+    "id": 7,
+    "propagator_count": 3
+  },
+  "payload": {
+    "sector_basis": {
+      "type": "mathematica-expression",
+      "path": "/absolute/path/sector-basis.wl"
+    },
+    "sector_cut_de": {
+      "type": "mathematica-expression",
+      "path": "/absolute/path/sector-cut-de.wl"
+    },
+    "core_candidates": {
+      "type": "mathematica-expression",
+      "path": "/absolute/path/core-candidates.wl"
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "family": "replace-with-family-definition",
+  "target": {
+    "top_sector_id": 0
+  },
+  "propagators": [],
+  "kinematics": {}
+}

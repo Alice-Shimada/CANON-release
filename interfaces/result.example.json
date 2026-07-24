@@ -1,0 +1,14 @@
+{
+  "schema": "canon-neu/script-result/v1",
+  "task_id": "T0006-CHECK_CORE",
+  "step": "CHECK_CORE",
+  "status": "PASS",
+  "code": "CORE_PASS",
+  "artifacts": {
+    "core_transform": {
+      "type": "mathematica-expression",
+      "path": "core-transform.wl"
+    }
+  },
+  "summary": {}
+}
