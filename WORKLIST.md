@@ -24,8 +24,8 @@
 
 - [ ] 进行IBP约化
     写SKILL让AI调用Reducer进行IBP约化，输入来自上一轮准备的config，输出Mathematica格式的replacement rules
-- [ ] 进行DE构建
-    求导（可以让AI写，旧的workflow里这个函数已经有了），然后做第二轮IBP。如果两次主积分数量一致，说明完备，构建微分方程。写一个`Build_DE.wls`程序让AI调用即可
+- [ ] 进行DE构建并检验
+    求导（可以让AI写，旧的workflow里这个函数已经有了），然后做第二轮IBP。如果两次主积分数量一致，说明完备，构建微分方程。写一个`Build_DE.wls`程序让AI调用即可。检验scaling，检验可积性。
 - [ ] 验证 sector 排序和产物交接
     需要按照传播子从少到多+sector ID从小到大排列。将对各个变量的DE保存，约化规则保存，用作下一个阶段的input
 - [ ] 优化的导数算符
