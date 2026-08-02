@@ -33,9 +33,9 @@
 ## 4. Ansatz 生成和检验
 
 - [ ] 实现 DlogBasis 的改进，每次开始前先进行一次ansatz生成，并将生成ansatz中涉及的标量积分送去约化
-    DlogBasis的改进有待讨论
+    DlogBasis的改进有待讨论-LBL不同维度 for each loop（需要接口去调整）
 - [ ] 实现 Gram-Baikov 方法生成ansatz
-    有待讨论
+    有待讨论-让AI去尝试归纳一下，不行穷举
 - [ ]  实现一个 MethodCard 接口，允许各种方法插入，允许agent按照优先级选取一个方法
     每个方法需配置一系列的程序，并提供一个SKILL教AI如何使用这些程序生成ansatz
 - [ ] 有状态笔记本进行sector-by-sector检测
