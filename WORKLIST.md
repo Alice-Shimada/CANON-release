@@ -38,14 +38,17 @@
     有待讨论-让AI去尝试归纳一下，不行穷举
 - [ ]  实现一个 MethodCard 接口，允许各种方法插入，允许agent按照优先级选取一个方法
     每个方法需配置一系列的程序，并提供一个SKILL教AI如何使用这些程序生成ansatz
+- [ ] 每个sector找完需要检查一下左上角是不是d-log form
+
+
 - [ ] 有状态笔记本进行sector-by-sector检测
     使用有状态笔记本因为可以只读入一次rule，然后sector-by-sector连续工作。可以考虑用MICA调度笔记本。
 
 ## 5. Sector 纠错机制
 
 - [ ] 非对角元素不正确时，决定更换ansatz测试或是寻找变换修补非对角元素
-     尽量不要修，而是期望把ansatz找的好一些，直接变成a+b eps的形式。判断：a+b eps积出来是超越函数要重新换ansatz
-     修eps^n依赖的算法
+    尽量不要修，而是期望把ansatz找的好一些，直接变成a+b eps的形式。判断：a+b eps积出来是超越函数要重新换ansatz
+    修eps^n依赖的算法
 
 ## 6. 提交与总检
 
