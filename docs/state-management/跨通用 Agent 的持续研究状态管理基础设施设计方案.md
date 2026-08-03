@@ -1,5 +1,7 @@
 # 跨通用 Agent 的持续研究状态管理基础设施设计方案
 
+---
+
 $\epsilon$-form 构建并非线性流程：一个算例通常需要派发数量众多、相互关联的异步任务，并在不同方法和候选方案之间不断探索、验证和回溯。任务之间的依赖关系必须严格遵循，每次尝试产生的成功经验、失败原因和中间结果也必须妥善保存，供后续任务判断与复用。单个 Markdown 文档适合呈现研究记录，却难以可靠管理并发领取、依赖解锁和状态转换，也难以保证不同会话、不同 Agent 始终使用同一组有效事实。本方案因此以任务目录内的 JSON 数据和受控 CLI 管理任务状态与研究轨迹，以 Markdown 作为可读视图，为持续研究提供可靠的状态管理基础。
 
 **文档版本：** v0.1
@@ -13,6 +15,9 @@ $\epsilon$-form 构建并非线性流程：一个算例通常需要派发数量�
 1. 所有持久化状态和研究产物均位于项目内的 `.state-management/[TASK_NAME]/`；
 1. 项目状态独立于任何特定 Agent 的会话。
 
+
+在 CANON 中，本方案实施后将完全取代当前的 demo 状态机；现有 `workflow.py` 和 `state.json` 不作为兼容或迁移对象。
+
 ## 一、项目目标
 
 本系统旨在为不同通用 Agent 提供一套统一的持续研究机制，使其能够：
@@ -25,8 +30,7 @@ $\epsilon$-form 构建并非线性流程：一个算例通常需要派发数量�
 - 保存任务的成功、失败经验及中间结果，供后续任务复用；
 - 在更换 Codex、Hermes 或 Claude Code 后继续同一项目。
 
-
-系统不要求不同 Agent 拥有完全相同的内部实现，而是统一它们对外表现出的研究协作协议。
+初版只实现本文明确给出的状态闭环和恢复底线。新的字段、命令和自动化行为只在实际研究测试暴露出明确问题后加入，并同时补充对应测试；不为尚未发生的使用场景预设机制。
 
 ## 二、系统的核心模型
 
@@ -34,36 +38,12 @@ $\epsilon$-form 构建并非线性流程：一个算例通常需要派发数量�
 
 > 主 Agent 负责规划和调度，原生 subagent 负责执行，CLI 和任务目录内的 JSON 文件负责保存并约束共享状态。
 
-整体关系如下：
-
-```
-用户
-  │
-  ▼
-主 Agent
-Codex / Hermes / Claude Code
-  │
-  ├── 读取项目状态和任务协议
-  │
-  ├── 调用 statemng CLI 管理项目
-  │
-  └── 使用自身原生能力创建 subagent
-                │
-                ▼
-         原生 subagent
-                │
-                ├── 通过 CLI 领取任务
-                ├── 读取任务上下文
-                ├── 执行研究
-                └── 通过 CLI 提交结果
-```
-
 其中：
 
-- 用户只看到主 Agent；
+- 用户只需要与主 Agent 交互；
 - 主 Agent 是研究负责人和任务调度者；
 - subagent 是临时研究执行者；
-- CLI 是所有 Agent 共享的任务协议；
+- CLI 是所有 Agent 共享的命令集和任务协议；
 - `.state-management/[TASK_NAME]/` 内的 JSON、Markdown 和研究产物保存总体任务的长期状态。
 
 ## 三、核心设计原则
@@ -74,7 +54,7 @@ Agent 负责：
 
 - 理解和拆解研究问题；
 - 提出假设、设计验证并分析结果；
-- 判断下一步研究方向。
+- 判断下一步研究方向和操作。
 
 
 CLI 和底层程序负责：
@@ -85,20 +65,7 @@ CLI 和底层程序负责：
 
 系统不能仅依靠提示词要求 Agent “记得更新进度”，关键状态必须通过 CLI 修改。
 
-### 3.2 项目状态不依赖会话
-
-任何 Agent 会话都可以结束、压缩或被替换。
-
-新会话启动后，主 Agent 应通过 CLI 恢复：
-
-- 当前研究目标；
-- 已完成、正在执行、阻塞和可继续执行的任务；
-- 已形成的证据和结论。
-
-
-Agent 会话是临时计算环境，项目状态才是长期事实。
-
-### 3.3 CLI 不负责创建 subagent
+### 3.2 CLI 不负责创建 subagent
 
 CLI 只管理任务，不直接启动或控制 subagent。
 
@@ -106,24 +73,22 @@ CLI 只管理任务，不直接启动或控制 subagent。
 
 #### 逻辑分配
 
-CLI 记录任务由哪个执行实例领取：
+CLI 记录任务的领取和运行：
 
 ```
 statemng task claim T-012 \
-  --executor-ref codex:dispatch-7f3a
+  --task-name [TASK_NAME]
 ```
-
-`executor_ref` 是本次派发的唯一执行实例引用，不是固定的 subagent 名称。Adapter 应使用宿主平台提供的 thread 或 agent ID；如果该 ID 不可用或可能复用，则由主 Agent 生成 `dispatch_id`，单独使用或与平台 ID 组合，保证每次派发的 `executor_ref` 唯一。
 
 #### 物理分配
 
-主 Agent 使用自身原生能力创建一个 subagent，并把总体任务目录、内部任务 ID 和 `executor_ref` 告诉它。
+主 Agent 使用自身原生能力创建一个 subagent，并把总体任务名和内部任务 ID 告诉它。
 
 因此：
 
-> CLI 管理任务运行及其执行实例引用，主 Agent 决定创建哪个 subagent 执行任务。
+> CLI 管理任务运行，主 Agent 决定创建哪个 subagent 执行任务。
 
-### 3.4 使用统一协议，而不是统一内部实现
+### 3.3 使用统一协议，而不是统一内部实现
 
 不同 Agent 的 subagent 创建方式可能不同：
 
@@ -140,32 +105,22 @@ Hermes Adapter
 → 读取任务
 → 执行任务
 → 登记产物
-→ 完成或阻塞任务
+→ 提交结果，或报告阻塞与失败
 ```
 
-平台差异只存在于“如何创建原生 subagent”，不进入核心任务系统。
+结果是否完成验收由主 Agent 决定。平台差异只存在于“如何创建原生 subagent”，不进入核心任务系统。
 
-### 3.5 Markdown 用于阅读，JSON 用于运行
+### 3.4 Markdown 用于阅读，JSON 用于运行
 
-系统可以在总体任务目录内生成：
-
-```
-PROJECT_STATE.md
-RESEARCH_LOG.md
-DECISIONS.md
-```
-
-供人类和 Agent 阅读。
-
-运行时状态保存在 JSON 文件中，Markdown 只由 JSON 状态生成或更新。
+系统在总体任务目录内生成 `views/PROJECT_STATE.md`，供人类和 Agent 快速阅读。运行时状态保存在 JSON 文件中，Markdown 只由 JSON 状态生成或更新。
 
 原则是：
 
 > JSON 是事实源，Markdown 是人类可读投影。
 
-这样既保留透明度，也避免多个 Agent 并发修改同一个进度文档产生冲突。当前版本面向个人科研使用，不引入 SQL；若以后出现大规模并发或集中部署需求，再单独评估数据库迁移。
+这样既保留透明度，也避免多个 Agent 并发修改同一个进度文档产生冲突。当前版本面向个人科研使用，不引入 SQL。
 
-### 3.6 按总体任务隔离
+### 3.5 按总体任务隔离
 
 项目初始化后，所有状态管理产物都必须位于：
 
@@ -177,47 +132,182 @@ DECISIONS.md
 
 总体任务名称必须本身就是合法目录名，不得包含路径分隔符，也不得为 `.` 或 `..`。CLI 不对名称做隐式改写，从而保证目录名与任务名称一致。
 
+除 `init` 和只读的 `project list` 外，每条命令都必须通过 `--task-name` 精确指定一个总体任务。系统不保存项目级“当前总体任务”，也不根据上下文、提示词或近似名称自动选择。CLI 必须确认 `.state-management/` 位于当前项目内且不是符号链接，并确认总体任务目录是其非符号链接的直接子目录；任何路径逃逸都必须拒绝。解析完成后，本次命令的全部状态读写都必须限制在该总体任务目录内。
+
 ## 四、整体架构
 
-系统由四个主要部分组成。
+初版只有一个本地 CLI 和按总体任务分隔的状态目录。主 Agent 与原生 subagent 通过 CLI 读写明确指定的总体任务；subagent 的创建和研究过程仍由宿主 Agent 负责，不进入状态管理程序。完整工作流如下：
+
+```mermaid
+flowchart TD
+    U["用户提出总体研究目标"] --> M["主 Agent"]
+    M --> N{"总体任务名是否明确"}
+    N -- "否" --> LIST["statemng project list"]
+    LIST --> CONFIRM["主 Agent 请用户确认总体任务名"]
+    N -- "是" --> I{"总体任务目录是否存在"}
+    CONFIRM --> I
+    I -- "否" --> INIT["statemng init TASK_NAME"]
+    I -- "是" --> RESUME["statemng project resume<br/>--task-name TASK_NAME"]
+    INIT --> PLAN["根据当前证据创建必要的任务与依赖"]
+    RESUME --> RECOVER{"是否存在未完成运行"}
+    RECOVER -- "否" --> PLAN
+    RECOVER -- "是" --> INSPECT["检查 task JSON、run、workspace 与 artifact"]
+    INSPECT --> DECIDE["主 Agent 决定保留并继续、阻塞、失败或清理当前 run"]
+    DECIDE --> PLAN
+
+    PLAN --> READY["statemng task ready"]
+    READY --> SPAWN["主 Agent 通过 Adapter 创建原生 subagent<br/>传入总体任务名和 task ID"]
+    SPAWN --> CLAIM["subagent: task claim<br/>原子写入 running 并取得 run_id"]
+    CLAIM --> SHOW["subagent: task show<br/>读取目标、依赖结果、验收标准与 workspace"]
+    SHOW --> RESEARCH["subagent 在 workspace 中研究、计算和验证"]
+
+    RESEARCH -->|"形成可交付结果"| ART["artifact add<br/>复制正式产物并记录哈希"]
+    ART --> SUBMIT["task submit<br/>保存 summary 与 artifact ID，状态变为 submitted"]
+    SUBMIT --> REVIEW["主 Agent 审查结果"]
+    REVIEW -->|"需要独立验证"| VERIFY["创建验证 subagent<br/>读取 artifact 并提交验证结果"]
+    VERIFY --> REVIEW
+    REVIEW -->|"接受"| ACCEPT["task accept<br/>原子写入 completed 与 accepted_run_id"]
+    REVIEW -->|"不接受或需要外部条件"| BF["task block 或 task fail"]
+    BF --> PLAN
+
+    ACCEPT --> UNLOCK["依据 completed 任务重新计算依赖<br/>后续任务进入 ready"]
+    UNLOCK --> VIEW["重建 PROJECT_STATE.md"]
+    VIEW --> PLAN
+    PLAN -->|"研究目标已经满足"| REPORT["主 Agent 向用户提交阶段或最终结论"]
+
+    RESEARCH -->|"无法完成"| BF
+
+    subgraph STORE[".state-management/[TASK_NAME]/"]
+        META["meta.json"]
+        TASKS["tasks/*.json<br/>任务状态事实源"]
+        RUNS["runs/[RUN_ID]/<br/>run.json 与 workspace"]
+        ARTS["artifacts/<br/>不可变正式产物"]
+        VIEWS["views/PROJECT_STATE.md<br/>可重建视图"]
+        LOCKS[".locks/<br/>任务级文件锁"]
+    end
+
+    INIT -. "创建" .-> META
+    PLAN -. "写入" .-> TASKS
+    CLAIM -. "加锁并更新" .-> LOCKS
+    CLAIM -. "写入" .-> TASKS
+    CLAIM -. "创建" .-> RUNS
+    ART -. "写入" .-> ARTS
+    SUBMIT -. "更新" .-> RUNS
+    SUBMIT -. "更新" .-> TASKS
+    ACCEPT -. "最终完成提交点" .-> TASKS
+    VIEW -. "生成" .-> VIEWS
+    RESUME -. "读取" .-> META
+    RESUME -. "读取" .-> TASKS
+    RESUME -. "读取" .-> RUNS
+    RESUME -. "核对" .-> ARTS
+```
+
+图中的实线表示研究与调度流程，虚线表示 CLI 对持久化文件的读写。除 `init` 和 `project list` 外，图中每次 CLI 调用都显式携带同一个 `--task-name`，图内不再重复标注。任务 JSON 中的 `completed` 是完成事实；Markdown 视图和依赖解锁结果均可由 JSON 重建。
+
+### 4.1、持久化目录设计
+
+项目内部按总体任务维护独立目录：
 
 ```
-┌──────────────────────────────────────┐
-│              用户                     │
-└─────────────────┬────────────────────┘
-                  ▼
-┌──────────────────────────────────────┐
-│          通用 Agent 主会话             │
-│ Codex / Hermes / Claude Code          │
-│                                      │
-│ 研究规划 · 调度 · 综合 · 用户交互       │
-└──────────┬────────────────┬──────────┘
-           │                │
-           │ CLI            │ 原生 subagent 机制
-           ▼                ▼
-┌───────────────────┐  ┌───────────────────┐
-│ State Management  │  │ Native Subagents  │
-│ CLI: statemng     │◀─│                   │
-│ 任务 · 状态 · 产物 │  │ 调研 · 推理 · 编程 │
-│ 依赖 · 运行历史     │  │ 验证 · 综合        │
-└──────────┬────────┘  └───────────────────┘
-           ▼
-┌──────────────────────────────────────┐
-│ Task-scoped JSON · Artifacts · Views │
-└──────────────────────────────────────┘
+.state-management/
+├── [TASK_NAME_1]/
+│   ├── meta.json
+│   ├── tasks/
+│   │   ├── T-001.json
+│   │   └── T-002.json
+│   ├── runs/
+│   │   └── R-001/
+│   │       ├── run.json
+│   │       └── workspace/
+│   ├── artifacts/
+│   │   ├── A-001.md
+│   │   └── A-002.json
+│   ├── .locks/
+│   └── views/
+│       └── PROJECT_STATE.md
+└── [TASK_NAME_2]/
+    └── ...
 ```
+
+其中：
+
+- `meta.json`：总体任务名称、目标和 schema 版本；
+- `tasks/*.json`：内部任务、依赖、当前状态和运行结果，是任务状态的事实源；
+- `runs/[RUN_ID]/run.json`：单次运行的身份、时间和结果记录；
+- `artifacts/`：由 `artifact add` 复制并登记的不可变正式研究产物；
+- `runs/[RUN_ID]/workspace/`：每次运行的隔离工作目录；
+- `.locks/`：CLI 使用的任务级锁文件，不保存研究状态；
+- `views/PROJECT_STATE.md`：由 JSON 生成的当前状态摘要。
+
+每个 `[TASK_NAME]` 目录都是完整、自包含的状态单元，可以独立复制、归档或恢复。`.state-management/` 下不设置跨总体任务共享的可变状态。
+
+### 4.2、主 Agent 与 subagent 的协作闭环
+
+初版不预设固定的研究步骤。主 Agent 根据当前证据创建任务和依赖；新的结果可以促使主 Agent 重新规划尚未开展的研究。
+
+一次协作只包含以下步骤：
+
+1. 主 Agent 确定总体任务名；无法唯一确定时，列出已有名称并请用户确认。随后初始化或恢复该总体任务，创建当前确有必要的任务。
+1. 主 Agent 查询 `ready` 任务，创建原生 subagent，并传入总体任务名和内部任务 ID。
+1. subagent 依次执行 `claim` 和 `show`，在独立 workspace 中研究；重要结果通过 `artifact add` 保存，然后执行 `submit`，或用 `block`、`fail` 说明无法完成。
+1. 主 Agent 读取 summary 和 artifact；必要时另行验证。验证 subagent 只提交验证结果，不接受原任务。
+1. 主 Agent 确认结果满足当前任务的验收标准后执行 `accept`。只有进入 `completed` 的任务才能满足后续任务的依赖。
+1. 主 Agent 根据已接受的结果决定继续原计划、创建新的后续任务或停止当前路线。
+
+### 4.3、任务状态模型
+
+初版使用以下状态：
+
+```
+pending
+   │
+   │ 依赖满足
+   ▼
+ ready
+   │
+   │ subagent claim
+   ▼
+ running
+   │
+   │ subagent submit
+   ▼
+submitted
+   │
+   │ main Agent accept
+   ▼
+completed
+```
+
+`running` 或 `submitted` 也可以转为 `blocked`。运行失败时，`retryable: true` 使任务重新转为 `ready`，否则任务进入 `failed`。
+
+状态含义：
+
+- `pending`：前置依赖尚未完成；
+- `ready`：可以被 subagent 领取；
+- `running`：已经由某个 subagent 领取；
+- `submitted`：subagent 已提交结果，等待主 Agent 验收；
+- `completed`：主 Agent 已接受结果，任务正式完成；
+- `blocked`：需要用户、主 Agent 或外部条件介入；
+- `failed`：本次执行失败，且没有进入下一次重试；
+
+
+只有 CLI 可以修改任务状态。
 
 ## 五、主要组件
 
 ### 5.1 主 Agent
+
+主 Agent 直接使用宿主 Agent，对于当前系统而言，只需要明确其职责，无需单独实现。
 
 主 Agent 是系统中的研究负责人。
 
 主要职责：
 
 - 接收用户目标，读取项目状态并制定研究计划；
+- 在总体任务名无法唯一确定时，列出已有名称并请用户确认；
 - 创建任务及其依赖，选择可并行推进的任务；
-- 创建原生 subagent，并向其传递总体任务目录、内部任务 ID 和 `executor_ref`；
+- 创建原生 subagent，并向其传递总体任务名和内部任务 ID；
+- 检查 subagent 提交的结果，必要时取得独立验证结果，并决定是否接受；
 - 检查执行状态，处理阻塞与失败，并组织结果综合；
 - 向用户汇报阶段结果。
 
@@ -226,25 +316,23 @@ DECISIONS.md
 
 ### 5.2 原生 subagent
 
-subagent 只能由宿主 Agent 的原生机制创建。
+subagent 只能由宿主 Agent 的原生机制创建。对于当前系统而言，只需要明确其职责，无需单独实现。
 
 subagent 的职责应尽量单一：
 
 - 调研或理论分析；
 - 代码实现或实验执行；
 - 数据分析或结果审查；
-- 综合写作。
 
 
 每个 subagent 启动时只需要得到：
 
-- 总体任务目录；
+- 总体任务名；
 - 内部任务 ID；
-- `executor_ref`；
 - CLI 使用协议。
 
 
-任务的详细背景由 subagent 自行通过 CLI 获取。`priority` 只供主 Agent 排程，不传给 subagent，也不进入其任务上下文。
+任务的详细背景由 subagent 自行通过 CLI 获取。subagent 负责提交研究结果，但不能将任务设为 `completed`。
 
 ### 5.3 平台 Adapter
 
@@ -266,11 +354,9 @@ adapters/
 
 每个 Adapter 应规定：
 
-1. 如何创建原生 subagent，并传递总体任务目录、内部任务 ID 和 `executor_ref`；
-1. 如何取得宿主平台的执行实例标识，或生成唯一的 `dispatch_id`；
+1. 如何创建原生 subagent，并传递总体任务名和内部任务 ID；
 1. 如何并行执行及限制最大并发数；
-1. 如何判断 subagent 已结束，并处理异常退出；
-1. 宿主 Agent 能力不足时如何降级。
+1. 如何判断 subagent 已结束，并处理异常退出。
 
 
 Adapter 应尽量薄，不保存任何项目状态。
@@ -279,28 +365,15 @@ Adapter 应尽量薄，不保存任何项目状态。
 
 CLI 是系统的内部控制接口。
 
-调用者是：
-
-- 主 Agent；
-- 原生 subagent；
-- 必要时的验证 subagent。
-
-用户不需要知道 CLI 的存在。
-
-
-CLI 应具备以下特点：
-
-- 接口精简稳定，默认输出 Agent 可可靠解析的 JSON；
-- 错误码明确；
-- 支持文件输入，避免长文本 shell 转义；
-- 状态更新具有原子性，重复调用尽量保持幂等。
-
-
-命令名称统一为 `statemng`。具体实现应提供独立命令入口；hook 只能调用该入口，不定义另一套状态更新路径。
+CLI 供主 Agent 和原生 subagent 使用，不直接面向用户。命令名称统一为 `statemng`，默认返回 JSON；其中 `ok` 只表示本次命令是否执行成功，不表示任务是否完成。任务状态只能通过 CLI 修改。
 
 ## 六、CLI 命令设计
 
-*（需要后续详细设计。这里只提供初步参考，不以这里的设计为准。）*
+初版只实现以下命令。
+
+`statemng init` 以调用时的工作目录作为项目根目录。其他命令从调用位置向上定位最近的项目级 `.state-management/`；找不到时停止。CLI 只利用调用位置确定所属项目，不改变主 Agent 或 subagent 的工作目录。
+
+除 `init` 和 `project list` 外，所有命令都必须显式提供 `--task-name [TASK_NAME]`。缺少该参数时返回 `TASK_NAME_REQUIRED`；名称不存在时返回 `TASK_NOT_FOUND`。两种情况都不得修改文件。任务名成功解析后，所有返回均包含实际使用的 `task_name`。
 
 ### 6.1 初始化项目
 
@@ -316,24 +389,43 @@ statemng init [TASK_NAME]
 - 生成初始 Markdown 状态视图。
 
 
-若同名总体任务目录已经存在，命令必须停止，不能覆盖。初始化后，主 Agent 进入该总体任务目录；本节其余命令均从该目录执行，CLI 不跨目录读写其他总体任务。
+若同名总体任务目录已经存在，命令必须停止，不能覆盖。初始化不改变主 Agent 的工作目录。
 
 
-建议返回：
+返回：
 
 ```
 {
-  "success": true,
+  "ok": true,
   "task_name": "[TASK_NAME]",
   "task_root": "/path/to/project/.state-management/[TASK_NAME]",
   "schema_version": 1
 }
 ```
 
-### 6.2 恢复项目状态
+### 6.2 列出和恢复总体任务
 
 ```
-statemng project resume --json
+statemng project list --json
+```
+
+该命令只列出当前项目已有的总体任务名，不读取或修改各总体任务的内部状态：
+
+```
+{
+  "ok": true,
+  "task_names": ["TASK-A", "TASK-B"]
+}
+```
+
+`.state-management/` 尚不存在时，该命令返回空列表而不是报错。
+
+用户已经明确给出总体任务名时，主 Agent 直接使用；用户明确要求以该名称新建时，可以直接执行 `init`。没有现有总体任务且用户未指定名称时，主 Agent 提出名称并请用户确认；名称未明确且存在多个总体任务，或者准备恢复的名称不存在时，主 Agent 应将已有名称交给用户确认。不得自行猜测、改名或创建新任务。CLI 不模拟用户确认，只负责在任务名缺失或无效时停止。
+
+```
+statemng project resume \
+  --task-name [TASK_NAME] \
+  --json
 ```
 
 供主 Agent 每次新会话开始时调用。
@@ -341,8 +433,8 @@ statemng project resume --json
 返回内容应包括：
 
 - 项目目标；
-- 已完成、运行中、阻塞和可执行的任务；
-- 最近关键决策与建议的下一步动作。
+- 各任务的当前状态；
+- 已提交的结果和未完成运行。
 
 
 该命令应返回压缩后的项目状态，而不是整个历史记录。
@@ -351,29 +443,26 @@ statemng project resume --json
 
 ```
 statemng task create \
+  --task-name [TASK_NAME] \
   --title "调查相关研究工作" \
   --description-file task.md \
   --depends-on T-001,T-002 \
-  --priority 80 \
   --json
 ```
 
 设计要求：
 
 - 自动生成稳定任务 ID；
-- 支持依赖、优先级、任务类型和验收标准；
-- 记录父任务关系；
+- 保存任务目标、依赖和验收标准；
 - 详细描述优先通过文件传入。
-
-
-`priority` 只用于主 Agent 在多个 `ready` 任务之间排序，不传给 subagent，也不由 `task show` 返回。
 
 
 返回：
 
 ```
 {
-  "success": true,
+  "ok": true,
+  "task_name": "[TASK_NAME]",
   "task_id": "T-012",
   "status": "pending",
   "dependencies": ["T-001", "T-002"]
@@ -385,30 +474,22 @@ statemng task create \
 ### 6.4 查询可执行任务
 
 ```
-statemng task ready --json
+statemng task ready \
+  --task-name [TASK_NAME] \
+  --json
 ```
 
 供主 Agent 判断应该创建哪些 subagent。
-
-支持筛选：
-
-```
-statemng task ready \
-  --type literature-review \
-  --limit 4 \
-  --json
-```
 
 返回内容应保持精简：
 
 ```
 {
+  "task_name": "[TASK_NAME]",
   "tasks": [
     {
       "task_id": "T-012",
-      "title": "调查相关研究工作",
-      "priority": 80,
-      "estimated_scope": "medium"
+      "title": "调查相关研究工作"
     }
   ]
 }
@@ -420,7 +501,7 @@ statemng task ready \
 
 ```
 statemng task claim T-012 \
-  --executor-ref codex:dispatch-7f3a \
+  --task-name [TASK_NAME] \
   --json
 ```
 
@@ -432,19 +513,16 @@ statemng task claim T-012 \
 - 防止多个 subagent 重复领取；
 - 将任务变为 `running`；
 - 创建唯一 `run_id`；
-- 记录 `executor_ref` 和领取时间。
-
-
-`executor_ref` 必须由 Adapter 或主 Agent 为每次派发动态取得或生成，且不得复用。它只用于关联任务运行与宿主执行实例；`run_id` 才是后续状态更新的运行身份。
+- 记录领取时间。
 
 返回：
 
 ```
 {
-  "success": true,
+  "ok": true,
+  "task_name": "[TASK_NAME]",
   "task_id": "T-012",
   "run_id": "R-048",
-  "executor_ref": "codex:dispatch-7f3a",
   "status": "running"
 }
 ```
@@ -453,7 +531,8 @@ statemng task claim T-012 \
 
 ```
 {
-  "success": false,
+  "ok": false,
+  "task_name": "[TASK_NAME]",
   "error": "TASK_ALREADY_CLAIMED"
 }
 ```
@@ -462,6 +541,7 @@ statemng task claim T-012 \
 
 ```
 statemng task show T-012 \
+  --task-name [TASK_NAME] \
   --run-id R-048 \
   --json
 ```
@@ -470,43 +550,18 @@ statemng task show T-012 \
 
 - 任务目标、背景和验收标准；
 - 前置任务结果及相关 artifact；
-- 当前工作目录与允许创建的子任务范围；
-- 时间或资源预算。
-
-
-该命令不返回 `priority`。
-
+- 当前运行的工作目录。
 
 这样主 Agent 不需要在创建 subagent 时复制完整上下文。
 
-### 6.7 报告进度
-
-```
-statemng task heartbeat T-012 \
-  --run-id R-048 \
-  --message "已筛选出 15 项相关工作，正在进行结构化比较" \
-  --json
-```
-
-用于记录语义进展。
-
-设计要求：
-
-- 短任务无需频繁调用；
-- 长任务应在阶段切换时调用；
-- heartbeat 只说明 Agent 报告了进展；
-- 不能单独证明实际进程仍然存活。
-
-### 6.8 登记产物
-
-\command? hook? *Sys.argv*
+### 6.7 登记产物
 
 ```
 statemng artifact add \
+  --task-name [TASK_NAME] \
   --task T-012 \
   --run-id R-048 \
   --path runs/R-048/workspace/literature-review.md \
-  --type literature-review \
   --json
 ```
 
@@ -515,7 +570,8 @@ statemng artifact add \
 - 验证文件存在；
 - 计算内容哈希；
 - 保存来源任务和运行 ID；
-- 复制或登记到统一 artifact 目录；
+- 将文件复制到统一 artifact 目录；
+- 登记后的正式 artifact 不再修改；
 - 返回 artifact ID。
 
 
@@ -523,7 +579,8 @@ statemng artifact add \
 
 ```
 {
-  "success": true,
+  "ok": true,
+  "task_name": "[TASK_NAME]",
   "artifact_id": "A-031",
   "stored_path": ".state-management/[TASK_NAME]/artifacts/A-031.md"
 }
@@ -531,10 +588,11 @@ statemng artifact add \
 
 任务的重要结果不能只存在于 subagent 的聊天回复中。
 
-### 6.9 完成任务
+### 6.8 提交任务结果
 
 ```
-statemng task complete T-012 \
+statemng task submit T-012 \
+  --task-name [TASK_NAME] \
   --run-id R-048 \
   --summary-file runs/R-048/workspace/summary.md \
   --artifact A-031 \
@@ -545,17 +603,51 @@ statemng task complete T-012 \
 
 - 检查调用者是否持有当前任务；
 - 检查必要产物是否已经提交；
-- 检查验收字段是否完整；
-- 在同一次 `tasks/T-012.json` 原子替换中写入 `success: true`，并将任务设为 `completed`；
-- 自动解锁依赖该任务的后续任务；
-- 记录完整运行历史。
+- 保存本次运行的 summary 和 artifact ID；
+- 将任务设为 `submitted`，等待主 Agent 验收；
+- 不将任务设为 `completed`，也不解锁后续任务。
 
 
 返回：
 
 ```
 {
-  "success": true,
+  "ok": true,
+  "task_name": "[TASK_NAME]",
+  "status": "submitted"
+}
+```
+
+### 6.9 接受任务结果
+
+```
+statemng task accept T-012 \
+  --task-name [TASK_NAME] \
+  --run-id R-048 \
+  --json
+```
+
+该命令只由主 Agent 调用。若需要独立验证，主 Agent 可以创建验证 subagent；验证 subagent 只提交验证结果，是否接受原任务仍由主 Agent 决定。
+
+职责：
+
+- 检查任务是否为 `submitted`，且 `run_id` 对应当前提交；
+- 检查 summary、必要 artifact 和验收字段是否完整，artifact 是否存在且哈希一致；
+- 由主 Agent 根据研究结果和必要的验证结果判断是否通过验收；
+- 在 summary、artifact 和运行记录均已持久化后，最后原子替换 `tasks/T-012.json`，一次写入 `status: completed`、`accepted_run_id`、artifact ID 和完成时间；
+- 将这次任务 JSON 原子替换作为任务正式完成的唯一提交点；
+- 提交成功后解锁依赖该任务的后续任务，并更新 Markdown 视图。
+
+
+若最终任务 JSON 已提交，而后续解锁或 Markdown 更新被中断，`project resume` 根据依赖关系重新计算 `ready` 状态并重建视图。
+
+
+返回：
+
+```
+{
+  "ok": true,
+  "task_name": "[TASK_NAME]",
   "status": "completed",
   "unlocked_tasks": ["T-015"]
 }
@@ -565,25 +657,19 @@ statemng task complete T-012 \
 
 ```
 statemng task block T-012 \
+  --task-name [TASK_NAME] \
   --run-id R-048 \
   --reason-file blocker.md \
   --json
 ```
 
-适用于：
-
-- 缺少关键数据、权限或外部条件；
-- 需要用户或主 Agent 决定研究方向；
-- 前提假设无法验证或任务定义存在歧义；
-- 发现超出当前任务边界的问题。
-
-
-阻塞不同于失败。已经形成的中间产物必须保留。
+当任务必须等待用户、主 Agent 或外部条件才能继续时，将任务设为 `blocked`，并在 reason 文件中写明具体阻塞条件。阻塞不同于失败，已经形成的中间产物必须保留。
 
 ### 6.11 标记任务失败
 
 ```
 statemng task fail T-012 \
+  --task-name [TASK_NAME] \
   --run-id R-048 \
   --reason-file failure.md \
   --retryable true \
@@ -593,24 +679,24 @@ statemng task fail T-012 \
 失败信息应包括：
 
 - 失败原因；
-- 已尝试的方法；
-- 是否建议重试；
-- 是否建议换一种 Agent 角色；
-- 是否需要重新定义任务。
+- 已尝试的方法和保留下来的中间结果。
 
 
-主 Agent 根据这些信息决定重新派发或终止任务。
+`retryable: true` 表示结束本次 run，并将任务重新设为 `ready`；否则任务进入 `failed`。系统不自动重试，是否再次派发仍由主 Agent 决定。
 
 ### 6.12 查询状态
 
 ```
-statemng task status T-012 --json
+statemng task status T-012 \
+  --task-name [TASK_NAME] \
+  --json
 ```
 
 或：
 
 ```
 statemng task list \
+  --task-name [TASK_NAME] \
   --status running,blocked \
   --json
 ```
@@ -619,21 +705,22 @@ statemng task list \
 
 返回：
 
-- 当前状态、`executor_ref` 和 run ID；
-- 最近一次 heartbeat 与最新进展；
-- 已提交产物；
-- 已运行时长和重试次数。
+- 当前状态和 run ID；
+- 已提交的 summary 和 artifact。
 
 ### 6.13 读取研究产物
 
 ```
-statemng artifact show A-031 --json
+statemng artifact show A-031 \
+  --task-name [TASK_NAME] \
+  --json
 ```
 
 或：
 
 ```
 statemng artifact list \
+  --task-name [TASK_NAME] \
   --task T-012 \
   --json
 ```
@@ -643,328 +730,62 @@ statemng artifact list \
 ### 6.14 项目校验
 
 ```
-statemng doctor --json
+statemng doctor \
+  --task-name [TASK_NAME] \
+  --json
 ```
 
 用于检测：
 
-- JSON 文件损坏、字段不一致或存在无效、循环的任务依赖；
-- 丢失的 artifact；
-- 缺失或重复的 `executor_ref`；
-- 长期停留在 `running`、需要主 Agent 或 Adapter 核实执行实例状态的任务；
-- 不兼容的 schema 版本；
-- 断电后遗留的临时文件、孤立 artifact，以及没有 `success: true` 完成记录的运行。
+- 无法解析或版本不兼容的 JSON；
+- 无效或循环的任务依赖；
+- 任务与当前 run 不一致；
+- 丢失或哈希不一致的 artifact；
+- 断电后遗留的临时文件和未完成运行。
 
 ### 6.15 断电恢复
 
-总体任务恢复时，只有已经原子写入 `success: true` 且任务状态为 `completed` 的运行才视为成功。`statemng project resume --json` 应列出所有未成功结束的运行及其目录，但不自动删除文件，也不自动重试。
+总体任务恢复时，只有任务 JSON 已经原子写入 `status: completed` 和 `accepted_run_id`，任务才视为正式完成。`statemng project resume --task-name [TASK_NAME] --json` 应列出所有关联任务尚未正式完成的运行及其目录，但不自动删除文件，也不自动重试。
 
 该命令可以依据已提交的任务依赖确定性地恢复 `pending` 到 `ready` 的转换并重建 Markdown 视图；是否保留未成功运行的文件则必须由主 Agent 判断。
 
-主 Agent 逐项检查这些运行的 JSON 状态、日志、workspace 和 artifact，并决定：
+主 Agent 逐项检查这些运行的任务状态、run 记录、workspace 和 artifact，并决定：
 
-- 结果完整且可验证：保留结果并补交完成记录；
-- 中间结果仍有价值：保留相应文件，将任务重新设为 `ready` 或 `blocked`；
+- 结果完整且可验证：保留结果，补交 `submit`，复核后执行 `accept`；
+- 中间结果仍有价值：保留相应文件，将任务设为 `blocked`，或用可重试的 `fail` 重新设为 `ready`；
 - 文件无效、重复或已不再需要：只清理该运行的目录，再重新派发或结束任务。
 
 
-清理由主 Agent 使用宿主环境的文件操作直接执行，不增加 `statemng cleanup` 或 `statemng recover` 命令。若需要改变任务状态，主 Agent 先通过现有的 `complete`、`block` 或 `fail` 命令记录决定，再直接清理选定文件。清理范围必须限制在当前 `.state-management/[TASK_NAME]/runs/[RUN_ID]/`；已登记 artifact、成功运行和其他总体任务目录不得删除。无法判断时默认保留。对于 $\epsilon$-form 任务，清理前尤其应检查耗时的符号计算、候选变换和验证残差是否仍可复用。
+清理由主 Agent 使用宿主环境的文件操作直接执行，不增加 `statemng cleanup` 或 `statemng recover` 命令。若需要改变任务状态，主 Agent 先通过现有的 `submit`、`accept`、`block` 或 `fail` 命令记录决定，再直接清理选定文件。清理范围必须限制在当前 `.state-management/[TASK_NAME]/runs/[RUN_ID]/`；已登记 artifact、已接受的运行和其他总体任务目录不得删除。无法判断时默认保留。对于 $\epsilon$-form 任务，清理前尤其应检查耗时的符号计算、候选变换和验证残差是否仍可复用。
 
-## 七、任务状态模型
+## 七、可靠性要求
 
-建议采用以下状态：
-
-```
-pending
-   │
-   │ 依赖满足
-   ▼
- ready
-   │
-   │ subagent claim
-   ▼
- running
-  ├───────────────┬───────────────┐
-  ▼               ▼               ▼
-completed       blocked          failed
-                                    │
-                                    │ retry
-                                    ▼
-                                  ready
-```
-
-状态含义：
-
-- `pending`：前置依赖尚未完成；
-- `ready`：可以被 subagent 领取；
-- `running`：已经由某个 subagent 领取；
-- `completed`：完成并通过基本验收；
-- `blocked`：需要用户、主 Agent 或外部条件介入；
-- `failed`：本次执行失败；
-- `cancelled`：任务被主 Agent 主动取消。
-
-
-只有 CLI 可以修改任务状态。
-
-## 八、主 Agent 与 subagent 的协作流程
-
-（*需要后续详细设计。这里只提供初步参考，不以这里的设计为准。）*
-
-### 8.1 用户提出研究目标
-
-用户对主 Agent 说：
-
-```
-系统性研究不同通用 Agent 的持续研究机制，
-并形成一套跨平台设计方案。
-```
-
-### 8.2 主 Agent 初始化或恢复总体任务
-
-主 Agent 先确定总体任务名称，并检查对应目录是否存在。
-
-若 `.state-management/cross-agent-state-management/` 不存在，说明该总体任务尚未初始化。主 Agent 在项目根目录执行：
-
-```
-statemng init cross-agent-state-management
-```
-
-初始化命令已经创建初始状态，因此不再执行 `resume`。
-
-若该目录已经存在，主 Agent 进入目录并执行：
-
-```
-statemng project resume --json
-```
-
-读取已有研究状态。两种情况下，后续操作均在该总体任务目录内进行。
-
-### 8.3 主 Agent 创建任务
-
-例如：
-
-```
-T-001：研究 Codex 的相关机制
-T-002：研究 Hermes 的相关机制
-T-003：研究 Claude Code 的相关机制
-T-004：比较三者并形成统一抽象
-```
-
-其中：
-
-```
-T-004 depends on T-001, T-002, T-003
-```
-
-### 8.4 主 Agent 查询可执行任务
-
-```
-statemng task ready --json
-```
-
-得到：
-
-```
-T-001
-T-002
-T-003
-```
-
-### 8.5 主 Agent 创建原生 subagent
-
-这一步不通过 CLI。
-
-主 Agent 使用当前平台的原生 subagent 能力创建三个 subagent，并为每次派发取得或生成唯一的 `executor_ref`。
-
-传给每个 subagent 的启动提示词应采用固定模板：
-
-```
-你是当前项目的研究 subagent。
-
-总体任务目录：/path/to/project/.state-management/cross-agent-state-management
-内部任务 ID：T-001
-Executor Ref：codex:dispatch-a91c
-
-请严格执行以下协议：
-
-1. 执行：
-   statemng task claim T-001 --executor-ref codex:dispatch-a91c --json
-
-2. 读取返回的 run_id。
-
-3. 执行：
-   statemng task show T-001 --run-id <run_id> --json
-
-4. 根据任务目标完成研究。
-
-5. 所有重要结果必须保存为文件，并通过
-   statemng artifact add 登记。
-
-6. 完成时调用 statemng task complete。
-
-7. 无法完成时调用 statemng task block 或 fail。
-
-不要只在聊天中返回结果。
-```
-
-### 8.6 subagent 领取任务
-
-subagent 执行：
-
-```
-statemng task claim T-001 \
-  --executor-ref codex:dispatch-a91c \
-  --json
-```
-
-取得：
-
-```
-run_id = R-001
-```
-
-然后读取完整任务：
-
-```
-statemng task show T-001 \
-  --run-id R-001 \
-  --json
-```
-
-### 8.7 subagent 执行并提交结果
-
-完成研究后：
-
-```
-statemng artifact add \
-  --task T-001 \
-  --run-id R-001 \
-  --path runs/R-001/workspace/codex-report.md \
-  --type research-report \
-  --json
-```
-
-再执行：
-
-```
-statemng task complete T-001 \
-  --run-id R-001 \
-  --summary-file runs/R-001/workspace/summary.md \
-  --artifact A-001 \
-  --json
-```
-
-### 8.8 主 Agent 检查状态
-
-主 Agent 通过：
-
-```
-statemng task list \
-  --status running,completed,blocked,failed \
-  --json
-```
-
-检查所有 subagent 的结果。
-
-主 Agent 不需要依赖 subagent 的聊天消息作为唯一交接方式。
-
-### 8.9 自动解锁综合任务
-
-当 T-001、T-002、T-003 全部完成后，T-004 自动进入 `ready`。
-
-主 Agent 再创建一个原生综合 subagent，让其领取 T-004。
-
-综合 subagent 通过 CLI 读取三个前置任务的 artifact，形成最终报告。
-
-## 九、Adapter 的正式定义
-
-Adapter 是平台相关的 subagent 调用规范，不是独立运行时。实际实现可以采用平台专用指令或项目级 Agent 配置，必要时辅以宿主平台 hooks 和少量 bootstrap prompt 脚本。
-
-Adapter 不得：
-
-- 绕过 CLI 修改 JSON 事实源或自行定义另一套任务状态；
-- 保存独立的研究历史或绕过 CLI 提交结果；
-- 启动宿主 Agent 之外的模型进程。
-
-## 十、持久化目录设计
-
-*（需要后续详细设计。这里只提供初步参考，不以这里的设计为准。）*
-
-项目内部按总体任务维护独立目录：
-
-```
-.state-management/
-├── [TASK_NAME_1]/
-│   ├── meta.json
-│   ├── events/
-│   │   ├── E-001.json
-│   │   └── E-002.json
-│   ├── tasks/
-│   │   ├── T-001.json
-│   │   └── T-002.json
-│   ├── runs/
-│   │   └── R-001/
-│   │       ├── run.json
-│   │       ├── logs/
-│   │       │   └── L-001.json
-│   │       └── workspace/
-│   ├── artifacts/
-│   │   ├── A-001.md
-│   │   └── A-002.json
-│   ├── .locks/
-│   └── views/
-│       ├── PROJECT_STATE.md
-│       ├── TASK_BOARD.md
-│       ├── DECISIONS.md
-│       └── RESEARCH_LOG.md
-└── [TASK_NAME_2]/
-    └── ...
-```
-
-其中：
-
-- `meta.json`：总体任务名称、目标和 schema 版本；
-- `tasks/*.json`：内部任务、依赖、当前状态和运行结果，是任务状态的事实源；
-- `runs/[RUN_ID]/run.json`：单次运行的身份、时间和结果记录；
-- `events/*.json`：不可变的逐事件审计记录，不代替当前 JSON 状态；
-- `artifacts/`：正式研究产物；
-- `runs/[RUN_ID]/workspace/`：每次运行的隔离工作目录；
-- `runs/[RUN_ID]/logs/*.json`：该次运行的逐条日志；
-- `.locks/`：CLI 使用的任务级锁文件，不保存研究状态；
-- `views/`：自动生成的人类可读状态文件。
-
-
-每个 `[TASK_NAME]` 目录都是完整、自包含的状态单元，可以独立复制、归档或恢复。`.state-management/` 下不设置跨总体任务共享的可变状态。
-
-## 十一、可靠性要求
-
-### 11.1 原子任务领取
+### 7.1 原子任务领取
 
 两个 subagent 同时领取同一任务时，只允许一个成功。CLI 应对稳定的 `.locks/T-xxx.lock` 加排他锁，在锁内重新读取和校验 `tasks/T-xxx.json`，并通过同目录临时文件、落盘和原子替换提交新状态。进程退出或断电后锁由操作系统释放。
 
-### 11.2 幂等操作
+### 7.2 任务完成提交点与幂等操作
 
-同一个 `run_id` 重复提交相同 artifact 时，不应产生无限重复记录。
+`task accept` 必须先确认 summary、artifact 和运行记录均已持久化，再在任务锁内通过同目录临时文件、落盘和原子替换将任务 JSON 设为 `completed`。这次任务 JSON 原子替换是任务正式完成的唯一提交点；后续依赖解锁和 Markdown 更新即使中断，也可以恢复重建。
 
-### 11.3 运行身份验证
+同一个 `run_id` 重复提交相同 artifact 时，不应产生无限重复记录；对已经接受的同一 `run_id` 重复执行 `task accept`，应返回已有完成状态，不得再次产生完成记录。
 
-只有持有当前 `run_id` 的 subagent 才能完成、阻塞或失败该任务。
+### 7.3 运行身份验证
 
-`executor_ref` 只用于追踪执行实例，不能代替 `run_id` 进行状态更新，也不能用于多个派发。
+提交、阻塞或标记本次运行失败时必须提供当前 `run_id`，CLI 必须验证它与任务当前运行一致。只有主 Agent 可以接受提交并将任务设为 `completed`。
 
-### 11.4 非法退出处理
+### 7.4 非法退出处理
 
 若 subagent 已退出但任务仍处于 `running`：
 
 - 主 Agent 应检查状态；
-- 将本次运行标记为异常；
-- 根据任务属性重新设为 `ready` 或 `blocked`；
-- 保留已有产物和日志。
+- 通过可重试的 `fail` 将任务设为 `ready`，或将任务设为 `blocked`；
+- 保留已有 artifact 和 workspace。
 
 
 由于 CLI 不直接管理 subagent 进程，异常退出检测主要由主 Agent 和 Adapter 负责；断电后的判断和清理遵循 6.15。
 
-### 11.5 工作目录隔离
+### 7.5 工作目录隔离
 
 每个运行使用独立 workspace：
 
@@ -975,7 +796,3 @@ Adapter 不得：
 多个 subagent 不应直接同时修改同一份关键文件。
 
 正式结果通过 artifact 机制汇合。
-
-### 11.6 防止死循环
-
-自动重试及自动创建子任务必须设置次数、深度和数量上限。
