@@ -146,7 +146,7 @@ flowchart TD
     LIST --> CONFIRM["主 Agent 请用户确认总体任务名"]
     N -- "是" --> I{"总体任务目录是否存在"}
     CONFIRM --> I
-    I -- "否" --> INIT["statemng init TASK_NAME"]
+    I -- "否" --> INIT["statemng init TASK_NAME<br/>--goal-file goal.md"]
     I -- "是" --> RESUME["statemng project resume<br/>--task-name TASK_NAME"]
     INIT --> PLAN["根据当前证据创建必要的任务与依赖"]
     RESUME --> RECOVER{"是否存在未完成运行"}
@@ -231,7 +231,7 @@ flowchart TD
 
 其中：
 
-- `meta.json`：总体任务名称、目标和 schema 版本；
+- `meta.json`：总体任务名称、总体目标的 Markdown 原文和 schema 版本；
 - `tasks/*.json`：内部任务、依赖、当前状态和运行结果，是任务状态的事实源；
 - `runs/[RUN_ID]/run.json`：单次运行的身份、时间和结果记录；
 - `artifacts/`：由 `artifact add` 复制并登记的不可变正式研究产物；
@@ -247,7 +247,7 @@ flowchart TD
 
 一次协作只包含以下步骤：
 
-1. 主 Agent 确定总体任务名；无法唯一确定时，列出已有名称并请用户确认。随后初始化或恢复该总体任务，创建当前确有必要的任务。
+1. 主 Agent 确定总体任务名；无法唯一确定时，列出已有名称并请用户确认。总体任务不存在时使用总体目标文件初始化，已经存在时直接恢复；随后创建当前确有必要的任务。
 1. 主 Agent 查询 `ready` 任务，创建原生 subagent，并传入总体任务名和内部任务 ID。
 1. subagent 依次执行 `claim` 和 `show`，在独立 workspace 中研究；重要结果通过 `artifact add` 保存，然后执行 `submit`，或用 `block`、`fail` 说明无法完成。
 1. 主 Agent 读取 summary 和 artifact；必要时另行验证。验证 subagent 只提交验证结果，不接受原任务。
@@ -378,18 +378,22 @@ CLI 供主 Agent 和原生 subagent 使用，不直接面向用户。命令名�
 ### 6.1 初始化项目
 
 ```
-statemng init [TASK_NAME]
+statemng init [TASK_NAME] \
+  --goal-file goal.md
 ```
 
 职责：
 
 - 创建 `.state-management/[TASK_NAME]/`；
 - 初始化 JSON 状态文件、artifact 和运行目录；
+- 读取总体目标文件，将其 Markdown 原文写入 `meta.json` 的 `goal` 字段；
 - 写入 schema 版本及总体任务名称；
 - 生成初始 Markdown 状态视图。
 
 
-若同名总体任务目录已经存在，命令必须停止，不能覆盖。初始化不改变主 Agent 的工作目录。
+`--goal-file` 必须指向存在、非空且采用 UTF-8 编码的 Markdown 文件。该文件只作为初始化输入；CLI 不保存其路径，也不额外复制该文件。初始化完成后，`meta.json` 中的 `goal` 是总体目标的事实源，外部文件的后续修改不影响已初始化的总体任务。初版不提供修改总体目标的命令。
+
+若总体目标文件无效，或者同名总体任务目录已经存在，命令必须停止且不得修改文件。初始化不改变主 Agent 的工作目录。
 
 
 返回：
@@ -420,7 +424,7 @@ statemng project list --json
 
 `.state-management/` 尚不存在时，该命令返回空列表而不是报错。
 
-用户已经明确给出总体任务名时，主 Agent 直接使用；用户明确要求以该名称新建时，可以直接执行 `init`。没有现有总体任务且用户未指定名称时，主 Agent 提出名称并请用户确认；名称未明确且存在多个总体任务，或者准备恢复的名称不存在时，主 Agent 应将已有名称交给用户确认。不得自行猜测、改名或创建新任务。CLI 不模拟用户确认，只负责在任务名缺失或无效时停止。
+用户已经明确给出总体任务名时，主 Agent 直接使用；用户明确要求以该名称新建时，主 Agent 准备总体目标文件后执行 `init`。没有现有总体任务且用户未指定名称时，主 Agent 提出名称并请用户确认；名称未明确且存在多个总体任务，或者准备恢复的名称不存在时，主 Agent 应将已有名称交给用户确认。不得自行猜测、改名或创建新任务。CLI 不模拟用户确认，只负责在任务名缺失或无效时停止。
 
 ```
 statemng project resume \
@@ -445,16 +449,30 @@ statemng project resume \
 statemng task create \
   --task-name [TASK_NAME] \
   --title "调查相关研究工作" \
-  --description-file task.md \
+  --description-file task.json \
   --depends-on T-001,T-002 \
   --json
 ```
 
+`task.json` 的格式为：
+
+```json
+{
+  "objective": "[目标]",
+  "background": "[背景，如：前面已经完成了xxx，...]",
+  "acceptance_criteria": [
+    "[酌情制定验收标准]",
+  ]
+}
+```
+
+其中，`objective` 必须是非空字符串；`background` 必须是字符串，没有额外背景时可以为空；`acceptance_criteria` 必须是至少包含一个非空字符串的数组。不得包含其他字段。该文件只作为创建任务的输入；CLI 将三个字段写入任务 JSON，不保存原文件路径，后续状态也不依赖该文件。
+
 设计要求：
 
 - 自动生成稳定任务 ID；
-- 保存任务目标、依赖和验收标准；
-- 详细描述优先通过文件传入。
+- 校验并保存任务目标、背景、依赖和验收标准；
+- JSON 描述文件无效时停止且不得创建任务。
 
 
 返回：
@@ -602,7 +620,7 @@ statemng task submit T-012 \
 职责：
 
 - 检查调用者是否持有当前任务；
-- 检查必要产物是否已经提交；
+- 检查命令中声明的 artifact 已经由当前任务和运行登记；
 - 保存本次运行的 summary 和 artifact ID；
 - 将任务设为 `submitted`，等待主 Agent 验收；
 - 不将任务设为 `completed`，也不解锁后续任务。
@@ -632,8 +650,8 @@ statemng task accept T-012 \
 职责：
 
 - 检查任务是否为 `submitted`，且 `run_id` 对应当前提交；
-- 检查 summary、必要 artifact 和验收字段是否完整，artifact 是否存在且哈希一致；
-- 由主 Agent 根据研究结果和必要的验证结果判断是否通过验收；
+- 检查 summary、任务的三个描述字段和本次提交声明的 artifact 是否完整，artifact 是否存在且哈希一致；
+- 由主 Agent 根据 `acceptance_criteria`、研究结果和必要的验证结果判断是否通过验收；CLI 只检查验收字段的结构，不判断科研结果是否满足验收标准；
 - 在 summary、artifact 和运行记录均已持久化后，最后原子替换 `tasks/T-012.json`，一次写入 `status: completed`、`accepted_run_id`、artifact ID 和完成时间；
 - 将这次任务 JSON 原子替换作为任务正式完成的唯一提交点；
 - 提交成功后解锁依赖该任务的后续任务，并更新 Markdown 视图。
