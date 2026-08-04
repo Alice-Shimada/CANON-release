@@ -13,7 +13,13 @@ from typing import Any, Callable
 SERVER_DIRECTORY = Path(__file__).resolve().parent
 PROJECT_ROOT = SERVER_DIRECTORY.parent
 CLI = SERVER_DIRECTORY / "statemng"
-PROTOCOL_VERSION = "2025-06-18"
+SUPPORTED_PROTOCOL_VERSIONS = (
+    "2025-11-25",
+    "2025-06-18",
+    "2025-03-26",
+    "2024-11-05",
+)
+PROTOCOL_VERSION = SUPPORTED_PROTOCOL_VERSIONS[0]
 
 
 def object_schema(
@@ -356,7 +362,7 @@ def handle(message: Any) -> dict[str, Any] | None:
         )
         protocol_version = (
             requested_version
-            if isinstance(requested_version, str) and requested_version
+            if requested_version in SUPPORTED_PROTOCOL_VERSIONS
             else PROTOCOL_VERSION
         )
         return success(

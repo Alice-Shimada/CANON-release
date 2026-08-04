@@ -143,6 +143,30 @@ class MCPDefinitionTests(unittest.TestCase):
         )
         self.assertEqual(response["error"]["code"], -32602)
 
+    def test_initialize_negotiates_only_supported_protocol_versions(self) -> None:
+        for version in self.server.SUPPORTED_PROTOCOL_VERSIONS:
+            with self.subTest(version=version):
+                response = self.server.handle(
+                    {
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "initialize",
+                        "params": {"protocolVersion": version},
+                    }
+                )
+                self.assertEqual(response["result"]["protocolVersion"], version)
+        unsupported = self.server.handle(
+            {
+                "jsonrpc": "2.0",
+                "id": 2,
+                "method": "initialize",
+                "params": {"protocolVersion": "2099-01-01"},
+            }
+        )
+        self.assertEqual(
+            unsupported["result"]["protocolVersion"], self.server.PROTOCOL_VERSION
+        )
+
     def test_cli_launch_failure_is_returned_as_a_tool_error(self) -> None:
         original = self.server.PROJECT_ROOT
         try:
@@ -202,12 +226,12 @@ class MCPStdioEndToEndTests(unittest.TestCase):
         initialized = self.client.request(
             "initialize",
             {
-                "protocolVersion": "2026-01-26",
+                "protocolVersion": "2025-11-25",
                 "capabilities": {},
                 "clientInfo": {"name": "test", "version": "1"},
             },
         )["result"]
-        self.assertEqual(initialized["protocolVersion"], "2026-01-26")
+        self.assertEqual(initialized["protocolVersion"], "2025-11-25")
         self.assertIn("tools", initialized["capabilities"])
         self.client.notify("notifications/initialized")
         listed = self.client.request("tools/list")["result"]["tools"]
