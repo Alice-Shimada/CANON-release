@@ -1,64 +1,10 @@
-# CANON_neu
+# CANON
 
-这是一个 clean-slate、agent-facing 的科研 workflow 框架。唯一状态机是
-[`workflow.py`](workflow.py)；Mathematica 侧没有状态机。
+直接向 Agent 提出科研目标。对于需要多步骤推进的研究，Agent 会自动使用项目内部的持续研究状态管理基础设施，并负责初始化、恢复、任务派发、结果审查和后续规划；用户不需要了解或调用状态管理 CLI。
 
-当前完成的是框架层：
+设计文档：
 
-- Python workflow 已实现完整状态转移、sector 排序、任务板、artifact 路由和 subagent gate；
-- 每个 workflow step 都有一个由任务包引用的空白 `skills/*/SKILL.md`；
-- 所有 `.wls` 只有输入/输出契约，没有科学实现；
-- null test 用模拟结果文件验证整个 workflow，不运行 Mathematica。
+- [`跨通用 Agent 的持续研究状态管理基础设施设计方案.md`](docs/state-management/跨通用%20Agent%20的持续研究状态管理基础设施设计方案.md)
+- [`持续研究状态管理的 Agent 接入补充方案.md`](docs/state-management/持续研究状态管理的%20Agent%20接入补充方案.md)
 
-架构与边界见 [`ARCHITECTURE.md`](ARCHITECTURE.md)，脚本协议见
-[`INTERFACES.md`](INTERFACES.md)。
-
-## 运行 null test
-
-```bash
-cd /home/liuyuanche/Program/CANON_neu
-python3 -m unittest -v tests.test_null_workflow
-```
-
-## 初始化真实项目
-
-复制并修改 `project.example.json`，然后：
-
-```bash
-python3 workflow.py init project.json
-```
-
-命令会打印生成的 `state.json` 路径。`next` 同时给出当前步骤的 SKILL、输入、
-候选脚本命令和输出位置。之后主 agent 的最小循环是：
-
-```bash
-python3 workflow.py status <state.json>
-python3 workflow.py next <state.json>
-python3 workflow.py start <state.json> <task-id> --agent root
-```
-
-如果当前任务要求 subagent：
-
-```bash
-python3 workflow.py delegate <state.json> <task-id> \
-  --agent root \
-  --subagent candidate-1 \
-  --role candidate_route \
-  --script methods/dlogbasis/run.wls
-
-python3 workflow.py subreport <state.json> <task-id> <script-result.json> \
-  --subagent candidate-1
-```
-
-如果主 agent 采用这个 subagent 的路线，同一个 `script-result.json` 可以直接
-再次提交为主结果；否则主 agent 按 `next` 给出的接口生成另一个标准结果：
-
-```bash
-python3 workflow.py report <state.json> <task-id> <result.json>
-```
-
-再次查询 `status` 或 `next`，继续到 `DONE`。
-
-## 当前刻意没有实现
-
-所有 Mathematica、Kira、Blade、DlogBasis、Gram-Baikov、MethodCard、IBP、DE、UT/canonical 科学逻辑都为空。实现这些步骤时，保持已有 JSON I/O 不变即可；不要把计算或第二个状态机放进 Python。
+当前先完成 Codex 接入；其他宿主的接入文件暂不实现。

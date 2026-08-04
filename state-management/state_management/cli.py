@@ -848,6 +848,35 @@ def command_task_block(args: argparse.Namespace) -> dict[str, Any]:
     return finish_unsuccessful(args, "blocked", retryable=False)
 
 
+def command_task_unblock(args: argparse.Namespace) -> dict[str, Any]:
+    task_name, task_root, _ = resolve_task_root(args.task_name)
+    with task_lock(task_root, args.task_id):
+        task, run = require_current_run(
+            task_root, args.task_id, args.run_id, {"blocked"}
+        )
+        if run.get("status") != "blocked":
+            raise StateError("task and run blocked states are inconsistent", task_name)
+        task["status"] = "ready"
+        for field in (
+            "run_id",
+            "reason",
+            "summary",
+            "artifact_id",
+            "accepted_run_id",
+            "completed_at",
+        ):
+            task.pop(field, None)
+        atomic_write_json(task_path(task_root, args.task_id), task)
+    rebuild_view(task_root)
+    return {
+        "ok": True,
+        "task_name": task_name,
+        "task_id": args.task_id,
+        "run_id": args.run_id,
+        "status": "ready",
+    }
+
+
 def command_task_fail(args: argparse.Namespace) -> dict[str, Any]:
     retryable = parse_boolean(args.retryable)
     return finish_unsuccessful(args, "failed", retryable=retryable)
@@ -1156,6 +1185,13 @@ def build_parser() -> argparse.ArgumentParser:
     block.add_argument("--reason-file", required=True)
     add_json_option(block)
     block.set_defaults(handler=command_task_block)
+
+    unblock = task_commands.add_parser("unblock")
+    unblock.add_argument("task_id")
+    add_task_name(unblock)
+    unblock.add_argument("--run-id", required=True)
+    add_json_option(unblock)
+    unblock.set_defaults(handler=command_task_unblock)
 
     fail = task_commands.add_parser("fail")
     fail.add_argument("task_id")

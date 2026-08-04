@@ -167,15 +167,20 @@ flowchart TD
     REVIEW -->|"需要独立验证"| VERIFY["创建验证 subagent<br/>读取 artifact 并提交验证结果"]
     VERIFY --> REVIEW
     REVIEW -->|"接受"| ACCEPT["task accept<br/>原子写入 completed 与 accepted_run_id"]
-    REVIEW -->|"不接受或需要外部条件"| BF["task block 或 task fail"]
-    BF --> PLAN
+    REVIEW -->|"不接受"| FAIL["task fail"]
+    REVIEW -->|"需要外部条件"| BLOCK["task block"]
+    FAIL --> PLAN
+    BLOCK --> WAIT["等待阻塞条件解除"]
+    WAIT --> REOPEN["主 Agent: task unblock<br/>状态恢复为 ready"]
+    REOPEN --> PLAN
 
     ACCEPT --> UNLOCK["依据 completed 任务重新计算依赖<br/>后续任务进入 ready"]
     UNLOCK --> VIEW["重建 PROJECT_STATE.md"]
     VIEW --> PLAN
     PLAN -->|"研究目标已经满足"| REPORT["主 Agent 向用户提交阶段或最终结论"]
 
-    RESEARCH -->|"无法完成"| BF
+    RESEARCH -->|"无需等待外部条件的失败"| FAIL
+    RESEARCH -->|"需要外部条件"| BLOCK
 
     subgraph STORE[".state-management/[TASK_NAME]/"]
         META["meta.json"]
@@ -195,6 +200,7 @@ flowchart TD
     SUBMIT -. "更新" .-> RUNS
     SUBMIT -. "更新" .-> TASKS
     ACCEPT -. "最终完成提交点" .-> TASKS
+    REOPEN -. "更新" .-> TASKS
     VIEW -. "生成" .-> VIEWS
     RESUME -. "读取" .-> META
     RESUME -. "读取" .-> TASKS
@@ -252,6 +258,7 @@ flowchart TD
 1. subagent 依次执行 `claim` 和 `show`，在独立 workspace 中研究；重要结果通过 `artifact add` 保存，然后执行 `submit`，或用 `block`、`fail` 说明无法完成。
 1. 主 Agent 读取 summary 和 artifact；必要时另行验证。验证 subagent 只提交验证结果，不接受原任务。
 1. 主 Agent 确认结果满足当前任务的验收标准后执行 `accept`。只有进入 `completed` 的任务才能满足后续任务的依赖。
+1. 任务进入 `blocked` 后，主 Agent 等待并确认阻塞条件已经解除，再执行 `unblock` 将任务恢复为 `ready`，随后重新派发；subagent 不得解除阻塞。
 1. 主 Agent 根据已接受的结果决定继续原计划、创建新的后续任务或停止当前路线。
 
 ### 4.3、任务状态模型
@@ -278,7 +285,7 @@ submitted
 completed
 ```
 
-`running` 或 `submitted` 也可以转为 `blocked`。运行失败时，`retryable: true` 使任务重新转为 `ready`，否则任务进入 `failed`。
+`running` 或 `submitted` 也可以转为 `blocked`；阻塞条件解除后，主 Agent 通过 `unblock` 将任务重新转为 `ready`。运行失败时，`retryable: true` 使任务重新转为 `ready`，否则任务进入 `failed`。
 
 状态含义：
 
@@ -287,7 +294,7 @@ completed
 - `running`：已经由某个 subagent 领取；
 - `submitted`：subagent 已提交结果，等待主 Agent 验收；
 - `completed`：主 Agent 已接受结果，任务正式完成；
-- `blocked`：需要用户、主 Agent 或外部条件介入；
+- `blocked`：需要用户、主 Agent 或外部条件介入；条件解除后由主 Agent 恢复为 `ready`；
 - `failed`：本次执行失败，且没有进入下一次重试；
 
 
@@ -332,7 +339,7 @@ subagent 的职责应尽量单一：
 - CLI 使用协议。
 
 
-任务的详细背景由 subagent 自行通过 CLI 获取。subagent 负责提交研究结果，但不能将任务设为 `completed`。
+任务的详细背景由 subagent 自行通过 CLI 获取。subagent 负责提交研究结果，但不能执行 `accept` 或 `unblock`，不能将任务设为 `completed`，也不能自行解除阻塞。
 
 ### 5.3 平台 Adapter
 
@@ -357,6 +364,7 @@ adapters/
 1. 如何创建原生 subagent，并传递总体任务名和内部任务 ID；
 1. 如何并行执行及限制最大并发数；
 1. 如何判断 subagent 已结束，并处理异常退出。
+1. 如何确保 `accept` 和 `unblock` 只由主 Agent 调用，并禁止 subagent 使用对应 tools。
 
 
 Adapter 应尽量薄，不保存任何项目状态。
@@ -683,7 +691,40 @@ statemng task block T-012 \
 
 当任务必须等待用户、主 Agent 或外部条件才能继续时，将任务设为 `blocked`，并在 reason 文件中写明具体阻塞条件。阻塞不同于失败，已经形成的中间产物必须保留。
 
-### 6.11 标记任务失败
+### 6.11 解除任务阻塞
+
+```
+statemng task unblock T-012 \
+  --task-name [TASK_NAME] \
+  --run-id R-048 \
+  --json
+```
+
+该命令只由主 Agent 在确认阻塞条件已经解除后调用。CLI 必须在任务锁内确认任务当前为 `blocked`，并确认给出的 `run_id` 与该任务被阻塞的当前运行一致；条件不满足时停止且不得修改状态。
+
+命令成功后：
+
+- 将任务原子更新为 `ready`，允许主 Agent 重新派发；
+- 从任务当前状态中移除旧 `run_id`、阻塞原因以及旧 run 的 `summary` 和 `artifact_id`；
+- 保留原 run 的 `blocked` 状态、阻塞原因、workspace 和已有 artifact，作为本次阻塞的完整记录；
+- 后续 `claim` 创建新的 `run_id`，不得复用原运行。
+- 更新 Markdown 状态视图。
+
+返回：
+
+```
+{
+  "ok": true,
+  "task_name": "[TASK_NAME]",
+  "task_id": "T-012",
+  "run_id": "R-048",
+  "status": "ready"
+}
+```
+
+subagent 不得执行 `unblock`。主 Agent 不能仅因希望重试而解除阻塞；如果阻塞条件仍未消失，应继续保留 `blocked` 状态。
+
+### 6.12 标记任务失败
 
 ```
 statemng task fail T-012 \
@@ -702,7 +743,7 @@ statemng task fail T-012 \
 
 `retryable: true` 表示结束本次 run，并将任务重新设为 `ready`；否则任务进入 `failed`。系统不自动重试，是否再次派发仍由主 Agent 决定。
 
-### 6.12 查询状态
+### 6.13 查询状态
 
 ```
 statemng task status T-012 \
@@ -726,7 +767,7 @@ statemng task list \
 - 当前状态和 run ID；
 - 已提交的 summary 和 artifact。
 
-### 6.13 读取研究产物
+### 6.14 读取研究产物
 
 ```
 statemng artifact show A-031 \
@@ -745,7 +786,7 @@ statemng artifact list \
 
 主 Agent 或综合 subagent 通过 artifact 获取结果，而不是依赖原始 subagent 会话仍然存在。
 
-### 6.14 项目校验
+### 6.15 项目校验
 
 ```
 statemng doctor \
@@ -761,7 +802,7 @@ statemng doctor \
 - 丢失或哈希不一致的 artifact；
 - 断电后遗留的临时文件和未完成运行。
 
-### 6.15 断电恢复
+### 6.16 断电恢复
 
 总体任务恢复时，只有任务 JSON 已经原子写入 `status: completed` 和 `accepted_run_id`，任务才视为正式完成。`statemng project resume --task-name [TASK_NAME] --json` 应列出所有关联任务尚未正式完成的运行及其目录，但不自动删除文件，也不自动重试。
 
@@ -772,6 +813,8 @@ statemng doctor \
 - 结果完整且可验证：保留结果，补交 `submit`，复核后执行 `accept`；
 - 中间结果仍有价值：保留相应文件，将任务设为 `blocked`，或用可重试的 `fail` 重新设为 `ready`；
 - 文件无效、重复或已不再需要：只清理该运行的目录，再重新派发或结束任务。
+
+对于已经处于 `blocked` 的任务，`project resume` 只报告其状态和阻塞原因，不自动解除阻塞。主 Agent 确认条件已经解除后，使用 `task unblock` 将任务恢复为 `ready`。
 
 
 清理由主 Agent 使用宿主环境的文件操作直接执行，不增加 `statemng cleanup` 或 `statemng recover` 命令。若需要改变任务状态，主 Agent 先通过现有的 `submit`、`accept`、`block` 或 `fail` 命令记录决定，再直接清理选定文件。清理范围必须限制在当前 `.state-management/[TASK_NAME]/runs/[RUN_ID]/`；已登记 artifact、已接受的运行和其他总体任务目录不得删除。无法判断时默认保留。对于 $\epsilon$-form 任务，清理前尤其应检查耗时的符号计算、候选变换和验证残差是否仍可复用。
@@ -790,7 +833,7 @@ statemng doctor \
 
 ### 7.3 运行身份验证
 
-提交、阻塞或标记本次运行失败时必须提供当前 `run_id`，CLI 必须验证它与任务当前运行一致。只有主 Agent 可以接受提交并将任务设为 `completed`。
+提交、阻塞、解除阻塞或标记本次运行失败时必须提供当前 `run_id`，CLI 必须验证它与任务当前运行一致。只有主 Agent 可以接受提交并将任务设为 `completed`，也只有主 Agent 可以解除阻塞。
 
 ### 7.4 非法退出处理
 
@@ -801,7 +844,7 @@ statemng doctor \
 - 保留已有 artifact 和 workspace。
 
 
-由于 CLI 不直接管理 subagent 进程，异常退出检测主要由主 Agent 和 Adapter 负责；断电后的判断和清理遵循 6.15。
+由于 CLI 不直接管理 subagent 进程，异常退出检测主要由主 Agent 和 Adapter 负责；断电后的判断和清理遵循 6.16。
 
 ### 7.5 工作目录隔离
 

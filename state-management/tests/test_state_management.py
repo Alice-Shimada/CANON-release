@@ -445,6 +445,66 @@ class TaskLifecycleTests(StateManagementTestCase):
         )[1]
         self.assertEqual(status["reason"], "Waiting for input")
 
+        code, wrong_run = self.invoke(
+            "task",
+            "unblock",
+            task["task_id"],
+            "--task-name",
+            "family-a",
+            "--run-id",
+            "R-999",
+        )
+        self.assertEqual(code, 1, wrong_run)
+        self.assertIn("run_id", wrong_run["error"])
+
+        run_path = self.task_root / "runs" / second_run / "run.json"
+        inconsistent_run = json.loads(run_path.read_text(encoding="utf-8"))
+        inconsistent_run["status"] = "running"
+        run_path.write_text(json.dumps(inconsistent_run), encoding="utf-8")
+        code, inconsistent = self.invoke(
+            "task",
+            "unblock",
+            task["task_id"],
+            "--task-name",
+            "family-a",
+            "--run-id",
+            second_run,
+        )
+        self.assertEqual(code, 1, inconsistent)
+        self.assertIn("inconsistent", inconsistent["error"])
+        inconsistent_run["status"] = "blocked"
+        run_path.write_text(json.dumps(inconsistent_run), encoding="utf-8")
+
+        code, unblocked = self.invoke(
+            "task",
+            "unblock",
+            task["task_id"],
+            "--task-name",
+            "family-a",
+            "--run-id",
+            second_run,
+        )
+        self.assertEqual(code, 0, unblocked)
+        self.assertEqual(unblocked["status"], "ready")
+        task_json = json.loads(
+            (self.task_root / "tasks" / f"{task['task_id']}.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(task_json["status"], "ready")
+        for field in ("run_id", "reason", "summary", "artifact_id"):
+            self.assertNotIn(field, task_json)
+        old_run = json.loads(
+            (self.task_root / "runs" / second_run / "run.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(old_run["status"], "blocked")
+        self.assertEqual(old_run["reason"], "Waiting for input")
+        self.assertTrue(second_workspace.is_dir())
+        third_run = self.claim(task["task_id"])["run_id"]
+        self.assertNotEqual(third_run, second_run)
+
         final_task = self.create_task("Non-retryable", description_file="final.json")
         final_run = self.claim(final_task["task_id"])["run_id"]
         final_workspace = self.task_root / "runs" / final_run / "workspace"
@@ -464,6 +524,65 @@ class TaskLifecycleTests(StateManagementTestCase):
         )
         self.assertEqual(code, 0, failed)
         self.assertEqual(failed["status"], "failed")
+
+    def test_unblock_clears_submitted_fields_but_preserves_run_and_artifact(self) -> None:
+        task = self.create_task()
+        run_id = self.claim(task["task_id"])["run_id"]
+        artifact_id = self.submit_result(task["task_id"], run_id)
+        workspace = self.task_root / "runs" / run_id / "workspace"
+        (workspace / "blocker.md").write_text("Need review input", encoding="utf-8")
+        code, blocked = self.invoke(
+            "task",
+            "block",
+            task["task_id"],
+            "--task-name",
+            "family-a",
+            "--run-id",
+            run_id,
+            "--reason-file",
+            f"runs/{run_id}/workspace/blocker.md",
+        )
+        self.assertEqual(code, 0, blocked)
+
+        code, unblocked = self.invoke(
+            "task",
+            "unblock",
+            task["task_id"],
+            "--task-name",
+            "family-a",
+            "--run-id",
+            run_id,
+        )
+        self.assertEqual(code, 0, unblocked)
+        task_status = self.invoke(
+            "task", "status", task["task_id"], "--task-name", "family-a"
+        )[1]
+        self.assertEqual(task_status["status"], "ready")
+        self.assertNotIn("summary", task_status)
+        self.assertNotIn("artifact_id", task_status)
+        old_run = json.loads(
+            (self.task_root / "runs" / run_id / "run.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(old_run["status"], "blocked")
+        self.assertIn("Summary: Verified result", old_run["summary"])
+        self.assertEqual(old_run["artifact_id"], artifact_id)
+        artifact = self.invoke(
+            "artifact", "show", artifact_id, "--task-name", "family-a"
+        )[1]
+        self.assertEqual(artifact["run_id"], run_id)
+        view = (self.task_root / "views" / "PROJECT_STATE.md").read_text(encoding="utf-8")
+        self.assertNotIn("## Submitted Results", view)
+
+        code, repeated = self.invoke(
+            "task",
+            "unblock",
+            task["task_id"],
+            "--task-name",
+            "family-a",
+            "--run-id",
+            run_id,
+        )
+        self.assertEqual(code, 1, repeated)
 
     def test_missing_task_name_uses_required_error(self) -> None:
         code, result = self.invoke("task", "ready")
@@ -609,6 +728,48 @@ class EndToEndConcurrencyTests(StateManagementTestCase):
         self.assertEqual(sum(result.get("error") == "TASK_ALREADY_CLAIMED" for result in results), 1)
         runs = list((self.project / ".state-management" / "family-a" / "runs").glob("R-*"))
         self.assertEqual(len(runs), 1)
+
+    def test_two_processes_cannot_unblock_the_same_task_twice(self) -> None:
+        task_root = self.initialize()
+        task = self.create_task()
+        run_id = self.claim(task["task_id"])["run_id"]
+        workspace = task_root / "runs" / run_id / "workspace"
+        (workspace / "blocker.md").write_text("Waiting", encoding="utf-8")
+        blocked = self.run_cli(
+            "task",
+            "block",
+            task["task_id"],
+            "--task-name",
+            "family-a",
+            "--run-id",
+            run_id,
+            "--reason-file",
+            f"runs/{run_id}/workspace/blocker.md",
+        )
+        self.assertEqual(blocked.returncode, 0, blocked.stdout)
+        command = [
+            sys.executable,
+            str(CLI),
+            "task",
+            "unblock",
+            task["task_id"],
+            "--task-name",
+            "family-a",
+            "--run-id",
+            run_id,
+        ]
+        first = subprocess.Popen(command, cwd=self.project, text=True, stdout=subprocess.PIPE)
+        second = subprocess.Popen(command, cwd=self.project, text=True, stdout=subprocess.PIPE)
+        first_stdout, _ = first.communicate(timeout=10)
+        second_stdout, _ = second.communicate(timeout=10)
+        results = [json.loads(first_stdout), json.loads(second_stdout)]
+        self.assertEqual(sorted([first.returncode, second.returncode]), [0, 1])
+        self.assertEqual(sum(result.get("status") == "ready" for result in results), 1)
+        task_json = json.loads(
+            (task_root / "tasks" / f"{task['task_id']}.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(task_json["status"], "ready")
+        self.assertNotIn("run_id", task_json)
 
 
 if __name__ == "__main__":
