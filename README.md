@@ -1,64 +1,111 @@
-# CANON_neu
+# CANON
 
-这是一个 clean-slate、agent-facing 的科研 workflow 框架。唯一状态机是
-[`workflow.py`](workflow.py)；Mathematica 侧没有状态机。
+直接向 Agent 提出科研目标。对于需要多步骤推进的研究，Agent 会自动使用项目内部的 `statemng` 持续研究状态管理基础设施，并负责初始化、恢复、任务派发、结果审查和后续规划。用户不需要了解或调用状态管理 CLI。
 
-当前完成的是框架层：
+## 当前可用范围
 
-- Python workflow 已实现完整状态转移、sector 排序、任务板、artifact 路由和 subagent gate；
-- 每个 workflow step 都有一个由任务包引用的空白 `skills/*/SKILL.md`；
-- 所有 `.wls` 只有输入/输出契约，没有科学实现；
-- null test 用模拟结果文件验证整个 workflow，不运行 Mathematica。
+当前已经完成 Codex 接入，使用条件为：
 
-架构与边界见 [`ARCHITECTURE.md`](ARCHITECTURE.md)，脚本协议见
-[`INTERFACES.md`](INTERFACES.md)。
+- macOS 或 Linux；
+- Python 3.10 或更高版本；
+- Codex 将本仓库识别为 trusted project；
+- 使用项目原始 checkout 的 Local 会话，不使用 Worktree 会话执行持续研究。
 
-## 运行 null test
+OpenCode、Claude Code 和 Hermes 的接入尚未实现。Windows 原生环境也尚未适配。
 
-```bash
-cd /home/liuyuanche/Program/CANON_neu
-python3 -m unittest -v tests.test_null_workflow
+## 首次准备
+
+### 用户操作
+
+1. 在 Codex Desktop 中打开本仓库，按 Codex 的原生提示信任项目。
+2. 新建一个 **Local** 会话。即使机器本地 launcher 尚未安装，该会话也应当可以正常创建。
+3. 将下面的指令交给 Agent：
+
+```text
+请为当前 CANON checkout 完成 statemng Codex 接入准备：
+
+1. 确认当前是 Local 会话，并确认 .git 是目录、git-dir 与 common-dir 都是 .git。
+2. 由你运行 state-management/adapters/codex/install_launcher.py，安装机器本地 launcher。
+3. 由你运行 state-management/adapters/codex/install_launcher.py --check，确认 launcher 指向当前 checkout。
+4. 不要运行 statemng CLI，不要创建或修改任何研究状态。
+5. 报告检查结果，并明确告诉我是否需要新建 Local 会话。
 ```
 
-## 初始化真实项目
+4. 如果 Codex 请求允许 Agent 写入 `$HOME/.codex/statemng/CANON/mcp`，批准这一明确路径的操作；不需要授予更宽泛的文件写入权限。
+5. 安装完成后，完全退出并重新打开 Codex Desktop，再在本仓库中新建一个 Local 会话。MCP tool surface 在会话初始化时确定，安装 launcher 的旧会话不会热加载 `statemng` tools。
 
-复制并修改 `project.example.json`，然后：
+用户不应手动运行 `statemng` CLI、直接启动 `mcp_server.py`，也不应直接修改 `.state-management/` 中的 JSON。
 
-```bash
-python3 workflow.py init project.json
+### Agent 操作
+
+接入 Agent 必须在仓库根目录执行：
+
+```text
+state-management/adapters/codex/install_launcher.py
+state-management/adapters/codex/install_launcher.py --check
 ```
 
-命令会打印生成的 `state.json` 路径。`next` 同时给出当前步骤的 SKILL、输入、
-候选脚本命令和输出位置。之后主 agent 的最小循环是：
+安装器会将当前 checkout 和当前 Python 的绝对路径写入：
 
-```bash
-python3 workflow.py status <state.json>
-python3 workflow.py next <state.json>
-python3 workflow.py start <state.json> <task-id> --agent root
+```text
+$HOME/.codex/statemng/CANON/mcp
 ```
 
-如果当前任务要求 subagent：
+该 launcher 是机器本地文件，不属于仓库，也不保存研究状态。仓库中没有用户个人目录的硬编码；其他用户机器上的接入 Agent 执行安装器后，会得到适合该机器的 launcher。
 
-```bash
-python3 workflow.py delegate <state.json> <task-id> \
-  --agent root \
-  --subagent candidate-1 \
-  --role candidate_route \
-  --script methods/dlogbasis/run.wls
+如果 `--check` 失败，Agent 应重新安装 launcher，并停止当前会话中的持续研究，等待全新 Local 会话加载 MCP。不得继续使用可能指向其他 checkout 的 tools。
 
-python3 workflow.py subreport <state.json> <task-id> <script-result.json> \
-  --subagent candidate-1
+## MCP 自检
+
+在重新打开的 Local 会话中，将下面的指令交给 Agent：
+
+```text
+请只做 statemng MCP 接入自检，不开展研究，也不修改任何研究状态：
+
+1. 确认当前是 Codex Local 会话。
+2. 由你运行 state-management/adapters/codex/install_launcher.py --check。
+3. 确认 statemng_project_list 位于你的 MCP tool surface。
+4. 必须通过 MCP 调用 statemng_project_list 一次，禁止用 shell、statemng CLI 或直接运行 mcp_server.py 代替。
+5. 报告 launcher 校验结果、MCP tool 调用是否成功，以及 tool 返回的完整 structured result。
 ```
 
-如果主 agent 采用这个 subagent 的路线，同一个 `script-result.json` 可以直接
-再次提交为主结果；否则主 agent 按 `next` 给出的接口生成另一个标准结果：
+自检成功必须同时满足：
 
-```bash
-python3 workflow.py report <state.json> <task-id> <result.json>
+- 会话正常创建，没有 `required MCP servers failed to initialize`；
+- launcher 校验返回 `"ok": true`；
+- Agent 实际产生 `statemng_project_list` 的 MCP tool call；
+- tool 返回 `isError: false`，且 `structuredContent.ok` 为 `true`。
+
+`task_names` 为空只表示尚未创建持续研究任务，不是错误。Codex 显示的完整工具名可能是 `mcp__statemng__statemng_project_list`；前缀是宿主增加的命名空间。
+
+## 正常使用
+
+准备完成后，用户只需在 Local 会话中用自然语言提出科研目标。对于多步骤科研任务，Agent 必须加载 `persistent-scientific-research` Skill，并通过 `statemng` MCP tools 完成所有状态操作。
+
+研究状态保存在：
+
+```text
+.state-management/[TASK_NAME]/
 ```
 
-再次查询 `status` 或 `next`，继续到 `DONE`。
+不同总体任务彼此隔离。已有任务由 Agent 恢复，不存在的任务由 Agent 初始化；用户不需要选择内部命令或管理任务状态。
 
-## 当前刻意没有实现
+`.state-management/` 已加入 `.gitignore`。其中的状态、run workspace 和 artifact 均保留在当前项目本地，不随 Git 提交。
 
-所有 Mathematica、Kira、Blade、DlogBasis、Gram-Baikov、MethodCard、IBP、DE、UT/canonical 科学逻辑都为空。实现这些步骤时，保持已有 JSON I/O 不变即可；不要把计算或第二个状态机放进 Python。
+## 维护与故障处理
+
+- checkout 路径、Python 路径或当前主要 checkout 发生变化后，Agent 必须重新安装并校验 launcher，然后使用全新 Local 会话。
+- 每个用户的 `$HOME/.codex/statemng/CANON/mcp` 同时只指向一个 CANON checkout；首次状态调用前的 `--check` 用于防止写入另一 checkout。
+- Worktree 会话仍可处理普通任务，但不得执行持续研究。
+- `statemng` MCP 启动失败时，Codex 会话应保持可用；Agent 必须停止持续研究并报告接入错误，不得绕过 MCP 改用 CLI。
+
+修改 Codex 接入或状态管理代码后，可从 `state-management/` 目录运行完整测试：
+
+```text
+python3 -m unittest discover -s tests -p 'test_*.py' -v
+```
+
+设计文档：
+
+- [`跨通用 Agent 的持续研究状态管理基础设施设计方案.md`](docs/state-management/跨通用%20Agent%20的持续研究状态管理基础设施设计方案.md)
+- [`持续研究状态管理的 Agent 接入补充方案.md`](docs/state-management/持续研究状态管理的%20Agent%20接入补充方案.md)
