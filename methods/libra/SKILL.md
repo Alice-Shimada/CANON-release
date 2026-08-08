@@ -38,8 +38,9 @@ CANON 若采用非交互的逐变量 `Fuchsify`，它只是基于现有接口和
 并保存取值；部分或完整特化都只能帮助构造 candidate，不能作接受证据。结束时仍须对未
 取值的完整符号系统联合检查
 精确 gauge relation、各方向 Fuchsian 性、平坦性与 epsilon factorization。完成这一
-闭环前，多变量输入仍由当前 runner 明确返回 `NO_CANDIDATE`，而不是被描述为 Libra
-不支持。
+闭环前，多变量输入仍由当前 runner 明确返回 `INCONCLUSIVE/OUT_OF_SCOPE`，而不是被
+描述为 Libra 不支持，也不会把尚未实现的卡范围
+解释为 candidate 的数学失败。
 
 还要注意，Libra 的 `EFormQ[ds,eps]` 只判定每个连接矩阵除以 `eps` 后是否不再含
 `eps`；它不证明连接属于某个 dlog alphabet。多变量 canonical acceptance 因而还需要
@@ -61,10 +62,12 @@ CANON 独立实现并验收多变量 dlog 分解，不能只依赖 provider 的 
 
 本卡要求实际加载版本为 Libra 1.2，并记录精确 transformation、transformed matrix
 和 Libra `EFormQ` 结果。在
-`mma/CheckSectorCore.wls` 独立验证前，provider 输出始终只是 candidate。
+`mma/CheckSectorCore.wls` 独立验证前，provider 输出始终只是
+`PROVISIONAL/CANDIDATE_TRANSFORMATION`，不能返回 `PASS` 或数学拒绝 `FAIL`。
 
 ## 边界
 
 本卡是有界自动路线。若 `Fuchsify` 或 `FactorOut` 无法给出结论，则返回
-`NO_CANDIDATE`；不得静默回退到 `Rookie`、交互式操作、Fermatica 或 lower-sector
-重写。
+`INCONCLUSIVE/METHOD_EXHAUSTED`；非法或非 flat 系统返回
+`ERROR/INVALID_DIFFERENTIAL_SYSTEM`。不得静默回退到 `Rookie`、交互式操作、
+Fermatica、CANONICA、INITIAL 或 lower-sector 重写。

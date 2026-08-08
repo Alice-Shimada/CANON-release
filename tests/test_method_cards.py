@@ -73,7 +73,7 @@ class MethodCardIntegrationTest(unittest.TestCase):
         # WolframKernel's OpenMP runtime can release its shared-memory object
         # slightly after process exit. Keep sequential test invocations from
         # racing that cleanup; this does not retry or mask a failed run.
-        time.sleep(1.0)
+        time.sleep(2.0)
         result_path = output_dir / "result.json"
         result_debug = (
             result_path.read_text(encoding="utf-8")
@@ -132,6 +132,7 @@ class MethodCardIntegrationTest(unittest.TestCase):
         *,
         relative_entry: bool = True,
         method_options: dict | None = None,
+        sector_cut_de: Path | None = None,
     ) -> Path:
         value = json.loads(
             (FIXTURES / f"search-input-{method}.json").read_text(encoding="utf-8")
@@ -143,6 +144,10 @@ class MethodCardIntegrationTest(unittest.TestCase):
         ):
             descriptor = value["payload"][artifact_name]
             descriptor["path"] = str((FIXTURES / descriptor["path"]).resolve())
+        if sector_cut_de is not None:
+            value["payload"]["sector_cut_de"]["path"] = str(
+                sector_cut_de.resolve()
+            )
         if method_options is not None:
             value["payload"]["method_options"] = method_options
         else:
@@ -157,6 +162,87 @@ class MethodCardIntegrationTest(unittest.TestCase):
             }
         path = self.run_root / f"search-input-{method}.json"
         path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
+        return path
+
+    def route_input(
+        self,
+        task_id: str,
+        replacements: tuple[tuple[str, str], ...] = (),
+    ) -> Path:
+        artifact_text = (FIXTURES / "prepared-basis-refine.wl").read_text(
+            encoding="utf-8"
+        )
+        for old, new in replacements:
+            self.assertIn(old, artifact_text)
+            artifact_text = artifact_text.replace(old, new)
+        artifact_path = self.run_root / f"{task_id}-prepared-basis.wl"
+        artifact_path.write_text(artifact_text, encoding="utf-8")
+        value = {
+            "schema": "canon-neu/script-input/v1",
+            "task_id": task_id,
+            "step": "ROUTE_PREPARED_BASIS",
+            "payload": {
+                "prepared_basis": {
+                    "type": "mathematica-expression",
+                    "path": str(artifact_path),
+                }
+            },
+        }
+        input_path = self.run_root / f"{task_id}.json"
+        input_path.write_text(
+            json.dumps(value, indent=2) + "\n", encoding="utf-8"
+        )
+        return input_path
+
+    def assert_prepared_basis_invalid(
+        self,
+        task_id: str,
+        replacements: tuple[tuple[str, str], ...],
+        expected_field: str,
+    ) -> None:
+        output = self.run_root / f"{task_id}-output"
+        result = self.run_wls(
+            ROOT / "methods" / "route-prepared-basis" / "run.wls",
+            self.route_input(task_id, replacements),
+            output,
+            expected_returncode=1,
+        )
+        self.assertEqual(
+            (result["status"], result["code"]),
+            ("ERROR", "INVALID_PREPARED_BASIS"),
+        )
+        self.assertEqual(result["summary"]["field"], expected_field)
+
+    def fake_libra_entry(self) -> Path:
+        path = self.run_root / "FakeLibra.m"
+        path.write_text(
+            """BeginPackage[\"Libra`\"];
+$LibraVersion = \"1.2\";
+NewDSystem[___] := Null;
+Fuchsify[___] := $Failed;
+Transform[___] := Null;
+FactorOut[___] := $Failed;
+OverallTransformation[___] := $Failed;
+EFormQ[___] := False;
+EndPackage[];
+""",
+            encoding="utf-8",
+        )
+        return path
+
+    def fake_canonica_entry(self) -> Path:
+        path = self.run_root / "FakeCANONICA.m"
+        path.write_text(
+            """BeginPackage[\"CANONICA`\"];
+SectorBoundariesFromDE[___] := {1};
+RecursivelyTransformSectors[___] := $Failed;
+ExtractIrreducibles[___] := {};
+CheckEpsForm[___] := False;
+CheckIntegrability[___] := True;
+EndPackage[];
+""",
+            encoding="utf-8",
+        )
         return path
 
     def tail_screen_input(
@@ -279,8 +365,9 @@ class MethodCardIntegrationTest(unittest.TestCase):
         )
         self.assertEqual(
             (provider_result["status"], provider_result["code"]),
-            ("PASS", "CANDIDATE_READY"),
+            ("PROVISIONAL", "CANDIDATE_TRANSFORMATION"),
         )
+        self.assertNotIn(provider_result["status"], {"PASS", "FAIL"})
         candidate_path = provider_output / provider_result["artifacts"][
             "core_candidates"
         ]["path"]
@@ -310,6 +397,288 @@ class MethodCardIntegrationTest(unittest.TestCase):
             },
         )
 
+    def test_prepared_basis_router_covers_every_decision_branch(self) -> None:
+        localized_absent = (
+            '"present" -> True,\n'
+            '      "block" -> "lower-to-current",\n'
+            '      "signature" -> <|"kind" -> "epsilon-factorization", '
+            '"row" -> 1, "column" -> 2|>',
+            '"present" -> False,\n'
+            '      "block" -> Null,\n'
+            '      "signature" -> <||>',
+        )
+        common_complete = (
+            ('"pool_exhausted" -> False', '"pool_exhausted" -> True'),
+            ('"alternatives_remaining" -> 1', '"alternatives_remaining" -> 0'),
+            (
+                '"attempted_candidate_ids" -> {"fixture-candidate-a"}',
+                '"attempted_candidate_ids" -> {"fixture-candidate-a", "fixture-candidate-b"}',
+            ),
+            (
+                '"candidate_selection_complete" -> False',
+                '"candidate_selection_complete" -> True',
+            ),
+        )
+        cases = {
+            "verify": (
+                (
+                    ('"suspicious" -> True', '"suspicious" -> False'),
+                    ('"off_diagonal" -> "DEFECT"', '"off_diagonal" -> "CANONICAL"'),
+                    localized_absent,
+                    *common_complete,
+                    (
+                        '"classification" -> "LOCALIZED_RATIONAL_DEFECT"',
+                        '"classification" -> "NONE"',
+                    ),
+                    (
+                        '"rational_transformation_expected" -> True',
+                        '"rational_transformation_expected" -> False',
+                    ),
+                ),
+                "VERIFY_CANONICAL_DE",
+            ),
+            "refine": ((), "REFINE_SECTOR_UT_CANDIDATES"),
+            "repair": (
+                (('"plateau" -> False', '"plateau" -> True'),),
+                "REPAIR_WITH_LIBRA",
+            ),
+            "canonica": (
+                (
+                    ('"suspicious" -> True', '"suspicious" -> False'),
+                    localized_absent,
+                    *common_complete,
+                    (
+                        '"classification" -> "LOCALIZED_RATIONAL_DEFECT"',
+                        '"classification" -> "GLOBAL_RATIONAL_DEFECT"',
+                    ),
+                ),
+                "FIND_RATIONAL_CANONICAL_WITH_CANONICA",
+            ),
+            "diagnose": (
+                (
+                    ('"suspicious" -> True', '"suspicious" -> False'),
+                    localized_absent,
+                    *common_complete,
+                    (
+                        '"classification" -> "LOCALIZED_RATIONAL_DEFECT"',
+                        '"classification" -> "UNKNOWN_OR_NONRATIONAL"',
+                    ),
+                    (
+                        '"rational_transformation_expected" -> True',
+                        '"rational_transformation_expected" -> False',
+                    ),
+                ),
+                "DIAGNOSE_OR_CHANGE_VARIABLES",
+            ),
+        }
+        for name, (replacements, expected_decision) in cases.items():
+            with self.subTest(name=name):
+                output = self.run_root / f"route-{name}"
+                result = self.run_wls(
+                    ROOT / "methods" / "route-prepared-basis" / "run.wls",
+                    self.route_input(f"T-ROUTE-{name.upper()}", replacements),
+                    output,
+                )
+                self.assertEqual(
+                    (result["status"], result["code"]),
+                    ("PROVISIONAL", "ROUTE_DECISION"),
+                )
+                self.assertEqual(result["summary"]["decision"], expected_decision)
+                self.assertFalse(
+                    result["summary"]["initial_evidence_controls_route"]
+                )
+                artifact = output / result["artifacts"]["route_decision"]["path"]
+                self.assertIn(
+                    f'"decision" -> "{expected_decision}"',
+                    artifact.read_text(encoding="utf-8"),
+                )
+
+    def test_initial_evidence_changes_do_not_control_prepared_basis_route(self) -> None:
+        decisions = []
+        for name, replacements in (
+            ("original", ()),
+            (
+                "changed",
+                (
+                    (
+                        '"verification_status" -> "AWAITING_INDEPENDENT_VERIFICATION"',
+                        '"verification_status" -> "REPLACED_INITIAL_EVIDENCE"',
+                    ),
+                ),
+            ),
+        ):
+            output = self.run_root / f"route-initial-{name}"
+            result = self.run_wls(
+                ROOT / "methods" / "route-prepared-basis" / "run.wls",
+                self.route_input(f"T-ROUTE-INITIAL-{name.upper()}", replacements),
+                output,
+            )
+            decisions.append((result["status"], result["summary"]["decision"]))
+        self.assertEqual(
+            decisions,
+            [
+                ("PROVISIONAL", "REFINE_SECTOR_UT_CANDIDATES"),
+                ("PROVISIONAL", "REFINE_SECTOR_UT_CANDIDATES"),
+            ],
+        )
+
+    def test_prepared_basis_rejects_malformed_and_contradictory_inputs(self) -> None:
+        cases = {
+            "malformed": (
+                (
+                    '      "normalization" -> "leading-singularity-normalized",\n',
+                    "",
+                ),
+                "candidates",
+            ),
+            "contradictory": (
+                ('"pool_exhausted" -> False', '"pool_exhausted" -> True'),
+                "search_history",
+            ),
+        }
+        for name, (replacement, expected_field) in cases.items():
+            with self.subTest(name=name):
+                summaries = []
+                for repeat in range(2):
+                    output = self.run_root / f"route-{name}-{repeat}"
+                    result = self.run_wls(
+                        ROOT / "methods" / "route-prepared-basis" / "run.wls",
+                        self.route_input(
+                            f"T-ROUTE-{name.upper()}-{repeat}", (replacement,)
+                        ),
+                        output,
+                        expected_returncode=1,
+                    )
+                    self.assertEqual(
+                        (result["status"], result["code"]),
+                        ("ERROR", "INVALID_PREPARED_BASIS"),
+                    )
+                    summaries.append(result["summary"])
+                self.assertEqual(summaries[0], summaries[1])
+                self.assertEqual(summaries[0]["field"], expected_field)
+
+    def test_prepared_basis_rejects_canonical_selected_suspicious(self) -> None:
+        localized_absent = (
+            '"present" -> True,\n'
+            '      "block" -> "lower-to-current",\n'
+            '      "signature" -> <|"kind" -> "epsilon-factorization", '
+            '"row" -> 1, "column" -> 2|>',
+            '"present" -> False,\n'
+            '      "block" -> Null,\n'
+            '      "signature" -> <||>',
+        )
+        self.assert_prepared_basis_invalid(
+            "T-ROUTE-REJECT-CANONICAL-SUSPICIOUS",
+            (
+                ('"off_diagonal" -> "DEFECT"', '"off_diagonal" -> "CANONICAL"'),
+                localized_absent,
+                ('"pool_exhausted" -> False', '"pool_exhausted" -> True'),
+                ('"alternatives_remaining" -> 1', '"alternatives_remaining" -> 0'),
+                (
+                    '"attempted_candidate_ids" -> {"fixture-candidate-a"}',
+                    '"attempted_candidate_ids" -> {"fixture-candidate-a", "fixture-candidate-b"}',
+                ),
+                (
+                    '"classification" -> "LOCALIZED_RATIONAL_DEFECT"',
+                    '"classification" -> "NONE"',
+                ),
+                (
+                    '"candidate_selection_complete" -> False',
+                    '"candidate_selection_complete" -> True',
+                ),
+                (
+                    '"rational_transformation_expected" -> True',
+                    '"rational_transformation_expected" -> False',
+                ),
+            ),
+            "candidates.selected",
+        )
+
+    def test_prepared_basis_rejects_localized_rational_without_expectation(self) -> None:
+        self.assert_prepared_basis_invalid(
+            "T-ROUTE-REJECT-LOCALIZED-NONRATIONAL",
+            (
+                (
+                    '"rational_transformation_expected" -> True',
+                    '"rational_transformation_expected" -> False',
+                ),
+            ),
+            "remaining_problem.rational_transformation_expected",
+        )
+
+    def test_prepared_basis_rejects_localized_without_defect_quality(self) -> None:
+        self.assert_prepared_basis_invalid(
+            "T-ROUTE-REJECT-LOCALIZED-NO-DEFECT-QUALITY",
+            (('"off_diagonal" -> "DEFECT"', '"off_diagonal" -> "UNKNOWN"'),),
+            "quality.localized_defect",
+        )
+
+    def test_prepared_basis_rejects_completed_pool_with_unattempted_candidate(self) -> None:
+        self.assert_prepared_basis_invalid(
+            "T-ROUTE-REJECT-UNATTEMPTED-CANDIDATE",
+            (
+                ('"pool_exhausted" -> False', '"pool_exhausted" -> True'),
+                ('"alternatives_remaining" -> 1', '"alternatives_remaining" -> 0'),
+                (
+                    '"candidate_selection_complete" -> False',
+                    '"candidate_selection_complete" -> True',
+                ),
+            ),
+            "search_history.alternatives_remaining",
+        )
+
+    def test_libra_multivariable_scope_is_inconclusive_without_tool_action(self) -> None:
+        output = self.run_root / "libra-multivariable-out-of-scope"
+        result = self.run_wls(
+            ROOT / "methods" / "libra" / "run.wls",
+            self.provider_input(
+                "libra",
+                self.run_root / "must-not-load-Libra.m",
+                sector_cut_de=FIXTURES / "flat-multivariable-sector-cut-de.wl",
+            ),
+            output,
+        )
+        self.assertEqual(
+            (result["status"], result["code"]),
+            ("INCONCLUSIVE", "OUT_OF_SCOPE"),
+        )
+        self.assertNotIn(result["status"], {"PASS", "FAIL"})
+
+    def test_canonica_nonflat_system_is_input_error(self) -> None:
+        output = self.run_root / "canonica-nonflat-input"
+        result = self.run_wls(
+            ROOT / "methods" / "canonica" / "run.wls",
+            self.provider_input(
+                "canonica",
+                self.fake_canonica_entry(),
+                sector_cut_de=FIXTURES / "nonflat-sector-cut-de.wl",
+            ),
+            output,
+            expected_returncode=1,
+        )
+        self.assertEqual(
+            (result["status"], result["code"]),
+            ("ERROR", "INVALID_DIFFERENTIAL_SYSTEM"),
+        )
+
+    def test_provider_method_exhaustion_is_inconclusive(self) -> None:
+        for method, entry in (
+            ("libra", self.fake_libra_entry()),
+            ("canonica", self.fake_canonica_entry()),
+        ):
+            with self.subTest(method=method):
+                output = self.run_root / f"{method}-method-exhausted"
+                result = self.run_wls(
+                    ROOT / "methods" / method / "run.wls",
+                    self.provider_input(method, entry),
+                    output,
+                )
+                self.assertEqual(
+                    (result["status"], result["code"]),
+                    ("INCONCLUSIVE", "METHOD_EXHAUSTED"),
+                )
+                self.assertNotIn(result["status"], {"PASS", "FAIL"})
+
     @unittest.skipUnless(
         CANONICA_ENTRY is not None and CANONICA_ENTRY.is_file(),
         "set CANON_TEST_CANONICA_ENTRY to run the real CANONICA provider test",
@@ -320,7 +689,7 @@ class MethodCardIntegrationTest(unittest.TestCase):
             "canonica",
             CANONICA_ENTRY,
             '"transformation" -> {{1, x}, {0, 1}}',
-            relative_entry=True,
+            relative_entry=False,
         )
 
     @unittest.skipUnless(

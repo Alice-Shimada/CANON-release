@@ -10,7 +10,7 @@ task = CanonMethodCard`ReadTask[inputPath, "SEARCH_CORE"];
 If[FailureQ[task], Print[InputForm[task]]; Quit[2]];
 
 writeFailure[status_String, code_String, reason_String] := (
-  CanonMethodCard`WriteResult[
+  CanonMethodCard`WriteProviderResult[
     task, outputDir, status, code, <||>,
     <|"method_id" -> "canonica-recursive", "reason" -> reason|>
   ];
@@ -48,7 +48,10 @@ If[!symbolsAvailable,
 
 cut = CanonMethodCard`LoadArtifact[task, inputPath, "sector_cut_de"];
 If[FailureQ[cut] || !CanonMethodCard`ValidCutDEQ[cut],
-  writeFailure["ERROR", "INVALID_INPUT", "sector_cut_de artifact 无效"]
+  writeFailure["ERROR", "INVALID_DIFFERENTIAL_SYSTEM", "sector_cut_de artifact 无效"]
+];
+If[!CanonMethodCard`FlatConnectionQ[cut["matrices"], cut["variables"]],
+  writeFailure["ERROR", "INVALID_DIFFERENTIAL_SYSTEM", "输入 differential connection 不可积"]
 ];
 
 variables = cut["variables"];
@@ -58,7 +61,7 @@ toolRegulator = CANONICA`eps;
 aFull = matrices /. regulator -> toolRegulator;
 
 If[Length[variables] > 1 && !TrueQ[Quiet @ Check[CANONICA`CheckIntegrability[aFull, variables], False]],
-  writeFailure["FAIL", "NO_CANDIDATE", "输入 connection 未通过 CANONICA 可积性检查"]
+  writeFailure["ERROR", "INVALID_DIFFERENTIAL_SYSTEM", "输入 connection 未通过 CANONICA 可积性检查"]
 ];
 
 boundaries = Lookup[cut, "sector_boundaries", Automatic];
@@ -66,7 +69,7 @@ If[boundaries === Automatic,
   boundaries = Quiet[CANONICA`SectorBoundariesFromDE[aFull]]
 ];
 If[boundaries === $Failed || !ListQ[boundaries] || boundaries === {},
-  writeFailure["FAIL", "NO_CANDIDATE", "无法确定 sector boundaries"]
+  writeFailure["INCONCLUSIVE", "METHOD_EXHAUSTED", "CANONICA 无法确定 sector boundaries"]
 ];
 
 result = Quiet @ CheckAbort[
@@ -80,7 +83,7 @@ result = Quiet @ CheckAbort[
   $Aborted
 ];
 If[result === $Aborted || !ListQ[result] || Length[result] < 2,
-  writeFailure["FAIL", "NO_CANDIDATE", "CANONICA 未生成 transformation"]
+  writeFailure["INCONCLUSIVE", "METHOD_EXHAUSTED", "CANONICA 未生成 transformation"]
 ];
 
 transformation = result[[1]];
@@ -93,6 +96,9 @@ providerEFormQ = TrueQ @ Quiet @ Check[
   False
 ];
 alphabet = alphabet /. toolRegulator -> regulator;
+If[!providerEFormQ,
+  writeFailure["INCONCLUSIVE", "METHOD_EXHAUSTED", "CANONICA transformation 未通过 provider epsilon-form check"]
+];
 
 candidateArtifact = <|
   "schema" -> "canon-neu/core-candidates/v1",
@@ -132,11 +138,11 @@ artifactPath = CanonMethodCard`WriteWLArtifact[candidateArtifact, outputDir, "co
 If[artifactPath === $Failed,
   writeFailure["ERROR", "OUTPUT_ERROR", "无法写入 core candidate artifact"]
 ];
-resultPath = CanonMethodCard`WriteResult[
+resultPath = CanonMethodCard`WriteProviderResult[
   task,
   outputDir,
-  "PASS",
-  "CANDIDATE_READY",
+  "PROVISIONAL",
+  "CANDIDATE_TRANSFORMATION",
   <|"core_candidates" -> <|"type" -> "mathematica-expression", "path" -> FileNameTake[artifactPath]|>|>,
   <|
     "method_id" -> "canonica-recursive",

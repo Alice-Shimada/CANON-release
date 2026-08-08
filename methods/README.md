@@ -14,7 +14,8 @@ sector 调度，不修改已接受的 lower-sector prefix，也不能接受自�
 - **验证器/校准器**：提供 epsilon form 不能蕴含的证据，例如 leading singularity、
   边界归一化或独立数值。
 
-只有在声明阶段确实生成 candidate 的 provider 才能返回 `CANDIDATE_READY`。预处理器、
+只有在声明阶段确实生成 candidate transformation 的 provider 才能返回
+`PROVISIONAL/CANDIDATE_TRANSFORMATION`；provider 不能接受或拒绝自己的结果。预处理器、
 筛选器和验证器必须在一条路线内组合使用，或者只返回诊断证据。
 
 首批启用的变换 provider 是 `canonica` 和 `libra`。它们的 2x2 fixture 只证明
@@ -30,6 +31,94 @@ INITIAL 2.1 已登记的官方 26×26 massless planar 3-loop 4-point ladder cand
 候选替换或其他 provider。计算成功也只返回
 `PROVISIONAL/EVIDENCE_AWAITING_VERIFICATION`；最终 `PASS/VERIFIED_EVIDENCE` 只能由
 `mma/CheckUTEvidence.wls` 独立复算后给出。
+
+## 有类型的结果语义
+
+所有 method-card 结果保持 `canon-neu/script-result/v1` envelope，并且 status 只有以下
+五种正式含义：
+
+- `ERROR`：输入、环境、工具或计算失败，没有作出数学结论；
+- `INCONCLUSIVE`：卡的适用范围不覆盖输入，或有界方法已经耗尽，但没有拒绝 candidate；
+- `PROVISIONAL`：provider 提出了仍待独立检查的 transformation、evidence 或 route；
+- `FAIL`：只有独立 exact verifier/evidence checker 可以用它拒绝科学 claim；
+- `PASS`：只有独立 verifier 可以用它接受科学 claim。
+
+因此 Libra/CANONICA 成功只能返回
+`PROVISIONAL/CANDIDATE_TRANSFORMATION`，范围外返回
+`INCONCLUSIVE/OUT_OF_SCOPE`，有界 stages 耗尽返回
+`INCONCLUSIVE/METHOD_EXHAUSTED`，非法或非 flat differential system 返回
+`ERROR/INVALID_DIFFERENTIAL_SYSTEM`。Transformation provider 不能返回 `PASS` 或
+数学拒绝 `FAIL`。
+
+## `prepared-basis/v1` 与确定性 route
+
+`route-prepared-basis` 是一个已经可执行、但尚未连接到外部 coordinator 的纯 route 卡。
+它只读取、验证并分类 prepared basis；不运行 Libra、CANONICA 或 INITIAL，也不改变
+候选。输入 artifact 的完整 v1 形状为：
+
+```wl
+<|
+  "schema" -> "canon-neu/prepared-basis/v1",
+  "identity" -> <|
+    "preparation_id" -> "...", "family_id" -> "...", "basis_id" -> "...",
+    "variables" -> {x, ...}, "regulator" -> eps
+  |>,
+  "current_basis" -> <|"basis_id" -> "...", "basis" -> {j1, ...}|>,
+  "frozen_lower_prefix" -> <|
+    "present" -> True | False, "accepted" -> True | False,
+    "prefix_id" -> "..." | Null, "basis" -> {l1, ...} | {}
+  |>,
+  "candidates" -> {
+    <|
+      "candidate_id" -> "...", "definition" -> <|...|>,
+      "normalization" -> "...", "rank" -> 1,
+      "selected" -> True | False, "suspicious" -> True | False
+    |>, ...
+  },
+  "quality" -> <|
+    "diagonal" -> "CANONICAL" | "DEFECT" | "UNKNOWN",
+    "off_diagonal" -> "CANONICAL" | "DEFECT" | "UNKNOWN",
+    "localized_defect" -> <|
+      "present" -> True | False, "block" -> "..." | Null,
+      "signature" -> <|...|> | <||>
+    |>
+  |>,
+  "ut_evidence_references" -> {
+    <|
+      "reference_id" -> "...", "provider" -> "...",
+      "candidate_id" -> "...", "verification_status" -> "..."
+    |>, ...
+  },
+  "search_history" -> <|
+    "plateau" -> True | False, "pool_exhausted" -> True | False,
+    "alternatives_remaining" -> 0, "attempted_candidate_ids" -> {"...", ...}
+  |>,
+  "remaining_problem" -> <|
+    "classification" ->
+      "NONE" | "SUSPICIOUS_CANDIDATE" | "LOCALIZED_RATIONAL_DEFECT" |
+      "GLOBAL_RATIONAL_DEFECT" | "UNKNOWN_OR_NONRATIONAL",
+    "candidate_selection_complete" -> True | False,
+    "rational_transformation_expected" -> True | False
+  |>
+|>
+```
+
+Validator 要求 preparation/family/basis identity 完整、current basis ID 一致、present
+lower prefix 已被接受、candidate ID/rank 唯一且 rank 是从 1 开始的连续顺序、恰好一个
+selected candidate、evidence reference 指向已声明 candidate，并拒绝 canonical 与 defect
+或 selected-candidate suspicion 并存、pool exhausted/selection complete 时仍有未尝试的
+declared candidate、`alternatives_remaining` 与 declared-minus-attempted 数量不一致、
+localized rational defect 没有 `DEFECT` quality dimension 或 rational expectation、以及
+localized/global classification 与 defect data 相矛盾等状态。失败是
+确定性的 `ERROR/INVALID_PREPARED_BASIS`，并报告稳定 field/reason。
+
+成功写出 `canon-neu/route-decision/v1`，结果为 `PROVISIONAL/ROUTE_DECISION`。决策优先级
+固定为：已经 canonical → `VERIFY_CANONICAL_DE`；suspicious candidate 或 localized defect
+且还有 alternatives、没有 plateau → `REFINE_SECTOR_UT_CANDIDATES`；localized defect 在
+plateau 或完整 pool exhaustion 后 → `REPAIR_WITH_LIBRA`；candidate selection 已完成后的
+global rational defect → `FIND_RATIONAL_CANONICAL_WITH_CANONICA`；其余 →
+`DIAGNOSE_OR_CHANGE_VARIABLES`。`ut_evidence_references` 只用于追溯；改变 INITIAL evidence
+本身不能选择 backend、改变 decision 或终止 route。
 
 ## 目标路线策略（尚未接线）
 
@@ -78,6 +167,13 @@ CANONICA 等外部包的卡，只能通过以下通用边界解析依赖：
 Wolfram `$Version`/`$SystemID` 及工具能够报告的版本。Provider 的工具自检仍不能代替
 CANON 的独立科学 checker。本机安装与验收可以由外部环境管理，但不属于 CANON
 workflow 的状态事实源。
+
+CANONICA runner 有意先解析并加载 package，再读取和验证 `sector_cut_de`。这是为了避免
+先求值输入中的 `Global`eps` 后加载 CANONICA 时触发 ``CANONICA`eps::shdw``，从而把一个
+实际已经加载的 package 误判为不干净的加载。因而当工具不可用与 differential input
+非法或 non-flat 同时存在时，结果优先为具体的 `ERROR/TOOL_*`；只有工具边界通过后才返回
+`ERROR/INVALID_DIFFERENTIAL_SYSTEM`。该优先级是确定性的输入/环境错误分类，不是科学
+fallback，也不允许 provider 作数学拒绝。
 
 ### `sector_cut_de`
 

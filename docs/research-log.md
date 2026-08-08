@@ -45,3 +45,68 @@
 - 结论：A-003 的专用 dlog 条件与 `{1/x,1/(1+x)}` 常 residue span 精确等价；在 `old_basis = T.new_basis` 约定下直接检查 `A.T-D[T,x]-T.B==0` 正确且无需显式求逆。patch 已应用到共享工作树。
 - 程序验收：共享工作树 INITIAL 合约负例 5/5 通过（21.413 s）；注入登记的 Libra/CANONICA 真实入口、显式不注入 INITIAL 后，完整 23-test 回归为 22 通过、1 项条件跳过（58.141 s），判定 PASS。
 - 未决疑点：本轮没有在 checker 优化后再次运行 TCalc；证据严格限定为一次真实 provider provisional success 加一次独立的 post-fix 官方 reference checker PASS，不宣称连续端到端成功或任意 candidate 支持。
+
+### 2026-08-09 — Prepared-basis contract、确定性 route 与 typed provider 结果
+
+- 代表性输入：现有精确 2×2 单变量 `sector-cut-de.wl`；prepared-basis fixture 显式包含
+  preparation/family/basis identity、冻结且已接受的 lower prefix、两个有 normalization/rank
+  的 candidate、diagonal/off-diagonal quality、localized defect signature、INITIAL evidence
+  reference、plateau/pool/alternatives history 和 remaining-problem classification。
+- 预期/容限：所有判据均为精确符号判据，没有数值容限。Router 必须覆盖五个固定 decision；
+  malformed/contradictory 输入必须稳定返回 `ERROR/INVALID_PREPARED_BASIS`；改变 INITIAL
+  evidence 不得改变 route。Libra/CANONICA provider 成功预期
+  `PROVISIONAL/CANDIDATE_TRANSFORMATION`，随后独立 checker 才能给出 `PASS/CORE_PASS`。
+- Focused 命令：`python3 -m unittest -v` 运行 prepared-basis 五分支、INITIAL non-control、
+  malformed/contradictory、Libra multivariable scope、CANONICA non-flat 和两项 exhaustion
+  测试；全部通过。新测试暴露并修正了 `FlatConnectionQ` 原有的多变量 pair iterator，
+  fixture 对 flat/non-flat 两方向分别精确返回 `True/False`。
+- Libra 真实命令：以 `WolframKernel -noinit -noprompt -script methods/libra/run.wls`
+  调用登记入口 `/Users/balth/Works/hep-tools/tools/libra/Source/Libra.m`（1.2，入口 SHA-256
+  `b3574e7f560951516a289a8141aafbaf23f0f5ae563e29d0fa077b17ba4d3eb4`），caller-owned
+  目录为 `validation-runs/libra-provider`。实际 provider summary 是
+  `PROVISIONAL/CANDIDATE_TRANSFORMATION`、`provider_check_eps_form=true`、一个 candidate；
+  `mma/CheckSectorCore.wls` 在 `validation-runs/libra-checker` 返回 `PASS/CORE_PASS`，
+  `invertible/exact_gauge/flat_connection/epsilon_factorized` 全为 `true`。
+- CANONICA 真实命令：同样以 fresh kernel 调用登记入口
+  `/Users/balth/Works/hep-tools/tools/canonica/src/CANONICA.m`（1.0.3，入口 SHA-256
+  `0bf334159265f17814fb21bf8f1248637e66622bc4a8a3768085f7416df9d200`），caller-owned
+  目录为 `validation-runs/canonica-provider`。实际 provider summary 与 Libra 同为
+  `PROVISIONAL/CANDIDATE_TRANSFORMATION`、provider epsilon check true、一个 candidate；
+  checker 在 `validation-runs/canonica-checker` 返回同样四项全 true 的 `PASS/CORE_PASS`。
+- 产物路径：两项 provider 的 `core-candidates.wl`/`result.json` 和 checker 的
+  `core-transform.wl`/`result.json` 均保留在上述 run workspace 的 `validation-runs/` 下；
+  它们是可复现验证输出，不进入交付 patch。
+- 完整回归：注入登记的真实 Libra/CANONICA 入口并显式不注入 INITIAL，运行
+  `python3 -m unittest discover -s tests -p 'test_*.py' -v`，29 项在 130.643 秒内
+  `OK`，仅真实 INITIAL ladder 条件测试按预期跳过；其余 INITIAL 与 full-prefix regressions
+  全部通过。全程没有运行 INITIAL、`TCalc`，两个 transformation provider 也没有互调或
+  fallback。
+
+### 2026-08-09 — A-007 rejection remediation 与重新验收
+
+- 独立复核输入：T-007/A-007 的四项 blocking counterexample。修正版删除 method-card
+  protocol 中过时的 `CANDIDATE_READY`；canonical quality 与 selected-candidate suspicion
+  不再能并存；localized rational defect 必须同时有至少一个 `DEFECT` quality dimension
+  和 `rational_transformation_expected=True`；`alternatives_remaining` 必须严格等于
+  declared-minus-attempted candidate 数，pool exhausted 或 candidate selection complete
+  时不得留有 declared unattempted candidate。
+- 新负例与预期：四项输入都没有数值容限，必须稳定返回
+  `ERROR/INVALID_PREPARED_BASIS`，field 分别为 `candidates.selected`、
+  `remaining_problem.rational_transformation_expected`、`quality.localized_defect` 和
+  `search_history.alternatives_remaining`。实际四项全按预期拒绝；五个合法 route branch
+  仍全部产生原 decision。完整 focused contract 命令运行 10 个 test method，54.267 秒
+  `OK`。
+- CANONICA load precedence：保留 package-first load，避免输入先创建 `Global`eps` 后的
+  ``CANONICA`eps::shdw`` 干扰 fail-closed package check。工具与输入同时失败时，确定性
+  返回具体 `ERROR/TOOL_*`；工具边界通过后才分类
+  `ERROR/INVALID_DIFFERENTIAL_SYSTEM`。这是错误优先级，不是 fallback。
+- 真实 provider 重验：登记入口和 hash 未变。R-008 caller-owned 产物分别位于
+  `validation-runs/libra-provider`、`validation-runs/libra-checker`、
+  `validation-runs/canonica-provider` 和 `validation-runs/canonica-checker`。两个 provider
+  实际均为 `PROVISIONAL/CANDIDATE_TRANSFORMATION`、一个 candidate、provider epsilon
+  check true；两个独立 checker 均为 `PASS/CORE_PASS`，且
+  `invertible/exact_gauge/flat_connection/epsilon_factorized` 全为 true。
+- 完整回归：以登记的 Libra/CANONICA 入口运行
+  `python3 -m unittest discover -s tests -p 'test_*.py' -v`，33 项在 143.147 秒内
+  `OK`，仅 real INITIAL ladder 条件测试按预期跳过。全程没有运行 INITIAL、`TCalc`，
+  没有修改外部安装。

@@ -10,12 +10,23 @@ task = CanonMethodCard`ReadTask[inputPath, "SEARCH_CORE"];
 If[FailureQ[task], Print[InputForm[task]]; Quit[2]];
 
 writeFailure[status_String, code_String, reason_String] := (
-  CanonMethodCard`WriteResult[
+  CanonMethodCard`WriteProviderResult[
     task, outputDir, status, code, <||>,
     <|"method_id" -> "libra-single-variable", "reason" -> reason|>
   ];
   Quit[If[status === "ERROR", 1, 0]]
 );
+
+cut = CanonMethodCard`LoadArtifact[task, inputPath, "sector_cut_de"];
+If[FailureQ[cut] || !CanonMethodCard`ValidCutDEQ[cut],
+  writeFailure["ERROR", "INVALID_DIFFERENTIAL_SYSTEM", "sector_cut_de artifact 无效"]
+];
+If[!CanonMethodCard`FlatConnectionQ[cut["matrices"], cut["variables"]],
+  writeFailure["ERROR", "INVALID_DIFFERENTIAL_SYSTEM", "输入 differential connection 不可积"]
+];
+If[Length[cut["variables"]] =!= 1,
+  writeFailure["INCONCLUSIVE", "OUT_OF_SCOPE", "当前 Libra 卡只接受恰好一个变量"]
+];
 
 package = CanonMethodCard`ResolveMethodPackage[task, inputPath, "Libra`"];
 If[FailureQ[package],
@@ -49,14 +60,6 @@ If[!ValueQ[Libra`$LibraVersion] || Libra`$LibraVersion =!= "1.2",
 ];
 Libra`$LibraUseFermat = False;
 
-cut = CanonMethodCard`LoadArtifact[task, inputPath, "sector_cut_de"];
-If[FailureQ[cut] || !CanonMethodCard`ValidCutDEQ[cut],
-  writeFailure["ERROR", "INVALID_INPUT", "sector_cut_de artifact 无效"]
-];
-If[Length[cut["variables"]] =!= 1,
-  writeFailure["FAIL", "NO_CANDIDATE", "Libra 卡只接受恰好一个变量"]
-];
-
 variable = First[cut["variables"]];
 regulator = cut["regulator"];
 matrix = Map[Together, First[cut["matrices"]], {2}];
@@ -65,29 +68,29 @@ If[!TrueQ[Quiet @ Check[NewDSystem[cardSystem, variable -> matrix]; True, False]
 ];
 fuchsTransformation = Quiet @ Check[Fuchsify[cardSystem, variable], $Failed];
 If[fuchsTransformation === $Failed || !MatrixQ[fuchsTransformation],
-  writeFailure["FAIL", "NO_CANDIDATE", "Libra Fuchsify 未生成矩阵 transformation"]
+  writeFailure["INCONCLUSIVE", "METHOD_EXHAUSTED", "Libra Fuchsify 未生成矩阵 transformation"]
 ];
 If[!TrueQ[Quiet @ Check[Transform[cardSystem, fuchsTransformation]; True, False]],
-  writeFailure["FAIL", "NO_CANDIDATE", "Libra 无法应用 Fuchsify transformation"]
+  writeFailure["INCONCLUSIVE", "METHOD_EXHAUSTED", "Libra 无法应用 Fuchsify transformation"]
 ];
 factorTransformation = Quiet @ Check[
   FactorOut[cardSystem, variable, regulator, 1/2] /. _C -> 1,
   $Failed
 ];
 If[factorTransformation === $Failed || !MatrixQ[factorTransformation],
-  writeFailure["FAIL", "NO_CANDIDATE", "Libra FactorOut 未生成矩阵 transformation"]
+  writeFailure["INCONCLUSIVE", "METHOD_EXHAUSTED", "Libra FactorOut 未生成矩阵 transformation"]
 ];
 If[!TrueQ[Quiet @ Check[Transform[cardSystem, factorTransformation]; True, False]],
-  writeFailure["FAIL", "NO_CANDIDATE", "Libra 无法应用 FactorOut transformation"]
+  writeFailure["INCONCLUSIVE", "METHOD_EXHAUSTED", "Libra 无法应用 FactorOut transformation"]
 ];
 transformation = Quiet @ Check[OverallTransformation[cardSystem][Transform], $Failed];
 transformed = Quiet @ Check[cardSystem[variable], $Failed];
 If[transformation === $Failed || !MatrixQ[transformation] || transformed === $Failed,
-  writeFailure["FAIL", "NO_CANDIDATE", "Libra 无法合并 transformation history"]
+  writeFailure["INCONCLUSIVE", "METHOD_EXHAUSTED", "Libra 无法合并 transformation history"]
 ];
 providerEFormQ = TrueQ @ Quiet @ Check[EFormQ[transformed, regulator], False];
 If[!providerEFormQ,
-  writeFailure["FAIL", "NO_CANDIDATE", "Libra 结果不是 epsilon form"]
+  writeFailure["INCONCLUSIVE", "METHOD_EXHAUSTED", "Libra stages 未生成 epsilon form candidate"]
 ];
 
 candidateArtifact = <|
@@ -129,11 +132,11 @@ artifactPath = CanonMethodCard`WriteWLArtifact[candidateArtifact, outputDir, "co
 If[artifactPath === $Failed,
   writeFailure["ERROR", "OUTPUT_ERROR", "无法写入 core candidate artifact"]
 ];
-resultPath = CanonMethodCard`WriteResult[
+resultPath = CanonMethodCard`WriteProviderResult[
   task,
   outputDir,
-  "PASS",
-  "CANDIDATE_READY",
+  "PROVISIONAL",
+  "CANDIDATE_TRANSFORMATION",
   <|"core_candidates" -> <|"type" -> "mathematica-expression", "path" -> FileNameTake[artifactPath]|>|>,
   <|
     "method_id" -> "libra-single-variable",

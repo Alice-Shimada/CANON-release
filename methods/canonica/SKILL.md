@@ -29,14 +29,23 @@ canonical transformation。CANON 不负责安装或登记 CANONICA，也不依�
 卡会记录实际解析入口、解析方式、入口 SHA-256 和 Wolfram `$Version`/`$SystemID`，
 但不将某台机器的固定 hash 作为运行前提；科学结果仍由独立 checker 验收。
 
+Runner 保持 package-first load：它在求值 `sector_cut_de` 前完成入口解析、hash、加载和
+公共符号检查，避免输入先创建 `Global`eps` 后触发 ``CANONICA`eps::shdw``。因此工具与
+输入同时失败时，具体 `ERROR/TOOL_*` 优先；工具边界通过后，非法或 non-flat system 才
+返回 `ERROR/INVALID_DIFFERENTIAL_SYSTEM`。该顺序不得改成 provider fallback。
+
 ## 结果与证据
 
 成功时，本卡按 `old_basis = transformation . new_basis` 约定写出
 `canon-neu/core-candidates/v1` artifact，并记录 CANONICA 入口、推断或提供的 sector
 boundaries、alphabet 和 provider 侧 epsilon-form 结果。`mma/CheckSectorCore.wls`
-独立复算科学验收条件。
+独立复算科学验收条件。Provider 成功只返回
+`PROVISIONAL/CANDIDATE_TRANSFORMATION`；阶段耗尽返回
+`INCONCLUSIVE/METHOD_EXHAUSTED`；非法或非 flat 系统返回
+`ERROR/INVALID_DIFFERENTIAL_SYSTEM`。本卡不能返回 `PASS` 或数学拒绝 `FAIL`。
 
 ## 边界
 
 本卡不执行 IBP reduction，不改变 sector ordering，不求解非对角 lower-sector tail，
-不修改 `accepted_prefix`，也不接受自己提出的 candidate。
+不修改 `accepted_prefix`，也不接受自己提出的 candidate。它不调用 Libra 或 INITIAL，
+也不是 Libra 之后的固定 fallback。
