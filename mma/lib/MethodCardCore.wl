@@ -19,6 +19,9 @@ FlatConnectionQ::usage = "FlatConnectionQ[matrices, variables] tests exact integ
 EpsilonFactorizedQ::usage = "EpsilonFactorizedQ[matrices, eps] tests exact epsilon factorization.";
 DLogConnectionQ::usage = "DLogConnectionQ[matrices, variables, eps, alphabet] tests the bounded exact one-variable dlog form.";
 ExactRationalExpressionQ::usage = "ExactRationalExpressionQ[expr] accepts only finite exact rational functions.";
+ValidateStructuredRepairInput::usage = "ValidateStructuredRepairInput[prepared, route, request] validates the frozen-prefix Libra repair contract.";
+DeclaredCoefficientDomainQ::usage = "DeclaredCoefficientDomainQ[expr, symbols] checks exact rational syntax and rejects undeclared coefficient symbols.";
+StructuredRepairPublicationGate::usage = "StructuredRepairPublicationGate[request, candidate] applies only the provider's minimal structural publication gate.";
 
 Begin["`Private`"];
 
@@ -195,6 +198,12 @@ ExactRationalExpressionQ[expr_] := Module[{value, variables, numerator, denomina
   rationalPolynomialSyntaxQ[numerator] && rationalPolynomialSyntaxQ[denominator] &&
     PolynomialQ[numerator, variables] && PolynomialQ[denominator, variables] && denominator =!= 0
 ];
+
+DeclaredCoefficientDomainQ[expr_, allowedSymbols_List] :=
+  ExactRationalExpressionQ[expr] && SubsetQ[
+    DeleteDuplicates[allowedSymbols],
+    DeleteDuplicates[Cases[Unevaluated[expr], _Symbol, Infinity]]
+  ];
 
 exactRationalMatrixQ[m_, n_Integer] := squareMatrixQ[m, n] &&
   And @@ (ExactRationalExpressionQ /@ Flatten[m]);
@@ -587,6 +596,262 @@ DLogConnectionQ[
   derivatives = Quiet @ Check[Together[D[#, variable]/#] & /@ alphabet, $Failed];
   If[derivatives === $Failed || !And @@ (ExactRationalExpressionQ /@ derivatives), Return[False]];
   And @@ (dLogExpressionQ[Together[#/regulator], variable, derivatives] & /@ Flatten[matrices])
+];
+
+repairFailure[field_String, message_String] :=
+  Failure["INVALID_STRUCTURED_REPAIR_INPUT", <|"Field" -> field, "Message" -> message|>];
+
+exactMatrixListQ[matrices_, count_Integer, dimension_Integer] :=
+  ListQ[matrices] && Length[matrices] === count &&
+    And @@ (
+      MatrixQ[#] && Dimensions[#] === {dimension, dimension} &&
+        And @@ (ExactRationalExpressionQ /@ Flatten[#]) & /@ matrices
+    );
+
+sameMatrixListsQ[left_List, right_List] := Length[left] === Length[right] &&
+  And @@ MapThread[ZeroMatrixQ[Map[Together, #1 - #2, {2}]] &, {left, right}];
+
+matrixBlocks[matrices_List, rows_, columns_] := (#[[rows, columns]] & /@ matrices);
+
+zeroMatrixListQ[matrices_List] := And @@ (ZeroMatrixQ /@ matrices);
+
+ValidateStructuredRepairInput[
+  prepared_Association,
+  route_Association,
+  request_Association
+] := Module[
+  {
+    validated, identity, selected, prefix, frozen, target, search, variables,
+    regulator, parameters, allowedSymbols, basis, matrices, alphabet, dimension,
+    prefixDimension, prefixRows, tailRows, acceptedMatrices, acceptedBlocks,
+    signature, expectedFullEntry, prefixFlat, prefixEpsilonFactorized,
+    prefixNoResidualRegulator, prefixDLog
+  },
+  validated = ValidatePreparedBasis[prepared];
+  If[FailureQ[validated],
+    Return[repairFailure["prepared_basis", "prepared basis did not pass canon-neu/prepared-basis/v1 validation"]]
+  ];
+  identity = prepared["identity"];
+  selected = First @ Select[prepared["candidates"], TrueQ[Lookup[#, "selected", False]] &];
+  prefix = prepared["frozen_lower_prefix"];
+  If[
+    Lookup[route, "schema", None] =!= "canon-neu/route-decision/v1" ||
+      Lookup[route, "decision", None] =!= "REPAIR_WITH_LIBRA",
+    Return[repairFailure["route_decision.decision", "route decision must be exactly REPAIR_WITH_LIBRA"]]
+  ];
+  If[
+    Lookup[route, "preparation_id", None] =!= identity["preparation_id"] ||
+      Lookup[route, "family_id", None] =!= identity["family_id"] ||
+      Lookup[route, "basis_id", None] =!= identity["basis_id"] ||
+      Lookup[route, "selected_candidate_id", None] =!= selected["candidate_id"],
+    Return[repairFailure["route_decision.identity", "route identity or selected candidate does not match the prepared basis"]]
+  ];
+  If[Lookup[request, "schema", None] =!= "canon-neu/libra-structured-repair-input/v1",
+    Return[repairFailure["schema", "unexpected repair request schema"]]
+  ];
+  If[
+    Lookup[request, "preparation_id", None] =!= identity["preparation_id"] ||
+      Lookup[request, "family_id", None] =!= identity["family_id"] ||
+      Lookup[request, "basis_id", None] =!= identity["basis_id"] ||
+      Lookup[request, "selected_candidate_id", None] =!= selected["candidate_id"],
+    Return[repairFailure["identity", "repair request identity or selected candidate mismatch"]]
+  ];
+  If[
+    Lookup[request, "coefficient_domain", None] =!= "exact-rational-functions" ||
+      Lookup[request, "convention", None] =!= "old_basis = transformation . new_basis",
+    Return[repairFailure["convention", "repair request requires the exact rational domain and old_basis transformation convention"]]
+  ];
+  variables = Lookup[request, "variables", None];
+  regulator = Lookup[request, "regulator", None];
+  parameters = Lookup[request, "parameters", None];
+  basis = Lookup[request, "basis", None];
+  matrices = Lookup[request, "original_matrices", None];
+  If[
+    variables =!= {First[identity["variables"]]} || Length[identity["variables"]] =!= 1 ||
+      !MatchQ[regulator, _Symbol] || parameters =!= {} || !ListQ[basis] || basis === {},
+    Return[repairFailure["differential_system", "v1 requires one variable, one regulator, and parameters={} in an ordered basis"]]
+  ];
+  If[variables =!= identity["variables"] || regulator =!= identity["regulator"],
+    Return[repairFailure["differential_system.identity", "variables or regulator contradict the prepared basis"]]
+  ];
+  dimension = Length[basis];
+  allowedSymbols = Join[variables, {regulator}, parameters];
+  If[
+    !exactMatrixListQ[matrices, Length[variables], dimension] ||
+      !And @@ (DeclaredCoefficientDomainQ[#, allowedSymbols] & /@ Flatten[matrices]),
+    Return[repairFailure["original_matrices", "full differential matrices must be exact rational square matrices in basis order"]]
+  ];
+  If[!FlatConnectionQ[matrices, variables],
+    Return[repairFailure["original_matrices.flatness", "full differential connection is not flat"]]
+  ];
+  alphabet = Lookup[request, "alphabet", None];
+  If[
+    !ListQ[alphabet] || alphabet === {} ||
+      !And @@ (DeclaredCoefficientDomainQ[#, allowedSymbols] & /@ alphabet) ||
+      !FreeQ[alphabet, regulator],
+    Return[repairFailure["alphabet", "declared alphabet must be nonempty, exact rational, and regulator independent"]]
+  ];
+  frozen = Lookup[request, "frozen_prefix", None];
+  If[!AssociationQ[frozen], Return[repairFailure["frozen_prefix", "frozen-prefix contract is missing"]]];
+  prefixDimension = Lookup[frozen, "dimension", None];
+  acceptedMatrices = Lookup[frozen, "accepted_matrices", None];
+  If[
+    prefixDimension =!= 1 || dimension =!= 3 || Length[prepared["current_basis"]["basis"]] =!= 2 ||
+      Lookup[request, "repair_scope", None] =!= "DIRECT_SUM_1X1_PREFIX_PLUS_2X2_TAIL_INTERNAL" ||
+      Lookup[frozen, "prefix_id", None] =!= prefix["prefix_id"] ||
+      Lookup[frozen, "basis", None] =!= prefix["basis"] ||
+      Lookup[frozen, "order", None] =!= Range[prefixDimension] ||
+      prefixDimension =!= Length[prefix["basis"]] ||
+      basis =!= Join[prefix["basis"], prepared["current_basis"]["basis"]] ||
+      !exactMatrixListQ[acceptedMatrices, Length[variables], prefixDimension] ||
+      !And @@ (DeclaredCoefficientDomainQ[#, allowedSymbols] & /@ Flatten[acceptedMatrices]),
+    Return[repairFailure["frozen_prefix", "v1 requires a direct-sum 1x1 accepted prefix plus an ordered 2x2 tail"]]
+  ];
+  prefixRows = 1 ;; prefixDimension;
+  tailRows = prefixDimension + 1 ;; dimension;
+  If[
+    !sameMatrixListsQ[matrixBlocks[matrices, prefixRows, prefixRows], acceptedMatrices] ||
+      !zeroMatrixListQ[matrixBlocks[matrices, prefixRows, tailRows]] ||
+      !zeroMatrixListQ[matrixBlocks[matrices, tailRows, prefixRows]],
+    Return[repairFailure["frozen_prefix.source_blocks", "v1 source must be the declared 1x1 prefix direct-summed with a 2x2 tail"]]
+  ];
+  prefixFlat = FlatConnectionQ[acceptedMatrices, variables];
+  prefixEpsilonFactorized = EpsilonFactorizedQ[acceptedMatrices, regulator];
+  prefixNoResidualRegulator = And @@ (
+    FreeQ[Together[#/regulator], regulator] & /@ Flatten[acceptedMatrices]
+  );
+  prefixDLog = DLogConnectionQ[acceptedMatrices, variables, regulator, alphabet];
+  If[
+    !TrueQ[prefixFlat] || !TrueQ[prefixEpsilonFactorized] ||
+      !TrueQ[prefixNoResidualRegulator] || !TrueQ[prefixDLog],
+    Return[repairFailure[
+      "frozen_prefix.accepted_matrices",
+      "accepted 1x1 prefix must be flat, epsilon-factorized without residual regulator dependence, and in the declared dlog alphabet"
+    ]]
+  ];
+  acceptedBlocks = Lookup[frozen, "accepted_blocks", None];
+  If[
+    Sort[acceptedBlocks] =!= Sort[{"prefix-prefix", "prefix-from-tail", "tail-from-prefix"}],
+    Return[repairFailure["frozen_prefix.accepted_blocks", "v1 fixes all direct-sum prefix and cross blocks"]]
+  ];
+  If[
+    Sort[Lookup[frozen, "forbidden_mixing", {}]] =!= Sort[{"prefix-from-tail", "tail-from-prefix"}],
+    Return[repairFailure["frozen_prefix.forbidden_mixing", "v1 forbids both cross-block transformation mixings"]]
+  ];
+  target = Lookup[request, "localized_target", None];
+  If[
+    !AssociationQ[target] || Lookup[target, "scope", None] =!= "LOCALIZED_BLOCK" ||
+      Lookup[target, "prepared_block", None] =!= "current-current" ||
+      prepared["quality"]["localized_defect"]["block"] =!= "current-current" ||
+      Lookup[target, "prepared_signature", None] =!= prepared["quality"]["localized_defect"]["signature"] ||
+      !MatchQ[Lookup[target, "full_entry", None], {_Integer, _Integer}] ||
+      Lookup[target, "failure_test", None] =!= "REGULATOR_INDEPENDENT_TERM",
+    Return[repairFailure["localized_target", "localized target does not match the prepared defect signature"]]
+  ];
+  signature = target["prepared_signature"];
+  If[
+    Lookup[signature, "kind", None] =!= "epsilon-factorization" ||
+      !IntegerQ[Lookup[signature, "row", None]] || !IntegerQ[Lookup[signature, "column", None]] ||
+      !Between[signature["row"], {1, 2}] || !Between[signature["column"], {1, 2}],
+    Return[repairFailure[
+      "localized_target.prepared_signature",
+      "v1 target must be an epsilon-factorization defect inside the 2x2 current-current tail"
+    ]]
+  ];
+  expectedFullEntry = prefixDimension + {signature["row"], signature["column"]};
+  If[target["full_entry"] =!= expectedFullEntry,
+    Return[repairFailure["localized_target.full_entry", "full_entry must equal prefix_dimension + prepared current-current coordinates"]]
+  ];
+  search = Lookup[request, "search_evidence", None];
+  If[!AssociationQ[search] || search =!= prepared["search_history"],
+    Return[repairFailure["search_evidence", "repair search evidence must exactly match the validated prepared basis"]]
+  ];
+  If[!TrueQ[search["plateau"]] && !TrueQ[search["pool_exhausted"]],
+    Return[repairFailure["search_evidence", "repair requires a plateau or complete candidate-pool exhaustion"]]
+  ];
+  If[TrueQ[search["pool_exhausted"]] && search["alternatives_remaining"] =!= 0,
+    Return[repairFailure["search_evidence.pool_exhausted", "pool exhaustion contradicts remaining alternatives"]]
+  ];
+  request
+];
+
+StructuredRepairPublicationGate[
+  request_Association,
+  candidate_Association
+] := Module[
+  {
+    variables, regulator, parameters, allowedSymbols, basis, original, frozen, target, dimension,
+    prefixDimension, prefixRows, tailRows, transformation, declared, shape,
+    exactDomain, invertible, prefixIdentity, forbiddenMixing, identityMatch,
+    providerStatus, reasons
+  },
+  variables = request["variables"];
+  regulator = request["regulator"];
+  parameters = request["parameters"];
+  allowedSymbols = Join[variables, {regulator}, parameters];
+  basis = request["basis"];
+  original = request["original_matrices"];
+  frozen = request["frozen_prefix"];
+  target = request["localized_target"];
+  dimension = Length[basis];
+  prefixDimension = frozen["dimension"];
+  prefixRows = 1 ;; prefixDimension;
+  tailRows = prefixDimension + 1 ;; dimension;
+  identityMatch =
+    Lookup[candidate, "schema", None] === "canon-neu/libra-structured-repair-candidate/v1" &&
+      Lookup[candidate, "preparation_id", None] === request["preparation_id"] &&
+      Lookup[candidate, "family_id", None] === request["family_id"] &&
+      Lookup[candidate, "basis_id", None] === request["basis_id"] &&
+      Lookup[candidate, "selected_candidate_id", None] === request["selected_candidate_id"] &&
+      Lookup[candidate, "basis", None] === basis &&
+      Lookup[candidate, "variables", None] === variables &&
+      Lookup[candidate, "regulator", None] === regulator &&
+      Lookup[candidate, "parameters", None] === parameters &&
+      Lookup[candidate, "repair_scope", None] === request["repair_scope"] &&
+      Lookup[candidate, "coefficient_domain", None] === request["coefficient_domain"] &&
+      Lookup[candidate, "convention", None] === request["convention"] &&
+      Lookup[candidate, "original_matrices", None] === original &&
+      Lookup[candidate, "frozen_prefix", None] === frozen &&
+      Lookup[candidate, "localized_target", None] === target;
+  providerStatus = Lookup[candidate, "provider_status", None] ===
+    "PROVISIONAL/CANDIDATE_TRANSFORMATION";
+  transformation = Lookup[candidate, "transformation", None];
+  declared = Lookup[candidate, "transformed_matrices", None];
+  shape = MatrixQ[transformation] && Dimensions[transformation] === {dimension, dimension} &&
+    ListQ[declared] && Length[declared] === Length[variables] &&
+    And @@ (MatrixQ[#] && Dimensions[#] === {dimension, dimension} & /@ declared);
+  exactDomain = TrueQ[shape] &&
+    And @@ (DeclaredCoefficientDomainQ[#, allowedSymbols] & /@ Flatten[transformation]) &&
+    And @@ (DeclaredCoefficientDomainQ[#, allowedSymbols] & /@ Flatten[declared]);
+  invertible = TrueQ[exactDomain] && TrueQ[Together[Det[transformation]] =!= 0];
+  prefixIdentity = TrueQ[invertible] && ZeroMatrixQ[
+    Map[Together, transformation[[prefixRows, prefixRows]] - IdentityMatrix[prefixDimension], {2}]
+  ];
+  forbiddenMixing = TrueQ[invertible] &&
+    (!MemberQ[frozen["forbidden_mixing"], "prefix-from-tail"] ||
+      ZeroMatrixQ[transformation[[prefixRows, tailRows]]]) &&
+    (!MemberQ[frozen["forbidden_mixing"], "tail-from-prefix"] ||
+      ZeroMatrixQ[transformation[[tailRows, prefixRows]]]);
+  reasons = Pick[
+    {
+      "identity_or_order_mismatch", "forged_provider_status", "candidate_shape_invalid",
+      "coefficient_domain_invalid", "singular_transformation", "frozen_prefix_modified",
+      "forbidden_prefix_mixing"
+    },
+    {
+      !TrueQ[identityMatch], !TrueQ[providerStatus], !TrueQ[shape], !TrueQ[exactDomain],
+      !TrueQ[invertible], !TrueQ[prefixIdentity], !TrueQ[forbiddenMixing]
+    }
+  ];
+  <|
+    "pass" -> (reasons === {}),
+    "reasons" -> reasons,
+    "identity_and_order" -> TrueQ[identityMatch],
+    "provider_status_provisional" -> TrueQ[providerStatus],
+    "invertible" -> TrueQ[invertible],
+    "frozen_prefix_identity" -> TrueQ[prefixIdentity],
+    "forbidden_mixing_zero" -> TrueQ[forbiddenMixing]
+  |>
 ];
 
 End[];

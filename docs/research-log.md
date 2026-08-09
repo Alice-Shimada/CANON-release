@@ -110,3 +110,43 @@
   `python3 -m unittest discover -s tests -p 'test_*.py' -v`，33 项在 143.147 秒内
   `OK`，仅 real INITIAL ladder 条件测试按预期跳过。全程没有运行 INITIAL、`TCalc`，
   没有修改外部安装。
+
+### 2026-08-09 — Libra frozen-prefix structured repair 切片
+
+- 固定范围：v1 只接受 `parameters -> {}` 的单变量精确有理 `3×3` 直和，即 accepted
+  canonical `1×1` prefix 加 Libra Tutorial #1 `2×2` tail-internal defect。两个源 cross
+  blocks 必须为零、两个 transformation cross mixings 禁止；defect kind 必须精确为
+  `current-current`/`epsilon-factorization`，failure test 为 `REGULATOR_INDEPENDENT_TERM`，且
+  `full_entry = prefix_dimension + {row,column}`。preflight 还精确复查 prefix flatness、epsilon
+  factorization、除 regulator 后无残余依赖和声明 dlog alphabet；联合伪造其他 kind 与 `1/x`
+  noncanonical prefix 均在 package resolution 前稳定拒绝。
+- 权限边界：provider 只做 shape/domain/invertibility/frozen-prefix publication gate。Checker
+  独立实现全部科学判据，并只 canonicalize/stat/hash authoritative entry；不求值 package，
+  不读写 Libra context state。Side-effect sentinel 的正文会写 marker 并 abort，但 checker
+  hash 后仍完成 `PASS/VERIFIED_STRUCTURED_REPAIR` 且 marker 不存在，证明 provider code 未执行。
+  A-011/A-013 的 shared verdict、伪造 provenance、mapping、未声明 `z`、other-kind 和
+  noncanonical-prefix counterexamples 均已覆盖。
+- Focused 命令：`PYTHONDONTWRITEBYTECODE=1 CANON_WOLFRAM_KERNEL=/Applications/Mathematica.app/Contents/MacOS/WolframKernel python3 -m unittest -v tests.test_method_cards.MethodCardIntegrationTest.test_structured_repair_contract_rejects_route_pool_and_prefix_contradictions tests.test_method_cards.MethodCardIntegrationTest.test_structured_repair_preflight_enforces_mapping_direct_sum_and_parameters tests.test_method_cards.MethodCardIntegrationTest.test_structured_repair_preflight_requires_exact_defect_and_canonical_prefix tests.test_method_cards.MethodCardIntegrationTest.test_structured_repair_scope_invalid_system_and_method_exhaustion tests.test_method_cards.MethodCardIntegrationTest.test_structured_repair_checker_positive_and_adversarial_rejections tests.test_method_cards.MethodCardIntegrationTest.test_structured_repair_checker_hashes_package_without_executing_it`；实际
+  `Ran 6 tests in 109.802s — OK`，无数值容限。
+- 唯一当前源码完整 suite 命令：`PYTHONDONTWRITEBYTECODE=1 HEP_TOOLS_ROOT=/Users/balth/Works/hep-tools HEP_TOOLS_MACHINE_ID=macos-arm64 HEP_TOOLS_MACHINE_STATE=/Users/balth/Works/hep-tools/tools/macos-arm64.md CANON_WOLFRAM_KERNEL=/Applications/Mathematica.app/Contents/MacOS/WolframKernel CANON_TEST_LIBRA_ENTRY=/Users/balth/Works/hep-tools/tools/libra/Source/Libra.m CANON_TEST_CANONICA_ENTRY=/Users/balth/Works/hep-tools/tools/canonica/src/CANONICA.m CANON_TEST_INITIAL_HEP_TOOLS_ROOT= CANON_TEST_STRUCTURED_OUTPUT_ROOT=/Users/balth/Works/hep-tools/tools-dev/CANON/.state-management/canon-method-card-development/runs/R-014/workspace/full-suite-structured-R014 python3 -m unittest discover -s tests -p 'test_*.py' -v`；实际
+  `Ran 40 tests in 274.397s`：37 通过、1 个 real INITIAL 条件跳过，另两个 kernel 在写结果前
+  因 `OMP Error #178: Can't open SHM` 退出。只复跑这两个非真实 provider test methods 后
+  `Ran 2 tests in 39.716s — OK`；没有重启完整 suite。
+- 该完整 suite 中唯一真实 structured runner 未接收 transformation，Libra 自行生成
+  `{{1,0,0},{0,1,x},{0,0,1}}` 并返回 `PROVISIONAL/CANDIDATE_TRANSFORMATION`；hash-only checker
+  返回 `PASS/VERIFIED_STRUCTURED_REPAIR`，authenticated provenance 与全部精确科学 flags 为
+  true。caller-owned 现场在 R-014 `full-suite-structured-R014/`，不进入 patch。全程未调用
+  INITIAL、`TCalc` 或非既有 regression 的 CANONICA，也没有 fallback 或外部写入。
+
+## 2026-08-09：ARM64 libomp sequential-launch lifecycle gate
+
+- Mathematica 14 ARM64 的 kernel 直接链接 bundled `libomp.dylib`；其 registration 名为
+  `__KMP_REGISTERED_LIB_<pid>`。测试 launcher 在唯一一次 `execve` 前只 unlink 当前未来
+  kernel PID 的陈旧 registration；除成功或 `ENOENT` 外均 fail closed。没有 retry、
+  `KMP_DUPLICATE_LIB_OK`、结果替换或外部安装变更。
+- 固定 full-scale stress：84/84 kernel launches 与 result artifacts 通过，18/18 tests，
+  0 abort/failure/error/skip，306.808 秒；覆盖 registered CANONICA provider/checker、prepared
+  basis 路径以及 structured preflight/checker negatives。
+- 唯一 fresh full suite：82/82 launches 与 result artifacts，41 tests 中 40 pass，唯一 skip
+  是显式禁用的 real INITIAL ladder；0 abort/failure/error，300.870 秒。Libra/CANONICA 使用
+  登记入口，未运行 INITIAL `TCalc`。

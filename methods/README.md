@@ -120,6 +120,49 @@ global rational defect → `FIND_RATIONAL_CANONICAL_WITH_CANONICA`；其余 →
 `DIAGNOSE_OR_CHANGE_VARIABLES`。`ut_evidence_references` 只用于追溯；改变 INITIAL evidence
 本身不能选择 backend、改变 decision 或终止 route。
 
+## Libra frozen-prefix structured repair
+
+`libra-structured-repair` 是与 `methods/libra` 的 `SEARCH_CORE` 不同的 provider。它只读取
+通过校验的 prepared basis、恰为 `REPAIR_WITH_LIBRA` 的 route decision，以及
+`canon-neu/libra-structured-repair-input/v1`。repair input 必须显式绑定 preparation/family/
+basis/selected-candidate identity，完整 ordered basis 与精确 matrices，
+`old_basis = transformation . new_basis` 约定，冻结 prefix 的 ID/basis/order/dimension/
+accepted matrices，禁止混合块，localized target signature，单变量 rational dlog alphabet，
+以及与 prepared basis 完全相同的 plateau 或完整 pool-exhaustion 证据。上述身份、范围、
+维数、pool state、约定或系数域的矛盾都在加载 Libra 前拒绝。
+
+v1 不宣称一般 localized/full-prefix repair：唯一支持的结构是一个 accepted canonical
+`1x1` prefix 与一个 `2x2` current tail 的直和，两个 cross blocks 必须严格为零并禁止
+transformation mixing，defect 必须是 tail 内部 `current-current` epsilon-factorization entry，
+failure test 必须是 `REGULATOR_INDEPENDENT_TERM`。accepted prefix 在 package resolution 前
+必须精确通过 flatness、epsilon factorization、除 regulator 后无残余依赖和声明的单变量 dlog
+alphabet。prepared signature
+的 `(row,column)` 必须满足 `full_entry = prefix_dimension + {row,column}`。系数参数固定
+`parameters -> {}`，矩阵、alphabet 和 candidate transformation 中出现 `x`、regulator 之外
+的 `z` 等未声明 symbol 会 fail-closed 拒绝。
+
+当前 provider 只运行登记或调用方注入的 Libra 1.2，并固定 Fermatica 为 false；阶段为
+`NewDSystem` → `Fuchsify` → `Transform` → `FactorOut` → `Transform` →
+`OverallTransformation` → `EFormQ`。它没有 provider fallback，也不调用其他 method card。
+多变量或 global/nonlocalized 问题为 `INCONCLUSIVE/OUT_OF_SCOPE`，无效/non-flat system
+为 `ERROR/INVALID_DIFFERENTIAL_SYSTEM`，有界阶段不能产生冻结 prefix 兼容的矩阵 candidate 为
+`INCONCLUSIVE/METHOD_EXHAUSTED`。成功也只能写
+`canon-neu/libra-structured-repair-candidate/v1` 并返回
+`PROVISIONAL/CANDIDATE_TRANSFORMATION`。
+
+Provider 的 publication gate 只核对 shape、declared exact syntax、invertibility、prefix
+identity 和禁止 mixing，不运行 gauge/epsilon/dlog/target acceptance。`mma/CheckStructuredRepair.wls`
+从 authoritative prepared/route/request 重新加载 candidate，以 checker-owned 实现独立核对
+全部 identity/order/domain/convention、变换维数与可逆性、prefix identity 和禁止
+混合块、完整 exact gauge identity、flatness、epsilon factorization 与除 regulator 后无残余
+依赖、声明 dlog alphabet、target defect 消除，以及所有 declared accepted blocks 不退化。
+Checker 还必须通过 `checker_options` 独立 canonicalize/stat/hash injected Libra entry，且不得
+求值 package 或读写任何 Libra context state；随后逐项认证
+tool identity、entry/hash、package source、runtime、Fermatica/mu options 和 stages；认证 provenance
+保留在 verified artifact。
+只有它能返回 `PASS/VERIFIED_STRUCTURED_REPAIR`；任何 provider `PASS` 字段都会作为 forged
+status 被 `FAIL/STRUCTURED_REPAIR_REJECTED` 拒绝，provider evidence 不具有验收权限。
+
 ## 目标路线策略（尚未接线）
 
 当前可执行 checker 只验证或筛选显式 candidate artifact，不承担 sector 调度。已经
@@ -128,8 +171,9 @@ global rational defect → `FIND_RATIONAL_CANONICAL_WITH_CANONICA`；其余 →
 不能把它描述成已有能力。
 
 独立的 `full-prefix-tail-screen` 卡已经实现了其中“对预构造的精确单变量 artifact 进行
-有界候选筛选”的部分。它不生成 candidate-specific full DE，也未接入 coordinator，
-所以端到端路线仍未闭合。
+有界候选筛选”的部分；`libra-structured-repair` 已实现显式 eligible localized defect 的
+provider/checker vertical slice。两者仍未接入 coordinator，也不负责生成物理
+candidate-specific full DE，所以端到端路线仍未闭合。
 
 对每个 current sector：
 

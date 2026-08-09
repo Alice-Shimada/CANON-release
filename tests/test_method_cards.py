@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
+import sys
 import tempfile
 import time
 import unittest
@@ -15,6 +17,7 @@ DEFAULT_KERNEL = Path(
     "/Applications/Mathematica.app/Contents/MacOS/WolframKernel"
 )
 KERNEL = Path(os.environ.get("CANON_WOLFRAM_KERNEL", DEFAULT_KERNEL))
+KERNEL_LAUNCHER = ROOT / "tests" / "wolfram_kernel_launcher.py"
 
 
 def optional_entry(name: str) -> Path | None:
@@ -25,6 +28,13 @@ def optional_entry(name: str) -> Path | None:
 CANONICA_ENTRY = optional_entry("CANON_TEST_CANONICA_ENTRY")
 LIBRA_ENTRY = optional_entry("CANON_TEST_LIBRA_ENTRY")
 INITIAL_HEP_TOOLS_ROOT = optional_entry("CANON_TEST_INITIAL_HEP_TOOLS_ROOT")
+STRUCTURED_OUTPUT_ROOT = optional_entry("CANON_TEST_STRUCTURED_OUTPUT_ROOT")
+REGISTERED_LIBRA_ENTRY = Path(
+    "/Users/balth/Works/hep-tools/tools/libra/Source/Libra.m"
+)
+REGISTERED_LIBRA_SHA256 = (
+    "b3574e7f560951516a289a8141aafbaf23f0f5ae563e29d0fa077b17ba4d3eb4"
+)
 
 
 @unittest.skipUnless(
@@ -56,6 +66,8 @@ class MethodCardIntegrationTest(unittest.TestCase):
         environment["VECLIB_MAXIMUM_THREADS"] = "1"
         completed = subprocess.run(
             [
+                sys.executable,
+                str(KERNEL_LAUNCHER),
                 str(KERNEL),
                 "-noinit",
                 "-noprompt",
@@ -278,6 +290,118 @@ EndPackage[];
                     "path": str(full_prefix_candidates),
                 },
                 "screen_options": {"candidate_budget": candidate_budget},
+            },
+        }
+        path = self.run_root / f"{task_id}.json"
+        path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
+        return path
+
+    def mutated_wl(
+        self,
+        source: Path,
+        name: str,
+        replacements: tuple[tuple[str, str], ...],
+    ) -> Path:
+        text = source.read_text(encoding="utf-8")
+        for old, new in replacements:
+            self.assertIn(old, text)
+            text = text.replace(old, new)
+        path = self.run_root / f"{name}.wl"
+        path.write_text(text, encoding="utf-8")
+        return path
+
+    def structured_repair_provider_input(
+        self,
+        task_id: str,
+        *,
+        prepared_basis: Path | None = None,
+        route_decision: Path | None = None,
+        repair_request: Path | None = None,
+        package_entry: Path | None = None,
+    ) -> Path:
+        value = {
+            "schema": "canon-neu/script-input/v1",
+            "task_id": task_id,
+            "step": "REPAIR_WITH_LIBRA",
+            "payload": {
+                "prepared_basis": {
+                    "type": "mathematica-expression",
+                    "path": str(
+                        prepared_basis
+                        or FIXTURES / "structured-repair-prepared-basis.wl"
+                    ),
+                },
+                "route_decision": {
+                    "type": "mathematica-expression",
+                    "path": str(
+                        route_decision
+                        or FIXTURES / "structured-repair-route-decision.wl"
+                    ),
+                },
+                "repair_request": {
+                    "type": "mathematica-expression",
+                    "path": str(
+                        repair_request
+                        or FIXTURES / "structured-repair-input.wl"
+                    ),
+                },
+                "method_options": {
+                    "package_entry": str(
+                        package_entry or self.run_root / "must-not-load-Libra.m"
+                    )
+                },
+            },
+        }
+        path = self.run_root / f"{task_id}.json"
+        path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
+        return path
+
+    def structured_repair_checker_input(
+        self,
+        task_id: str,
+        repair_candidate: Path,
+        *,
+        prepared_basis: Path | None = None,
+        route_decision: Path | None = None,
+        repair_request: Path | None = None,
+        checker_entry: Path = REGISTERED_LIBRA_ENTRY,
+        checker_sha256: str = REGISTERED_LIBRA_SHA256,
+    ) -> Path:
+        value = {
+            "schema": "canon-neu/script-input/v1",
+            "task_id": task_id,
+            "step": "CHECK_STRUCTURED_REPAIR",
+            "payload": {
+                "prepared_basis": {
+                    "type": "mathematica-expression",
+                    "path": str(
+                        prepared_basis
+                        or FIXTURES / "structured-repair-prepared-basis.wl"
+                    ),
+                },
+                "route_decision": {
+                    "type": "mathematica-expression",
+                    "path": str(
+                        route_decision
+                        or FIXTURES / "structured-repair-route-decision.wl"
+                    ),
+                },
+                "repair_request": {
+                    "type": "mathematica-expression",
+                    "path": str(
+                        repair_request
+                        or FIXTURES / "structured-repair-input.wl"
+                    ),
+                },
+                "repair_candidate": {
+                    "type": "mathematica-expression",
+                    "path": str(repair_candidate),
+                },
+                "checker_options": {
+                    "package_entry": str(checker_entry),
+                    "expected_tool_identity": "1.2",
+                    "expected_entry_sha256": checker_sha256,
+                },
             },
         }
         path = self.run_root / f"{task_id}.json"
@@ -704,6 +828,491 @@ EndPackage[];
             '"transformation" -> {{1, x}, {0, 1}}',
             relative_entry=False,
         )
+
+    @unittest.skipUnless(
+        LIBRA_ENTRY is not None and LIBRA_ENTRY.is_file(),
+        "set CANON_TEST_LIBRA_ENTRY to run the real structured-repair test",
+    )
+    def test_real_libra_structured_repair_and_independent_checker(self) -> None:
+        assert LIBRA_ENTRY is not None
+        structured_root = STRUCTURED_OUTPUT_ROOT or self.run_root
+        provider_output = structured_root / "structured-real-provider"
+        provider = self.run_wls(
+            ROOT / "methods" / "libra-structured-repair" / "run.wls",
+            self.structured_repair_provider_input(
+                "T-STRUCTURED-REAL-PROVIDER", package_entry=LIBRA_ENTRY
+            ),
+            provider_output,
+        )
+        self.assertEqual(
+            (provider["status"], provider["code"]),
+            ("PROVISIONAL", "CANDIDATE_TRANSFORMATION"),
+        )
+        candidate = provider_output / provider["artifacts"]["repair_candidate"]["path"]
+        candidate_text = " ".join(candidate.read_text(encoding="utf-8").split())
+        self.assertIn(
+            '"transformation" -> {{1, 0, 0}, {0, 1, x}, {0, 0, 1}}',
+            candidate_text,
+        )
+        checker_output = structured_root / "structured-real-checker"
+        checked = self.run_wls(
+            ROOT / "mma" / "CheckStructuredRepair.wls",
+            self.structured_repair_checker_input(
+                "T-STRUCTURED-REAL-CHECKER", candidate
+            ),
+            checker_output,
+        )
+        self.assertEqual(
+            (checked["status"], checked["code"]),
+            ("PASS", "VERIFIED_STRUCTURED_REPAIR"),
+        )
+        for field in (
+            "identity_and_order",
+            "authenticated_libra_provenance",
+            "invertible",
+            "frozen_prefix_identity",
+            "forbidden_mixing_zero",
+            "exact_full_gauge",
+            "flat_connection",
+            "epsilon_factorized",
+            "no_residual_regulator_dependence",
+            "declared_dlog_alphabet",
+            "target_defect_eliminated",
+            "accepted_blocks_nonregressed",
+        ):
+            self.assertTrue(checked["summary"][field], field)
+        verified_path = checker_output / checked["artifacts"][
+            "verified_structured_repair"
+        ]["path"]
+        verified_text = verified_path.read_text(encoding="utf-8")
+        self.assertIn('"authenticated_provenance"', verified_text)
+        self.assertIn(REGISTERED_LIBRA_SHA256, verified_text)
+
+    def test_structured_repair_contract_rejects_route_pool_and_prefix_contradictions(self) -> None:
+        base_prepared = FIXTURES / "structured-repair-prepared-basis.wl"
+        base_route = FIXTURES / "structured-repair-route-decision.wl"
+        base_request = FIXTURES / "structured-repair-input.wl"
+        no_plateau_prepared = self.mutated_wl(
+            base_prepared,
+            "structured-no-plateau-prepared",
+            (( '"plateau" -> True', '"plateau" -> False'),),
+        )
+        no_plateau_request = self.mutated_wl(
+            base_request,
+            "structured-no-plateau-request",
+            (( '"plateau" -> True', '"plateau" -> False'),),
+        )
+        cases = {
+            "wrong-route": {
+                "route_decision": self.mutated_wl(
+                    base_route,
+                    "structured-wrong-route",
+                    (( '"REPAIR_WITH_LIBRA"', '"FIND_RATIONAL_CANONICAL_WITH_CANONICA"'),),
+                ),
+            },
+            "pool-not-exhausted": {
+                "prepared_basis": no_plateau_prepared,
+                "repair_request": no_plateau_request,
+            },
+            "prefix-order": {
+                "repair_request": self.mutated_wl(
+                    base_request,
+                    "structured-wrong-prefix-order",
+                    (( '"order" -> {1}', '"order" -> {2}'),),
+                ),
+            },
+            "prefix-identity": {
+                "repair_request": self.mutated_wl(
+                    base_request,
+                    "structured-wrong-prefix-id",
+                    (( '"fixture-libra-accepted-prefix-v1"', '"wrong-prefix-id"'),),
+                ),
+            },
+            "selected-candidate-identity": {
+                "repair_request": self.mutated_wl(
+                    base_request,
+                    "structured-wrong-selected-candidate",
+                    (( '"selected_candidate_id" -> "fixture-structured-candidate-a"',
+                       '"selected_candidate_id" -> "fixture-structured-candidate-b"'),),
+                ),
+            },
+            "coefficient-domain": {
+                "repair_request": self.mutated_wl(
+                    base_request,
+                    "structured-wrong-domain",
+                    (( '"coefficient_domain" -> "exact-rational-functions"',
+                       '"coefficient_domain" -> "machine-real"'),),
+                ),
+            },
+            "convention": {
+                "repair_request": self.mutated_wl(
+                    base_request,
+                    "structured-wrong-convention",
+                    (( '"old_basis = transformation . new_basis"',
+                       '"new_basis = transformation . old_basis"'),),
+                ),
+            },
+            "block-dimension": {
+                "repair_request": self.mutated_wl(
+                    base_request,
+                    "structured-wrong-prefix-dimension",
+                    (( '"dimension" -> 1', '"dimension" -> 2'),),
+                ),
+            },
+        }
+        for name, updates in cases.items():
+            with self.subTest(name=name):
+                output = self.run_root / f"structured-contract-{name}"
+                result = self.run_wls(
+                    ROOT / "methods" / "libra-structured-repair" / "run.wls",
+                    self.structured_repair_provider_input(
+                        f"T-STRUCTURED-CONTRACT-{name.upper()}", **updates
+                    ),
+                    output,
+                    expected_returncode=1,
+                )
+                self.assertEqual(
+                    (result["status"], result["code"]),
+                    ("ERROR", "INVALID_REPAIR_INPUT"),
+                )
+
+    def test_structured_repair_preflight_enforces_mapping_direct_sum_and_parameters(self) -> None:
+        base_request = FIXTURES / "structured-repair-input.wl"
+        cases = {
+            "mismapped-target": (
+                (( '"full_entry" -> {2, 3}', '"full_entry" -> {3, 2}'),),
+                "INVALID_REPAIR_INPUT",
+                "localized_target.full_entry",
+            ),
+            "undeclared-symbol": (
+                ((
+                    '1 - eps + eps/(1 - x) - x eps/(1 + x)',
+                    '1 - eps + eps/(1 - x) - x eps/(1 + x) + z',
+                ),),
+                "INVALID_DIFFERENTIAL_SYSTEM",
+                "original_matrices",
+            ),
+            "undeclared-parameter": (
+                (( '"parameters" -> {}', '"parameters" -> {z}'),),
+                "INVALID_REPAIR_INPUT",
+                "differential_system",
+            ),
+            "nonzero-cross-block": (
+                ((
+                    '{0, 0, -eps/(1 + x)}',
+                    '{eps/x, 0, -eps/(1 + x)}',
+                ),),
+                "INVALID_REPAIR_INPUT",
+                "frozen_prefix.source_blocks",
+            ),
+            "broader-scope-claim": (
+                ((
+                    '"DIRECT_SUM_1X1_PREFIX_PLUS_2X2_TAIL_INTERNAL"',
+                    '"GENERIC_LOCALIZED_FULL_PREFIX"',
+                ),),
+                "INVALID_REPAIR_INPUT",
+                "frozen_prefix",
+            ),
+        }
+        for name, (replacements, expected_code, expected_field) in cases.items():
+            with self.subTest(name=name):
+                request = self.mutated_wl(
+                    base_request, f"structured-preflight-{name}", replacements
+                )
+                output = self.run_root / f"structured-preflight-{name}-output"
+                result = self.run_wls(
+                    ROOT / "methods" / "libra-structured-repair" / "run.wls",
+                    self.structured_repair_provider_input(
+                        f"T-STRUCTURED-PREFLIGHT-{name.upper()}",
+                        repair_request=request,
+                    ),
+                    output,
+                    expected_returncode=1,
+                )
+                self.assertEqual((result["status"], result["code"]), ("ERROR", expected_code))
+                self.assertEqual(result["summary"]["field"], expected_field)
+                self.assertNotEqual(result["code"], "TOOL_UNAVAILABLE")
+
+    def test_structured_repair_preflight_requires_exact_defect_and_canonical_prefix(self) -> None:
+        base_prepared = FIXTURES / "structured-repair-prepared-basis.wl"
+        base_request = FIXTURES / "structured-repair-input.wl"
+
+        other_kind_prepared = self.mutated_wl(
+            base_prepared,
+            "structured-other-kind-prepared",
+            (( '"kind" -> "epsilon-factorization"', '"kind" -> "another-defect-kind"'),),
+        )
+        other_kind_request = self.mutated_wl(
+            base_request,
+            "structured-other-kind-request",
+            (( '"kind" -> "epsilon-factorization"', '"kind" -> "another-defect-kind"'),),
+        )
+        noncanonical_prefix = self.mutated_wl(
+            base_request,
+            "structured-noncanonical-prefix",
+            (
+                ("{eps/x, 0, 0}", "{1/x, 0, 0}"),
+                ('"accepted_matrices" -> {{{eps/x}}}', '"accepted_matrices" -> {{{1/x}}}'),
+            ),
+        )
+
+        cases = {
+            "other-defect-kind": (
+                other_kind_prepared,
+                other_kind_request,
+                "localized_target.prepared_signature",
+            ),
+            "noncanonical-prefix": (
+                base_prepared,
+                noncanonical_prefix,
+                "frozen_prefix.accepted_matrices",
+            ),
+        }
+        for name, (prepared, request, expected_field) in cases.items():
+            with self.subTest(name=name):
+                output = self.run_root / f"structured-v1-preflight-{name}"
+                result = self.run_wls(
+                    ROOT / "methods" / "libra-structured-repair" / "run.wls",
+                    self.structured_repair_provider_input(
+                        f"T-STRUCTURED-V1-PREFLIGHT-{name.upper()}",
+                        prepared_basis=prepared,
+                        repair_request=request,
+                    ),
+                    output,
+                    expected_returncode=1,
+                )
+                self.assertEqual(
+                    (result["status"], result["code"]),
+                    ("ERROR", "INVALID_REPAIR_INPUT"),
+                )
+                self.assertEqual(result["summary"]["field"], expected_field)
+                self.assertNotEqual(result["code"], "TOOL_UNAVAILABLE")
+
+    def test_structured_repair_scope_invalid_system_and_method_exhaustion(self) -> None:
+        base_prepared = FIXTURES / "structured-repair-prepared-basis.wl"
+        multivariable_prepared = self.mutated_wl(
+            base_prepared,
+            "structured-multivariable-prepared",
+            (( '"variables" -> {x}', '"variables" -> {x, y}'),),
+        )
+        flat_request = FIXTURES / "structured-repair-input-multivariable-flat.wl"
+
+        out = self.run_root / "structured-multivariable"
+        result = self.run_wls(
+            ROOT / "methods" / "libra-structured-repair" / "run.wls",
+            self.structured_repair_provider_input(
+                "T-STRUCTURED-MULTIVARIABLE",
+                prepared_basis=multivariable_prepared,
+                repair_request=flat_request,
+            ),
+            out,
+        )
+        self.assertEqual(
+            (result["status"], result["code"]),
+            ("INCONCLUSIVE", "OUT_OF_SCOPE"),
+        )
+
+        global_request = self.mutated_wl(
+            FIXTURES / "structured-repair-input.wl",
+            "structured-global-request",
+            (( '"scope" -> "LOCALIZED_BLOCK"', '"scope" -> "GLOBAL"'),),
+        )
+        out = self.run_root / "structured-global"
+        result = self.run_wls(
+            ROOT / "methods" / "libra-structured-repair" / "run.wls",
+            self.structured_repair_provider_input(
+                "T-STRUCTURED-GLOBAL", repair_request=global_request
+            ),
+            out,
+        )
+        self.assertEqual(
+            (result["status"], result["code"]),
+            ("INCONCLUSIVE", "OUT_OF_SCOPE"),
+        )
+
+        nonflat_request = self.mutated_wl(
+            flat_request,
+            "structured-multivariable-nonflat",
+            (( 'ConstantArray[0, {3, 3}]', '{{x, 0, 0}, {0, 0, 0}, {0, 0, 0}}'),),
+        )
+        out = self.run_root / "structured-nonflat"
+        result = self.run_wls(
+            ROOT / "methods" / "libra-structured-repair" / "run.wls",
+            self.structured_repair_provider_input(
+                "T-STRUCTURED-NONFLAT",
+                prepared_basis=multivariable_prepared,
+                repair_request=nonflat_request,
+            ),
+            out,
+            expected_returncode=1,
+        )
+        self.assertEqual(
+            (result["status"], result["code"]),
+            ("ERROR", "INVALID_DIFFERENTIAL_SYSTEM"),
+        )
+        self.assertEqual(result["summary"]["field"], "original_matrices.flatness")
+
+        out = self.run_root / "structured-exhausted"
+        result = self.run_wls(
+            ROOT / "methods" / "libra-structured-repair" / "run.wls",
+            self.structured_repair_provider_input(
+                "T-STRUCTURED-EXHAUSTED", package_entry=self.fake_libra_entry()
+            ),
+            out,
+        )
+        self.assertEqual(
+            (result["status"], result["code"]),
+            ("INCONCLUSIVE", "METHOD_EXHAUSTED"),
+        )
+
+    def test_structured_repair_checker_positive_and_adversarial_rejections(self) -> None:
+        base = FIXTURES / "structured-repair-candidate.wl"
+        positive_output = self.run_root / "structured-static-positive"
+        positive = self.run_wls(
+            ROOT / "mma" / "CheckStructuredRepair.wls",
+            self.structured_repair_checker_input("T-STRUCTURED-STATIC-POSITIVE", base),
+            positive_output,
+        )
+        self.assertEqual(
+            (positive["status"], positive["code"]),
+            ("PASS", "VERIFIED_STRUCTURED_REPAIR"),
+        )
+
+        cases = {
+            "prefix-modified": (
+                ((
+                    '"transformation" -> {{1, 0, 0}, {0, 1, x}, {0, 0, 1}}',
+                    '"transformation" -> {{2, 0, 0}, {0, 1, x}, {0, 0, 1}}',
+                ),),
+                "frozen_prefix_modified",
+            ),
+            "forbidden-mixing": (
+                ((
+                    '"transformation" -> {{1, 0, 0}, {0, 1, x}, {0, 0, 1}}',
+                    '"transformation" -> {{1, x, 0}, {0, 1, x}, {0, 0, 1}}',
+                ),),
+                "forbidden_prefix_mixing",
+            ),
+            "wrong-gauge": (
+                (( '{0, eps/x, eps/(1 - x)}', '{0, eps/x, 2 eps/(1 - x)}'),),
+                "wrong_gauge_residual",
+            ),
+            "unresolved-target": (
+                (
+                    (
+                        '"transformation" -> {{1, 0, 0}, {0, 1, x}, {0, 0, 1}}',
+                        '"transformation" -> IdentityMatrix[3]',
+                    ),
+                    (
+                        '{0, eps/x, eps/(1 - x)}',
+                        '{0, eps/x, 1 - eps + eps/(1 - x) - x eps/(1 + x)}',
+                    ),
+                ),
+                "unresolved_target_defect",
+            ),
+            "accepted-block-regression": (
+                ((
+                    '"transformation" -> {{1, 0, 0}, {0, 1, x}, {0, 0, 1}}',
+                    '"transformation" -> {{1, 0, 0}, {x, 1, x}, {0, 0, 1}}',
+                ),),
+                "accepted_tail_from_prefix_regression",
+            ),
+            "wrong-order": (
+                (( '"basis" -> {l1, j1, j2}', '"basis" -> {j1, l1, j2}'),),
+                "identity_or_order_mismatch",
+            ),
+            "forged-provider-pass": (
+                ((
+                    '"provider_status" -> "PROVISIONAL/CANDIDATE_TRANSFORMATION"',
+                    '"provider_status" -> "PASS/VERIFIED_STRUCTURED_REPAIR"',
+                ),),
+                "forged_provider_status",
+            ),
+            "undeclared-z": (
+                ((
+                    '"transformation" -> {{1, 0, 0}, {0, 1, x}, {0, 0, 1}}',
+                    '"transformation" -> {{1, 0, 0}, {0, z, x z}, {0, 0, z}}',
+                ),),
+                "coefficient_domain_invalid",
+            ),
+            "forged-libra-provenance": (
+                (
+                    (
+                        '"entry" -> "/Users/balth/Works/hep-tools/tools/libra/Source/Libra.m"',
+                        '"entry" -> "/nonexistent/forged-Libra.m"',
+                    ),
+                    (
+                        '"b3574e7f560951516a289a8141aafbaf23f0f5ae563e29d0fa077b17ba4d3eb4"',
+                        '"0000000000000000000000000000000000000000000000000000000000000000"',
+                    ),
+                    (
+                        '"package_source" -> "method_options.package_entry"',
+                        '"package_source" -> "forged"',
+                    ),
+                    (
+                        '"factor_out_mu" -> 1/2',
+                        '"factor_out_mu" -> 99',
+                    ),
+                ),
+                "libra_provenance_mismatch",
+            ),
+        }
+        for name, (replacements, expected_reason) in cases.items():
+            with self.subTest(name=name):
+                candidate = self.mutated_wl(base, f"structured-{name}", replacements)
+                output = self.run_root / f"structured-negative-{name}"
+                result = self.run_wls(
+                    ROOT / "mma" / "CheckStructuredRepair.wls",
+                    self.structured_repair_checker_input(
+                        f"T-STRUCTURED-NEGATIVE-{name.upper()}", candidate
+                    ),
+                    output,
+                )
+                self.assertEqual(
+                    (result["status"], result["code"]),
+                    ("FAIL", "STRUCTURED_REPAIR_REJECTED"),
+                )
+                self.assertIn(expected_reason, result["summary"]["rejection_signature"])
+
+    def test_structured_repair_checker_hashes_package_without_executing_it(self) -> None:
+        marker = self.run_root / "checker-executed-package.marker"
+        sentinel = self.run_root / "SentinelLibra.m"
+        sentinel.write_text(
+            f'Put["EXECUTED", {json.dumps(str(marker))}]; Abort[];\n',
+            encoding="utf-8",
+        )
+        sentinel_sha256 = hashlib.sha256(sentinel.read_bytes()).hexdigest()
+        candidate = self.mutated_wl(
+            FIXTURES / "structured-repair-candidate.wl",
+            "structured-sentinel-provenance",
+            (
+                (
+                    '"entry" -> "/Users/balth/Works/hep-tools/tools/libra/Source/Libra.m"',
+                    f'"entry" -> "{sentinel}"',
+                ),
+                (
+                    f'"{REGISTERED_LIBRA_SHA256}"',
+                    f'"{sentinel_sha256}"',
+                ),
+            ),
+        )
+        output = self.run_root / "structured-sentinel-checker"
+        result = self.run_wls(
+            ROOT / "mma" / "CheckStructuredRepair.wls",
+            self.structured_repair_checker_input(
+                "T-STRUCTURED-SENTINEL-CHECKER",
+                candidate,
+                checker_entry=sentinel,
+                checker_sha256=sentinel_sha256,
+            ),
+            output,
+        )
+        self.assertEqual(
+            (result["status"], result["code"]),
+            ("PASS", "VERIFIED_STRUCTURED_REPAIR"),
+        )
+        self.assertTrue(result["summary"]["authenticated_libra_provenance"])
+        self.assertFalse(marker.exists(), "checker executed the hashed provider package")
 
     @unittest.skipUnless(
         INITIAL_HEP_TOOLS_ROOT is not None and INITIAL_HEP_TOOLS_ROOT.is_dir(),
