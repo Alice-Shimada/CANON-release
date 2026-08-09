@@ -46,7 +46,10 @@ wolframscript -file <script.wls> <input.json> <output_dir>
 }
 ```
 
-`status` 只能是 `PASS`、`FAIL` 或 `ERROR`。artifact 路径相对于 `result.json` 所在目录；状态机会把它规范化为绝对路径，但不会检查或解析文件内容。
+`status` 使用唯一的 typed method-card 协议，可为 `ERROR`、`INCONCLUSIVE`、
+`PROVISIONAL`、`FAIL` 或 `PASS`。provider 只能发布前三类中受其 card 允许的 code，
+不能发布 `PASS` 或 `FAIL`；独立 checker 保留最终 `PASS`/`FAIL` 权限。artifact 路径
+相对于 `result.json` 所在目录；状态机会把它规范化为绝对路径，但不会检查或解析文件内容。
 
 ## 各步骤 SKILL、payload 与输出
 
@@ -83,12 +86,17 @@ wolframscript -file <script.wls> <input.json> <output_dir>
 
 ## 最小结果码
 
+`SEARCH_CORE` 是 provider 步骤，不使用下表的 authoritative `PASS`/`FAIL`：候选已生成时
+发布 `PROVISIONAL/CANDIDATE_TRANSFORMATION`，范围或方法未建立时发布
+`INCONCLUSIVE/OUT_OF_SCOPE` 或 `INCONCLUSIVE/METHOD_EXHAUSTED`，输入或工具故障发布
+具体 `ERROR/*`。其余 method-card provider 同样遵守 `methods/README.md` 的单一 typed
+协议。
+
 | step | PASS | 可恢复 FAIL |
 |---|---|---|
 | `PREPARE` | `OK` | 无 |
 | `DISCOVER` | `SECTORS_READY` | 无 |
 | `BUILD_CUT_DE` | `OK` | 无 |
-| `SEARCH_CORE` | `CANDIDATE_READY` | `NO_CANDIDATE` |
 | `CHECK_CORE` | `CORE_PASS` | `CORE_FAIL` |
 | `BUILD_FULL_DE` | `OK` | 无 |
 | `SOLVE_TAIL` | `TAIL_READY` | `TAIL_UNSOLVED` |

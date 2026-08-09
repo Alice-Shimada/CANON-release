@@ -164,3 +164,23 @@
   invertible/exact gauge/flat/epsilon-factorized 全真。
 - 唯一 fresh full suite 注入登记 Libra/CANONICA、禁用 real INITIAL 并使用可靠 launcher：
   47 tests 在 277.319 秒内 `OK (skipped=1)`；skip 仅为已禁用的 real INITIAL ladder，无 retry。
+
+## 2026-08-09：跨 method-card typed-contract hardening G1--G3
+
+- 证据：Libra 在 package resolution 前、CANONICA 在 package load 与 public-symbol gate 后，
+  都精确验证 `task`、`sector_basis`、`sector_cut_de` 的 sector/family/basis ID 与完整 basis
+  顺序。14 个 identity/schema 负例中 Libra package load marker 始终不存在；CANONICA load
+  marker 始终存在，而 `CheckIntegrability`、`SectorBoundariesFromDE`、
+  `RecursivelyTransformSectors` 的 scientific-call marker 始终不存在。focused G1--G3
+  10 tests 在 72.287 秒内 `OK`。
+- 结论：INITIAL 的全部 terminal publication 统一经过 provider writer，provider-local
+  reference/gauge/epsilon/dlog 未建立只返回 `INCONCLUSIVE/METHOD_EXHAUSTED`，独立
+  `CheckUTEvidence` 仍独占 `PASS`/`FAIL`。tail screen 只把尚有未测试 candidate 的 budget
+  stop 改为 `INCONCLUSIVE/CANDIDATE_BUDGET_EXHAUSTED`；complete all-bad pool 与 pass
+  路径及 repair metadata 不变。唯一一次 full suite 运行 48 tests/329.463 秒：46 pass、
+  1 个 real INITIAL 条件 skip、1 个过时 multivariable fixture identity 失败；补齐该 fixture
+  的 sector/family/basis binding 后，唯一失败项 focused 复验 1 test/2.773 秒 `OK`，未重启
+  full suite。
+- 未解决的 G4：CANONICA recursion 与 Libra legacy Automatic search 的工具忠实成本界限
+  仍缺少 primary-source 依据；本里程碑未增加维数 cap、wall-clock surrogate、call-count
+  surrogate，也未改变任何默认搜索策略。

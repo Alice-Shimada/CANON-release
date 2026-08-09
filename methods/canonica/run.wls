@@ -46,9 +46,27 @@ If[!symbolsAvailable,
   writeFailure["ERROR", "TOOL_ERROR", "CANONICA 缺少本卡所需的公共符号"]
 ];
 
+sectorBasis = CanonMethodCard`LoadArtifact[task, inputPath, "sector_basis"];
 cut = CanonMethodCard`LoadArtifact[task, inputPath, "sector_cut_de"];
-If[FailureQ[cut] || !CanonMethodCard`ValidCutDEQ[cut],
-  writeFailure["ERROR", "INVALID_DIFFERENTIAL_SYSTEM", "sector_cut_de artifact 无效"]
+If[
+  FailureQ[sectorBasis] || FailureQ[cut] ||
+    !CanonMethodCard`ValidSectorBasisQ[sectorBasis] ||
+    !CanonMethodCard`ValidCutDEQ[cut],
+  writeFailure[
+    "ERROR", "INVALID_DIFFERENTIAL_SYSTEM",
+    "sector_basis 或 sector_cut_de artifact 无效"
+  ]
+];
+If[
+  sectorBasis["sector"] =!= task["sector"] ||
+    cut["sector"] =!= task["sector"] ||
+    sectorBasis["family_id"] =!= cut["family_id"] ||
+    sectorBasis["basis_id"] =!= cut["basis_id"] ||
+    sectorBasis["basis"] =!= cut["basis"],
+  writeFailure[
+    "ERROR", "INVALID_DIFFERENTIAL_SYSTEM",
+    "task、sector_basis 与 sector_cut_de 的 sector/family/basis/order 不匹配"
+  ]
 ];
 If[!CanonMethodCard`FlatConnectionQ[cut["matrices"], cut["variables"]],
   writeFailure["ERROR", "INVALID_DIFFERENTIAL_SYSTEM", "输入 differential connection 不可积"]

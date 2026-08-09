@@ -248,7 +248,7 @@ publicAttempt[attempt_Association] := KeyDrop[attempt, {"full_transformation", "
 If[MissingQ[accepted],
   poolExhausted = candidateBudget >= Length[poolList];
   writeFailure[
-    "FAIL",
+    If[poolExhausted, "FAIL", "INCONCLUSIVE"],
     If[poolExhausted, "CANDIDATE_POOL_EXHAUSTED", "CANDIDATE_BUDGET_EXHAUSTED"],
     If[poolExhausted, "所有声明的 candidate 均未通过 full-prefix tail 筛选", "candidate budget 已用尽，但候选池尚未耗尽"],
     <|

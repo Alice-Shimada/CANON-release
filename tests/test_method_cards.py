@@ -144,6 +144,7 @@ class MethodCardIntegrationTest(unittest.TestCase):
         *,
         relative_entry: bool = True,
         method_options: dict | None = None,
+        sector_basis: Path | None = None,
         sector_cut_de: Path | None = None,
         dependent_row_hierarchy: Path | None = None,
     ) -> Path:
@@ -157,6 +158,10 @@ class MethodCardIntegrationTest(unittest.TestCase):
         ):
             descriptor = value["payload"][artifact_name]
             descriptor["path"] = str((FIXTURES / descriptor["path"]).resolve())
+        if sector_basis is not None:
+            value["payload"]["sector_basis"]["path"] = str(
+                sector_basis.resolve()
+            )
         if sector_cut_de is not None:
             value["payload"]["sector_cut_de"]["path"] = str(
                 sector_cut_de.resolve()
@@ -307,6 +312,33 @@ EndPackage[];
 """,
             encoding="utf-8",
         )
+        return path
+
+    def search_preflight_package(
+        self,
+        method: str,
+        load_marker: Path,
+        scientific_call_marker: Path,
+    ) -> Path:
+        path = self.run_root / (
+            "PreflightSentinelLibra.m"
+            if method == "libra"
+            else "PreflightCountingCANONICA.m"
+        )
+        load_path = json.dumps(str(load_marker))
+        call_path = json.dumps(str(scientific_call_marker))
+        if method == "libra":
+            source = f'Put["LOADED", {load_path}]; Abort[];\n'
+        else:
+            source = f'''BeginPackage["CANONICA`"];\nPut["LOADED", {load_path}];
+SectorBoundariesFromDE[___] := (Put["SectorBoundariesFromDE", {call_path}]; {{1}});
+RecursivelyTransformSectors[___] := (Put["RecursivelyTransformSectors", {call_path}]; $Failed);
+ExtractIrreducibles[___] := {{}};
+CheckEpsForm[___] := False;
+CheckIntegrability[___] := (Put["CheckIntegrability", {call_path}]; True);
+EndPackage[];
+'''
+        path.write_text(source, encoding="utf-8")
         return path
 
     def tail_screen_input(
@@ -804,14 +836,32 @@ EndPackage[];
         )
 
     def test_libra_multivariable_scope_is_inconclusive_without_tool_action(self) -> None:
+        sector_basis = self.mutated_wl(
+            FIXTURES / "sector-basis.wl",
+            "flat-multivariable-sector-basis",
+            (
+                (( '"id" -> 3', '"id" -> 6')),
+                (( '"family_id" -> "fixture-libra-tutorial-1"',
+                   '"family_id" -> "fixture-flat-multivariable"')),
+                (( '"basis_id" -> "fixture-sector-3-basis-v1"',
+                   '"basis_id" -> "fixture-sector-6-basis-v1"')),
+            ),
+        )
+        input_path = self.provider_input(
+            "libra",
+            self.run_root / "must-not-load-Libra.m",
+            sector_basis=sector_basis,
+            sector_cut_de=FIXTURES / "flat-multivariable-sector-cut-de.wl",
+        )
+        input_value = json.loads(input_path.read_text(encoding="utf-8"))
+        input_value["sector"] = {"id": 6, "propagator_count": 2}
+        input_path.write_text(
+            json.dumps(input_value, indent=2) + "\n", encoding="utf-8"
+        )
         output = self.run_root / "libra-multivariable-out-of-scope"
         result = self.run_wls(
             ROOT / "methods" / "libra" / "run.wls",
-            self.provider_input(
-                "libra",
-                self.run_root / "must-not-load-Libra.m",
-                sector_cut_de=FIXTURES / "flat-multivariable-sector-cut-de.wl",
-            ),
+            input_path,
             output,
         )
         self.assertEqual(
@@ -836,6 +886,105 @@ EndPackage[];
             (result["status"], result["code"]),
             ("ERROR", "INVALID_DIFFERENTIAL_SYSTEM"),
         )
+
+    def test_search_core_identity_preflight_order_and_exact_bindings(self) -> None:
+        sector_basis = FIXTURES / "sector-basis.wl"
+        cut = FIXTURES / "sector-cut-de.wl"
+        cases = {
+            "invalid-sector-basis": (
+                self.mutated_wl(
+                    sector_basis,
+                    "invalid-search-sector-basis",
+                    (("canon-neu/sector-basis/v1", "canon-neu/sector-basis/invalid"),),
+                ),
+                cut,
+                None,
+            ),
+            "task-sector": (sector_basis, cut, {"id": 99, "propagator_count": 2}),
+            "sector-basis-sector": (
+                self.mutated_wl(
+                    sector_basis,
+                    "wrong-search-sector-basis-sector",
+                    (( '"id" -> 3', '"id" -> 99'),),
+                ),
+                cut,
+                None,
+            ),
+            "cut-sector": (
+                sector_basis,
+                self.mutated_wl(
+                    cut,
+                    "wrong-search-cut-sector",
+                    (( '"id" -> 3', '"id" -> 99'),),
+                ),
+                None,
+            ),
+            "family": (
+                self.mutated_wl(
+                    sector_basis,
+                    "wrong-search-family",
+                    (( '"family_id" -> "fixture-libra-tutorial-1"',
+                       '"family_id" -> "wrong-family"'),),
+                ),
+                cut,
+                None,
+            ),
+            "basis-id": (
+                self.mutated_wl(
+                    sector_basis,
+                    "wrong-search-basis-id",
+                    (( '"basis_id" -> "fixture-sector-3-basis-v1"',
+                       '"basis_id" -> "wrong-basis"'),),
+                ),
+                cut,
+                None,
+            ),
+            "full-order": (
+                self.mutated_wl(
+                    sector_basis,
+                    "wrong-search-full-order",
+                    (( '"basis" -> {j1, j2}', '"basis" -> {j2, j1}'),),
+                ),
+                cut,
+                None,
+            ),
+        }
+        for method in ("libra", "canonica"):
+            for name, (case_basis, case_cut, task_sector) in cases.items():
+                with self.subTest(method=method, mismatch=name):
+                    load_marker = self.run_root / f"{method}-{name}-loaded.wl"
+                    call_marker = self.run_root / f"{method}-{name}-scientific-call.wl"
+                    package = self.search_preflight_package(
+                        method, load_marker, call_marker
+                    )
+                    input_path = self.provider_input(
+                        method,
+                        package,
+                        relative_entry=False,
+                        sector_basis=case_basis,
+                        sector_cut_de=case_cut,
+                    )
+                    if task_sector is not None:
+                        value = json.loads(input_path.read_text(encoding="utf-8"))
+                        value["sector"] = task_sector
+                        input_path.write_text(
+                            json.dumps(value, indent=2) + "\n", encoding="utf-8"
+                        )
+                    result = self.run_wls(
+                        ROOT / "methods" / method / "run.wls",
+                        input_path,
+                        self.run_root / f"{method}-{name}-preflight-output",
+                        expected_returncode=1,
+                    )
+                    self.assertEqual(
+                        (result["status"], result["code"]),
+                        ("ERROR", "INVALID_DIFFERENTIAL_SYSTEM"),
+                    )
+                    if method == "libra":
+                        self.assertFalse(load_marker.exists())
+                    else:
+                        self.assertTrue(load_marker.is_file())
+                    self.assertFalse(call_marker.exists())
 
     def test_provider_method_exhaustion_is_inconclusive(self) -> None:
         for method, entry in (
@@ -1596,7 +1745,7 @@ Quit[If[derived === automatic, 0, 1]];
             (provider_result["status"], provider_result["code"]),
             ("PROVISIONAL", "EVIDENCE_AWAITING_VERIFICATION"),
         )
-        self.assertNotEqual(provider_result["status"], "PASS")
+        self.assertNotIn(provider_result["status"], {"PASS", "FAIL"})
         evidence_path = provider_output / provider_result["artifacts"][
             "ut_evidence"
         ]["path"]
@@ -1647,6 +1796,24 @@ Quit[If[derived === automatic, 0, 1]];
         )
         self.assertEqual(result["summary"]["workflow_action"], "none")
         self.assertFalse(result["artifacts"])
+
+    def test_initial_provider_has_single_typed_publication_authority(self) -> None:
+        runner = (ROOT / "methods" / "initial" / "run.wls").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("CanonMethodCard`WriteResult[", runner)
+        self.assertEqual(runner.count("CanonMethodCard`WriteProviderResult["), 2)
+        self.assertNotIn('"FAIL"', runner)
+        self.assertNotIn("EVIDENCE_REJECTED", runner)
+        self.assertEqual(
+            runner.count('"INCONCLUSIVE", "METHOD_EXHAUSTED"'), 2
+        )
+
+        checker = (ROOT / "mma" / "CheckUTEvidence.wls").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('"FAIL", "EVIDENCE_REJECTED"', checker)
+        self.assertIn('"PASS", "VERIFIED_EVIDENCE"', checker)
 
     def test_initial_missing_registered_components_is_tool_error(self) -> None:
         fake_root = self.run_root / "empty-hep-tools"
@@ -1931,7 +2098,7 @@ Quit[If[derived === automatic, 0, 1]];
         )
         self.assertEqual(
             (result["status"], result["code"]),
-            ("FAIL", "CANDIDATE_BUDGET_EXHAUSTED"),
+            ("INCONCLUSIVE", "CANDIDATE_BUDGET_EXHAUSTED"),
         )
         self.assertFalse(result["summary"]["pool_exhausted"])
         self.assertFalse(result["summary"]["repair_eligible"])

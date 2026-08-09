@@ -32,5 +32,7 @@ dlog 结果均不是最终结论。只有随后独立运行 `mma/CheckUTEvidence
 A/basis/reference 并复算所有精确条件后，才能得到 `PASS/VERIFIED_EVIDENCE`。
 
 结果类别互不替代：范围外为 `INCONCLUSIVE/OUT_OF_SCOPE`；配置、组件、身份、加载或
-计算故障为具体的 `ERROR/TOOL_*`；科学 evidence 被拒绝为
-`FAIL/EVIDENCE_REJECTED`；provider 永远不能写出最终 `PASS`。
+计算故障为具体的 `ERROR/TOOL_*`；provider-local reference、gauge、epsilon 或 dlog
+证据未建立为 `INCONCLUSIVE/METHOD_EXHAUSTED`。provider 永远不能写出 `PASS` 或
+`FAIL`；只有独立 checker 才能发布 `PASS/VERIFIED_EVIDENCE` 或
+`FAIL/EVIDENCE_REJECTED`。

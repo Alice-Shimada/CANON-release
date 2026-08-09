@@ -40,7 +40,7 @@ officialLadderDLogQ[matrix_?MatrixQ] := And @@ (
 );
 
 writeOutcome[status_String, code_String, reason_String, details_: <||>] := (
-  CanonMethodCard`WriteResult[
+  CanonMethodCard`WriteProviderResult[
     task, outputDir, status, code, <||>,
     Join[<|"method_id" -> methodId, "reason" -> reason, "workflow_action" -> "none"|>, details]
   ];
@@ -163,7 +163,10 @@ If[transformation === $Failed || !MatrixQ[transformation],
   writeOutcome["ERROR", "TOOL_COMPUTATION_FAILED", "INITIAL TCalc failed"]
 ];
 If[!SameQ[transformation, referenceTransformation],
-  writeOutcome["FAIL", "EVIDENCE_REJECTED", "computed transformation differs from the official reference"]
+  writeOutcome[
+    "INCONCLUSIVE", "METHOD_EXHAUSTED",
+    "computed transformation differs from the official reference"
+  ]
 ];
 transformedMatrix = Quiet @ Check[basisChange[amatrix, transformation, x, "NThreads" -> nThreads], $Failed];
 If[transformedMatrix === $Failed || Dimensions[transformedMatrix] =!= {26, 26},
@@ -176,7 +179,10 @@ exactGauge = CanonMethodCard`ZeroMatrixQ[
 epsilonIndependent = CanonMethodCard`EpsilonFactorizedQ[{transformedMatrix}, eps];
 declaredDLog = officialLadderDLogQ[transformedMatrix];
 If[!TrueQ[exactGauge && epsilonIndependent && declaredDLog],
-  writeOutcome["FAIL", "EVIDENCE_REJECTED", "provider result failed exact gauge, epsilon, or declared dlog checks"]
+  writeOutcome[
+    "INCONCLUSIVE", "METHOD_EXHAUSTED",
+    "provider result did not establish exact gauge, epsilon, and declared dlog checks"
+  ]
 ];
 
 evidence = <|
@@ -231,7 +237,7 @@ artifactPath = CanonMethodCard`WriteWLArtifact[evidence, outputDir, "ut-evidence
 If[artifactPath === $Failed,
   writeOutcome["ERROR", "OUTPUT_ERROR", "could not write ut-evidence artifact"]
 ];
-resultPath = CanonMethodCard`WriteResult[
+resultPath = CanonMethodCard`WriteProviderResult[
   task, outputDir, "PROVISIONAL", "EVIDENCE_AWAITING_VERIFICATION",
   <|"ut_evidence" -> <|"type" -> "mathematica-expression", "path" -> FileNameTake[artifactPath]|>|>,
   <|
