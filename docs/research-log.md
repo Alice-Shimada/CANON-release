@@ -150,3 +150,17 @@
 - 唯一 fresh full suite：82/82 launches 与 result artifacts，41 tests 中 40 pass，唯一 skip
   是显式禁用的 real INITIAL ladder；0 abort/failure/error，300.870 秒。Libra/CANONICA 使用
   登记入口，未运行 INITIAL `TCalc`。
+
+## 2026-08-09：Libra SEARCH_CORE explicit sector-de-closure
+
+- 新增 caller-selected `sector-de-closure`：typed artifact 精确绑定 cut identity/order，保存
+  ordered sector labels、`MappedSectors=False` provenance 与非零数预算；post-Fuchsify residues
+  的 hierarchy 与 Libra 1.2 Automatic semantics exact parity。闭包超预算时不截断、不用
+  `All`、不 retry 且不调用 `FactorOut`；默认路线仍是原单次 Automatic。
+- Targeted 覆盖 default、full-mask forwarding、合法 cycle、identity/order/shape/domain/
+  diagonal/provenance/budget 负例和 overflow no-call。accepted 62-master caller-owned run 得到
+  hsector/hde/combined 非零数 366/516/534，provider 为
+  `PROVISIONAL/CANDIDATE_TRANSFORMATION`；未修改的 `CheckSectorCore` 返回 `PASS/CORE_PASS`，
+  invertible/exact gauge/flat/epsilon-factorized 全真。
+- 唯一 fresh full suite 注入登记 Libra/CANONICA、禁用 real INITIAL 并使用可靠 launcher：
+  47 tests 在 277.319 秒内 `OK (skipped=1)`；skip 仅为已禁用的 real INITIAL ladder，无 retry。

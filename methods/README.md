@@ -50,6 +50,34 @@ INITIAL 2.1 已登记的官方 26×26 massless planar 3-loop 4-point ladder cand
 `ERROR/INVALID_DIFFERENTIAL_SYSTEM`。Transformation provider 不能返回 `PASS` 或
 数学拒绝 `FAIL`。
 
+## `libra-dependent-row-hierarchy/v1`
+
+Libra `SEARCH_CORE` 的 caller-selected `sector-de-closure` 路线读取以下 typed WL artifact：
+
+```wl
+<|
+  "schema" -> "canon-neu/libra-dependent-row-hierarchy/v1",
+  "hierarchy_id" -> "...",
+  "sector" -> <|...|>, "family_id" -> "...", "basis_id" -> "...",
+  "basis" -> {j1, ...},
+  "master_sector_labels" -> {label1, ...},
+  "sector_hierarchy" -> {{1, 0, ...}, ...},
+  "max_mask_nonzeros" -> positiveInteger,
+  "provenance" -> <|
+    "producer" -> "...", "tool" -> "...", "tool_revision" -> "...",
+    "mapped_sectors" -> False,
+    "source_artifact" -> "...", "source_sha256" -> "64-hex-digits"
+  |>
+|>
+```
+
+`basis` 必须与 cut 的完整 ordered basis 精确相同；`master_sector_labels` 长度也是 `n`。
+`sector_hierarchy` 是 `n×n` binary relation mask，对角为 1；不把它解释为 row list，
+不推断 symmetry mapping，也不禁止 cycle。预算单位是闭包后的 mask 非零数。缺失或矛盾
+artifact 返回 `ERROR/INVALID_DIFFERENTIAL_SYSTEM`；闭包超预算返回
+`INCONCLUSIVE/METHOD_EXHAUSTED`，不会截断或重试。成功 candidate 仍须由现有
+`CheckSectorCore` 独立精确验收。
+
 ## `prepared-basis/v1` 与确定性 route
 
 `route-prepared-basis` 是一个已经可执行、但尚未连接到外部 coordinator 的纯 route 卡。

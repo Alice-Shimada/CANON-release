@@ -58,16 +58,32 @@ CANON 独立实现并验收多变量 dlog 分解，不能只依赖 provider 的 
 卡会记录实际解析入口、入口 SHA-256、解析方式、Libra 报告的版本以及 Wolfram
 `$Version`/`$SystemID`，但不读取 hep-tools 的机器状态。
 
+`method_options.dependent_row_strategy` 未给出或为 `automatic` 时，卡保持 Libra 1.2
+原有的单次 `FactorOut` Automatic 调用。调用方也可显式选择 `sector-de-closure`，并在
+payload 提供 `canon-neu/libra-dependent-row-hierarchy/v1` artifact。该 artifact 的
+`sector_hierarchy` 是与 cut ordered basis 同序的 `n×n` 0/1 relation mask，不是 row list；
+对角必须全为 1，cycle 合法。它还必须精确绑定 sector/family/basis ID 与完整 basis order，
+记录每个 master 的 ordered sector label、producer/tool revision、`MappedSectors=False`、
+source artifact/hash 和正整数 `max_mask_nonzeros`。
+
+显式路线只从实际 post-Fuchsify 矩阵的 residues 构造与 Libra 1.2 Automatic 同语义的
+`hde`，计算 `TClosure[hsector+hde]`。闭包后按 mask 中 1 的个数检查预算；超限不截断、
+不用 `All`、不重试，也不调用 `FactorOut`。预算内只调用一次
+`FactorOut[...,DependentRowIndices->combinedMask]`。artifact schema、identity/order、mask、
+provenance 或预算无效时，在搜索前 fail closed。
+
 ## 结果与证据
 
 本卡要求实际加载版本为 Libra 1.2，并记录精确 transformation、transformed matrix
 和 Libra `EFormQ` 结果。在
 `mma/CheckSectorCore.wls` 独立验证前，provider 输出始终只是
 `PROVISIONAL/CANDIDATE_TRANSFORMATION`，不能返回 `PASS` 或数学拒绝 `FAIL`。
+显式 hierarchy 路线还记录 strategy、artifact identity/hash、`MappedSectors` mode、stage、
+维数、`hsector`/`hde`/combined mask 非零数、预算以及确定性的 `C[*] -> 1` specialization。
 
 ## 边界
 
-本卡是有界自动路线。若 `Fuchsify` 或 `FactorOut` 无法给出结论，则返回
+本卡是有界自动或调用方显式 hierarchy 路线。若 `Fuchsify` 或 `FactorOut` 无法给出结论，则返回
 `INCONCLUSIVE/METHOD_EXHAUSTED`；非法或非 flat 系统返回
 `ERROR/INVALID_DIFFERENTIAL_SYSTEM`。不得静默回退到 `Rookie`、交互式操作、
 Fermatica、CANONICA、INITIAL 或 lower-sector 重写。

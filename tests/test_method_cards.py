@@ -145,6 +145,7 @@ class MethodCardIntegrationTest(unittest.TestCase):
         relative_entry: bool = True,
         method_options: dict | None = None,
         sector_cut_de: Path | None = None,
+        dependent_row_hierarchy: Path | None = None,
     ) -> Path:
         value = json.loads(
             (FIXTURES / f"search-input-{method}.json").read_text(encoding="utf-8")
@@ -160,6 +161,11 @@ class MethodCardIntegrationTest(unittest.TestCase):
             value["payload"]["sector_cut_de"]["path"] = str(
                 sector_cut_de.resolve()
             )
+        if dependent_row_hierarchy is not None:
+            value["payload"]["dependent_row_hierarchy"] = {
+                "type": "mathematica-expression",
+                "path": str(dependent_row_hierarchy.resolve()),
+            }
         if method_options is not None:
             value["payload"]["method_options"] = method_options
         else:
@@ -236,8 +242,54 @@ Transform[___] := Null;
 FactorOut[___] := $Failed;
 OverallTransformation[___] := $Failed;
 EFormQ[___] := False;
+TClosure[m_] := m;
+LeadingSeriesCoefficient[___] := $Failed;
+PolesInfo[___] := {};
 EndPackage[];
 """,
+            encoding="utf-8",
+        )
+        return path
+
+    def successful_fake_libra_entry(self, capture_path: Path) -> Path:
+        path = self.run_root / f"SuccessfulFakeLibra-{capture_path.stem}.m"
+        capture = str(capture_path).replace("\\", "\\\\").replace('"', '\\"')
+        path.write_text(
+            f'''BeginPackage["Libra`"];
+$LibraVersion = "1.2";
+$LibraUseFermat = False;
+DependentRowIndices;
+SetAttributes[NewDSystem, HoldFirst];
+NewDSystem[ds_Symbol, rule_Rule] := (
+  ds[Global`x] = Last[rule];
+  ds["overall"] = IdentityMatrix[Length[Last[rule]]];
+  Null
+);
+Fuchsify[ds_Symbol, Global`x] := IdentityMatrix[Length[ds[Global`x]]];
+Transform[ds_Symbol, transformation_] := (
+  ds[Global`x] = Together[
+    Inverse[transformation].(
+      ds[Global`x].transformation - D[transformation, Global`x]
+    )
+  ];
+  ds["overall"] = Together[ds["overall"].transformation];
+  Null
+);
+Options[FactorOut] = {{DependentRowIndices -> Automatic}};
+FactorOut[ds_Symbol, Global`x, Global`eps, 1/2, OptionsPattern[]] := (
+  Put[OptionValue[DependentRowIndices], "{capture}"];
+  {{{{1, Global`x}}, {{0, 1}}}}
+);
+PolesInfo[___] := {{{{0, 0}}}};
+LeadingSeriesCoefficient[___] := IdentityMatrix[2];
+TClosure[m_?MatrixQ] := FixedPoint[
+  Map[Boole[# =!= 0] &, # + #.#, {{2}}] &,
+  m
+];
+OverallTransformation[ds_Symbol][_] := ds["overall"];
+EFormQ[m_, fakeRegulator_] := FreeQ[Together[m/fakeRegulator], fakeRegulator];
+EndPackage[];
+''',
             encoding="utf-8",
         )
         return path
@@ -802,6 +854,216 @@ EndPackage[];
                     ("INCONCLUSIVE", "METHOD_EXHAUSTED"),
                 )
                 self.assertNotIn(result["status"], {"PASS", "FAIL"})
+
+    def test_libra_default_keeps_automatic_factorout_boundary(self) -> None:
+        capture = self.run_root / "default-dependent-rows.wl"
+        entry = self.successful_fake_libra_entry(capture)
+        output = self.run_root / "libra-default-automatic"
+        result = self.run_wls(
+            ROOT / "methods" / "libra" / "run.wls",
+            self.provider_input("libra", entry),
+            output,
+        )
+        self.assertEqual(
+            (result["status"], result["code"]),
+            ("PROVISIONAL", "CANDIDATE_TRANSFORMATION"),
+        )
+        self.assertEqual(capture.read_text(encoding="utf-8").strip(), "Automatic")
+        self.assertEqual(
+            result["summary"]["dependent_rows"]["dependent_row_strategy"],
+            "automatic",
+        )
+
+    def test_libra_explicit_hierarchy_forwards_exact_full_mask(self) -> None:
+        capture = self.run_root / "explicit-dependent-rows.wl"
+        entry = self.successful_fake_libra_entry(capture)
+        output = self.run_root / "libra-explicit-mask"
+        result = self.run_wls(
+            ROOT / "methods" / "libra" / "run.wls",
+            self.provider_input(
+                "libra",
+                method_options={
+                    "package_entry": str(entry),
+                    "dependent_row_strategy": "sector-de-closure",
+                },
+                dependent_row_hierarchy=(
+                    FIXTURES / "libra-dependent-row-hierarchy.wl"
+                ),
+            ),
+            output,
+        )
+        self.assertEqual(
+            (result["status"], result["code"]),
+            ("PROVISIONAL", "CANDIDATE_TRANSFORMATION"),
+        )
+        self.assertEqual(
+            "".join(capture.read_text(encoding="utf-8").split()),
+            "{{1,1},{1,1}}",
+        )
+        evidence = result["summary"]["dependent_rows"]
+        self.assertEqual(
+            (
+                evidence["dependent_row_strategy"],
+                evidence["hsector_nonzeros"],
+                evidence["hde_nonzeros"],
+                evidence["combined_mask_nonzeros"],
+                evidence["max_mask_nonzeros"],
+            ),
+            ("sector-de-closure", 4, 2, 4, 4),
+        )
+        self.assertFalse(evidence["mapped_sectors"])
+
+    def test_libra_explicit_hierarchy_rejects_invalid_contract_before_search(self) -> None:
+        fixture = FIXTURES / "libra-dependent-row-hierarchy.wl"
+        cases = {
+            "identity": (( '"family_id" -> "fixture-libra-tutorial-1"',
+                           '"family_id" -> "wrong-family"'),),
+            "order": (( '"basis" -> {j1, j2}', '"basis" -> {j2, j1}'),),
+            "shape": (( '"sector_hierarchy" -> {{1, 1}, {1, 1}}',
+                        '"sector_hierarchy" -> {{1, 1}}'),),
+            "nonbinary": (( '"sector_hierarchy" -> {{1, 1}, {1, 1}}',
+                            '"sector_hierarchy" -> {{1, 2}, {1, 1}}'),),
+            "diagonal": (( '"sector_hierarchy" -> {{1, 1}, {1, 1}}',
+                           '"sector_hierarchy" -> {{0, 1}, {1, 1}}'),),
+            "provenance": (( '"mapped_sectors" -> False',
+                             '"mapped_sectors" -> True'),),
+            "budget": (( '"max_mask_nonzeros" -> 4',
+                         '"max_mask_nonzeros" -> 0'),),
+        }
+        for name, replacements in cases.items():
+            with self.subTest(name=name):
+                hierarchy = self.mutated_wl(
+                    fixture, f"invalid-hierarchy-{name}", replacements
+                )
+                result = self.run_wls(
+                    ROOT / "methods" / "libra" / "run.wls",
+                    self.provider_input(
+                        "libra",
+                        method_options={
+                            "package_entry": str(self.run_root / "must-not-load.m"),
+                            "dependent_row_strategy": "sector-de-closure",
+                        },
+                        dependent_row_hierarchy=hierarchy,
+                    ),
+                    self.run_root / f"invalid-hierarchy-{name}-output",
+                    expected_returncode=1,
+                )
+                self.assertEqual(
+                    (result["status"], result["code"]),
+                    ("ERROR", "INVALID_DIFFERENTIAL_SYSTEM"),
+                )
+
+    def test_libra_explicit_hierarchy_overflow_never_calls_factorout(self) -> None:
+        hierarchy = self.mutated_wl(
+            FIXTURES / "libra-dependent-row-hierarchy.wl",
+            "overflow-hierarchy",
+            (( '"max_mask_nonzeros" -> 4', '"max_mask_nonzeros" -> 3'),),
+        )
+        capture = self.run_root / "overflow-must-not-exist.wl"
+        entry = self.successful_fake_libra_entry(capture)
+        result = self.run_wls(
+            ROOT / "methods" / "libra" / "run.wls",
+            self.provider_input(
+                "libra",
+                method_options={
+                    "package_entry": str(entry),
+                    "dependent_row_strategy": "sector-de-closure",
+                },
+                dependent_row_hierarchy=hierarchy,
+            ),
+            self.run_root / "overflow-hierarchy-output",
+        )
+        self.assertEqual(
+            (result["status"], result["code"]),
+            ("INCONCLUSIVE", "METHOD_EXHAUSTED"),
+        )
+        self.assertFalse(capture.exists())
+        self.assertEqual(
+            result["summary"]["combined_mask_nonzeros"], 4
+        )
+
+    def test_libra_rejects_unknown_dependent_row_strategy_before_search(self) -> None:
+        result = self.run_wls(
+            ROOT / "methods" / "libra" / "run.wls",
+            self.provider_input(
+                "libra",
+                method_options={
+                    "package_entry": str(self.run_root / "must-not-load.m"),
+                    "dependent_row_strategy": "retry-all",
+                },
+            ),
+            self.run_root / "invalid-dependent-row-strategy",
+            expected_returncode=1,
+        )
+        self.assertEqual(
+            (result["status"], result["code"]),
+            ("ERROR", "INVALID_OPTIONS"),
+        )
+
+    @unittest.skipUnless(
+        LIBRA_ENTRY is not None and LIBRA_ENTRY.is_file(),
+        "set CANON_TEST_LIBRA_ENTRY to test Libra Automatic hierarchy parity",
+    )
+    def test_real_libra_post_residue_hierarchy_matches_automatic_semantics(self) -> None:
+        assert LIBRA_ENTRY is not None
+        script = self.run_root / "check-libra-hierarchy-parity.wls"
+        result_path = self.run_root / "libra-hierarchy-parity.wl"
+        script.write_text(
+            '''$HistoryLength = 0;
+position = FirstPosition[$CommandLine, "-script"];
+args = Drop[$CommandLine, First[position] + 1];
+{entry, cutPath, outputPath} = args;
+cut = Get[cutPath];
+Get[entry];
+Libra`$LibraUseFermat = False;
+x = First[cut["variables"]];
+eps = cut["regulator"];
+m = First[cut["matrices"]];
+NewDSystem[ds, x -> m];
+tf = Fuchsify[ds, x];
+Transform[ds, tf];
+post = ds[x];
+residues = LeadingSeriesCoefficient[post/eps, {x, #1, 0}] & @@@ PolesInfo[post, x];
+vectors = Transpose[residues, {3, 1, 2}];
+derived = TClosure[Map[Boole[!MatchQ[#, {0 ..}]] &, vectors, {2}]];
+automaticData = FactorDependence[
+  residues, eps, 1/2,
+  DependentRowIndices -> Automatic, Sort -> False, Solve -> False
+];
+automatic = Map[Boole[# =!= 0] &, automaticData[[2]], {2}];
+Put[<|"equal" -> (derived === automatic), "derived" -> derived,
+  "automatic" -> automatic|>, outputPath];
+Quit[If[derived === automatic, 0, 1]];
+''',
+            encoding="utf-8",
+        )
+        environment = os.environ.copy()
+        environment["OMP_NUM_THREADS"] = "1"
+        completed = subprocess.run(
+            [
+                sys.executable,
+                str(KERNEL_LAUNCHER),
+                str(KERNEL),
+                "-noinit",
+                "-noprompt",
+                "-script",
+                str(script),
+                str(LIBRA_ENTRY),
+                str(FIXTURES / "sector-cut-de.wl"),
+                str(result_path),
+            ],
+            cwd=ROOT,
+            env=environment,
+            text=True,
+            capture_output=True,
+            timeout=60,
+        )
+        self.assertEqual(
+            completed.returncode,
+            0,
+            f"stdout:\n{completed.stdout}\nstderr:\n{completed.stderr}",
+        )
+        self.assertIn('"equal" -> True', result_path.read_text(encoding="utf-8"))
 
     @unittest.skipUnless(
         CANONICA_ENTRY is not None and CANONICA_ENTRY.is_file(),
