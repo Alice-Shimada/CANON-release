@@ -162,9 +162,17 @@ WriteProviderResult[
   summary_Association : <||>
 ] := Module[{valid},
   valid = Switch[status,
-    "ERROR", True,
+    "ERROR", code =!= "ERROR",
     "INCONCLUSIVE", MemberQ[{"OUT_OF_SCOPE", "METHOD_EXHAUSTED"}, code],
-    "PROVISIONAL", MemberQ[{"CANDIDATE_TRANSFORMATION", "EVIDENCE_AWAITING_VERIFICATION"}, code],
+    "PROVISIONAL", MemberQ[
+      {
+        {"PROPOSE_INTEGRAL_CANDIDATES", "INTEGRAL_CANDIDATES"},
+        {"SEARCH_CORE", "CANDIDATE_TRANSFORMATION"},
+        {"REPAIR_WITH_LIBRA", "CANDIDATE_TRANSFORMATION"},
+        {"PROVIDE_UT_EVIDENCE", "EVIDENCE_AWAITING_VERIFICATION"}
+      },
+      {Lookup[task, "step", None], code}
+    ],
     _, False
   ];
   If[!TrueQ[valid], Return[$Failed]];
@@ -471,10 +479,10 @@ PreparedBasisRoute[prepared_Association] := Module[
   {decision, reason} = Which[
     canonicalQ,
       {"VERIFY_CANONICAL_DE", "ALREADY_CANONICAL"},
-    (suspiciousQ || localizedQ) && alternativesQ && !TrueQ[history["plateau"]],
+    (suspiciousQ || localizedQ) && alternativesQ,
       {"REFINE_SECTOR_UT_CANDIDATES", "ALTERNATIVES_REMAIN"},
-    localizedQ && (TrueQ[history["plateau"]] || TrueQ[history["pool_exhausted"]]),
-      {"REPAIR_WITH_LIBRA", "LOCALIZED_SEARCH_EXHAUSTED"},
+    localizedQ && TrueQ[history["pool_exhausted"]],
+      {"REPAIR_WITH_LIBRA", "LOCALIZED_POOL_EXHAUSTED"},
     remaining["classification"] === "GLOBAL_RATIONAL_DEFECT" &&
       TrueQ[remaining["candidate_selection_complete"]] &&
       TrueQ[remaining["rational_transformation_expected"]],
@@ -766,11 +774,21 @@ ValidateStructuredRepairInput[
   If[!AssociationQ[search] || search =!= prepared["search_history"],
     Return[repairFailure["search_evidence", "repair search evidence must exactly match the validated prepared basis"]]
   ];
-  If[!TrueQ[search["plateau"]] && !TrueQ[search["pool_exhausted"]],
-    Return[repairFailure["search_evidence", "repair requires a plateau or complete candidate-pool exhaustion"]]
+  If[!TrueQ[search["pool_exhausted"]],
+    Return[repairFailure["search_evidence.pool_exhausted", "repair requires complete candidate-pool exhaustion"]]
   ];
-  If[TrueQ[search["pool_exhausted"]] && search["alternatives_remaining"] =!= 0,
+  If[search["alternatives_remaining"] =!= 0,
     Return[repairFailure["search_evidence.pool_exhausted", "pool exhaustion contradicts remaining alternatives"]]
+  ];
+  If[
+    Complement[
+      Lookup[prepared["candidates"], "candidate_id", {}],
+      search["attempted_candidate_ids"]
+    ] =!= {},
+    Return[repairFailure[
+      "search_evidence.attempted_candidate_ids",
+      "repair requires every declared candidate to be attempted"
+    ]]
   ];
   request
 ];

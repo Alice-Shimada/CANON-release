@@ -1,17 +1,19 @@
-# Gram-Baikov candidate route
+# Gram-Baikov pre-reduction integral-candidate route
 
 ## Purpose
 
-Produce one `SEARCH_CORE` result through a D-dimensional Gram/Baikov route.
+Provisionally define a `PROPOSE_INTEGRAL_CANDIDATES` route for a future
+D-dimensional Gram/Baikov ansatz generator. It does not produce a post-reduction
+transformation.
 
 ## Required interaction
 
-The assigned agent reads the task `input.json`, invokes this directory's
-`run.wls`, and returns its `result.json`. The input and output are exactly the
-`SEARCH_CORE` contract in `../../INTERFACES.md`.
+The interface is exactly the pre-reduction `canon-neu/integral-candidates/v1`
+contract in `../../INTERFACES.md`. It must not consume `sector_basis` or
+`sector_cut_de`.
 
 ## Boundary
 
-This card does not own workflow state, sector ordering, acceptance, retries, or
-other providers. Scientific procedure and implementation are intentionally not
-specified yet.
+No primary Gram-Baikov API or CANON adapter is selected or implemented. The card must
+keep dimension, numerator/power-counting, budget/exhaustion, candidate unit, and
+normalization separate, and cannot publish `PASS`, `FAIL`, or a UT/canonical claim.

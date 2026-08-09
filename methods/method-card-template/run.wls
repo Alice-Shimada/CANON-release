@@ -1,7 +1,5 @@
 (*
-CANON_neu interface-only provider template: SEARCH_CORE / MethodCard route
-Workflow step skill:
-  ../../skills/canon-search-core/SKILL.md
+CANON_neu role-aware interface-only provider template
 Provider card:
   SKILL.md
 
@@ -10,20 +8,20 @@ Invocation:
 
 Input envelope:
   schema  = "canon-neu/script-input/v1"
-  step    = "SEARCH_CORE"
+  step    = one declared stage, for example
+              "PROPOSE_INTEGRAL_CANDIDATES" (pre-reduction integral generator), or
+              "SEARCH_CORE" (post-reduction transformation generator)
   sector  = <|"id" -> integer, "propagator_count" -> integer|>
-  payload = <|
-    "prepared_family" -> <artifact descriptor>,
-    "sector_basis" -> <artifact descriptor>,
-    "sector_cut_de" -> <artifact descriptor>,
-    "method_options" -> <opaque options object>
-  |>
+  payload = the exact role-specific contract in ../../INTERFACES.md
 
 Required output:
   <output_dir>/result.json with schema "canon-neu/script-result/v1".
-  PASS: code "CANDIDATE_READY", artifact "core_candidates".
-  FAIL: code "NO_CANDIDATE"; method evidence is optional.
+  A provider uses only its declared PROVISIONAL code, bounded INCONCLUSIVE codes,
+  and concrete ERROR codes. PASS and FAIL are checker-only.
 
-Replace this directory to add one bounded MethodCard.
+Replace this directory to add one bounded MethodCard and delete all inapplicable role
+branches. A pre-reduction card must not consume sector_basis/sector_cut_de or emit a
+core transformation. A SEARCH_CORE card must consume the ordered post-reduction basis
+and cut DE and emit canon-neu/core-candidates/v1.
 Scientific implementation is intentionally absent.
 *)

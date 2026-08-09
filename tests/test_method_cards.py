@@ -646,8 +646,12 @@ EndPackage[];
                 "VERIFY_CANONICAL_DE",
             ),
             "refine": ((), "REFINE_SECTOR_UT_CANDIDATES"),
+            "plateau-refine": (
+                (( '"plateau" -> False', '"plateau" -> True'),),
+                "REFINE_SECTOR_UT_CANDIDATES",
+            ),
             "repair": (
-                (('"plateau" -> False', '"plateau" -> True'),),
+                common_complete,
                 "REPAIR_WITH_LIBRA",
             ),
             "canonica": (
@@ -692,6 +696,11 @@ EndPackage[];
                     ("PROVISIONAL", "ROUTE_DECISION"),
                 )
                 self.assertEqual(result["summary"]["decision"], expected_decision)
+                if name == "repair":
+                    self.assertEqual(
+                        result["summary"]["reason"],
+                        "LOCALIZED_POOL_EXHAUSTED",
+                    )
                 self.assertFalse(
                     result["summary"]["initial_evidence_controls_route"]
                 )
@@ -1303,15 +1312,29 @@ Quit[If[derived === automatic, 0, 1]];
         base_prepared = FIXTURES / "structured-repair-prepared-basis.wl"
         base_route = FIXTURES / "structured-repair-route-decision.wl"
         base_request = FIXTURES / "structured-repair-input.wl"
-        no_plateau_prepared = self.mutated_wl(
+        pool_remaining_prepared = self.mutated_wl(
             base_prepared,
-            "structured-no-plateau-prepared",
-            (( '"plateau" -> True', '"plateau" -> False'),),
+            "structured-pool-remaining-prepared",
+            (
+                ('"pool_exhausted" -> True', '"pool_exhausted" -> False'),
+                ('"alternatives_remaining" -> 0', '"alternatives_remaining" -> 1'),
+                (
+                    '"fixture-structured-candidate-a", "fixture-structured-candidate-b"',
+                    '"fixture-structured-candidate-a"',
+                ),
+            ),
         )
-        no_plateau_request = self.mutated_wl(
+        pool_remaining_request = self.mutated_wl(
             base_request,
-            "structured-no-plateau-request",
-            (( '"plateau" -> True', '"plateau" -> False'),),
+            "structured-pool-remaining-request",
+            (
+                ('"pool_exhausted" -> True', '"pool_exhausted" -> False'),
+                ('"alternatives_remaining" -> 0', '"alternatives_remaining" -> 1'),
+                (
+                    '"fixture-structured-candidate-a", "fixture-structured-candidate-b"',
+                    '"fixture-structured-candidate-a"',
+                ),
+            ),
         )
         cases = {
             "wrong-route": {
@@ -1322,8 +1345,18 @@ Quit[If[derived === automatic, 0, 1]];
                 ),
             },
             "pool-not-exhausted": {
-                "prepared_basis": no_plateau_prepared,
-                "repair_request": no_plateau_request,
+                "prepared_basis": pool_remaining_prepared,
+                "repair_request": pool_remaining_request,
+            },
+            "request-omits-attempted-candidate": {
+                "repair_request": self.mutated_wl(
+                    base_request,
+                    "structured-unattempted-request",
+                    ((
+                        '"fixture-structured-candidate-a", "fixture-structured-candidate-b"',
+                        '"fixture-structured-candidate-a"',
+                    ),),
+                ),
             },
             "prefix-order": {
                 "repair_request": self.mutated_wl(
@@ -1814,6 +1847,190 @@ Quit[If[derived === automatic, 0, 1]];
         )
         self.assertIn('"FAIL", "EVIDENCE_REJECTED"', checker)
         self.assertIn('"PASS", "VERIFIED_EVIDENCE"', checker)
+
+    def test_pre_reduction_integral_candidate_contract_is_role_separated(self) -> None:
+        input_value = json.loads(
+            (ROOT / "interfaces" / "integral-candidate-input.example.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(input_value["step"], "PROPOSE_INTEGRAL_CANDIDATES")
+        self.assertEqual(input_value["payload"]["sector_identity"]["id"], 7)
+        self.assertEqual(input_value["sector"]["id"], 7)
+        for field in (
+            "family_identity",
+            "sector_identity",
+            "dimension_policy",
+            "numerator_or_power_counting_policy",
+            "candidate_budget",
+            "candidate_unit",
+            "normalization_policy",
+        ):
+            self.assertIn(field, input_value["payload"])
+
+        artifact = (FIXTURES / "integral-candidates.wl").read_text(
+            encoding="utf-8"
+        )
+        for field in (
+            '"schema" -> "canon-neu/integral-candidates/v1"',
+            '"family_identity"',
+            '"sector_identity"',
+            '"dimension_policy"',
+            '"numerator_or_power_counting_policy"',
+            '"candidate_budget"',
+            '"pool_exhausted"',
+            '"candidate_unit"',
+            '"normalization_policy"',
+            '"candidate_id"',
+            '"exact_definition"',
+            '"method_evidence"',
+            '"tool_provenance"',
+        ):
+            self.assertIn(field, artifact)
+
+        for method in ("dlogbasis", "gram-baikov"):
+            runner = (ROOT / "methods" / method / "run.wls").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn('step    = "PROPOSE_INTEGRAL_CANDIDATES"', runner)
+            self.assertIn("PROVISIONAL/INTEGRAL_CANDIDATES", runner)
+            for forbidden in (
+                'step    = "SEARCH_CORE"',
+                '"sector_basis"',
+                '"sector_cut_de"',
+                "CANDIDATE_READY",
+                "NO_CANDIDATE",
+                "CANDIDATE_TRANSFORMATION",
+            ):
+                self.assertNotIn(forbidden, runner)
+
+        template = (ROOT / "methods" / "method-card-template" / "run.wls").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('"PROPOSE_INTEGRAL_CANDIDATES"', template)
+        self.assertIn('"SEARCH_CORE"', template)
+        interfaces = (ROOT / "INTERFACES.md").read_text(encoding="utf-8")
+        self.assertLess(
+            interfaces.index("`PROPOSE_INTEGRAL_CANDIDATES`"),
+            interfaces.index("`DISCOVER`"),
+        )
+
+    def test_provider_result_guard_accepts_only_typed_integral_candidate_outcome(self) -> None:
+        input_path = self.run_root / "integral-provider-input.json"
+        input_path.write_text(
+            json.dumps(
+                {
+                    "schema": "canon-neu/script-input/v1",
+                    "task_id": "T-INTEGRAL-PROVIDER-GUARD",
+                    "step": "PROPOSE_INTEGRAL_CANDIDATES",
+                    "payload": {},
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        script = self.run_root / "integral-provider-guard.wls"
+        core = ROOT / "mma" / "lib" / "MethodCardCore.wl"
+        script.write_text(
+            f'''Get[{json.dumps(str(core))}];
+args = CanonMethodCard`ScriptArguments[];
+task = CanonMethodCard`ReadTask[args[[1]], "PROPOSE_INTEGRAL_CANDIDATES"];
+searchTask = Join[KeyDrop[task, {{"step"}}], <|"step" -> "SEARCH_CORE"|>];
+repairTask = Join[KeyDrop[task, {{"step"}}], <|"step" -> "REPAIR_WITH_LIBRA"|>];
+evidenceTask = Join[KeyDrop[task, {{"step"}}], <|"step" -> "PROVIDE_UT_EVIDENCE"|>];
+good = CanonMethodCard`WriteProviderResult[
+  task, args[[2]], "PROVISIONAL", "INTEGRAL_CANDIDATES", <||>, <||>
+];
+goodSearch = CanonMethodCard`WriteProviderResult[
+  searchTask, FileNameJoin[{{args[[2]], "search"}}],
+  "PROVISIONAL", "CANDIDATE_TRANSFORMATION", <||>, <||>
+];
+goodRepair = CanonMethodCard`WriteProviderResult[
+  repairTask, FileNameJoin[{{args[[2]], "repair"}}],
+  "PROVISIONAL", "CANDIDATE_TRANSFORMATION", <||>, <||>
+];
+goodEvidence = CanonMethodCard`WriteProviderResult[
+  evidenceTask, FileNameJoin[{{args[[2]], "evidence"}}],
+  "PROVISIONAL", "EVIDENCE_AWAITING_VERIFICATION", <||>, <||>
+];
+badSearchIntegral = CanonMethodCard`WriteProviderResult[
+  searchTask, args[[2]], "PROVISIONAL", "INTEGRAL_CANDIDATES", <||>, <||>
+];
+badProposalTransformation = CanonMethodCard`WriteProviderResult[
+  task, args[[2]], "PROVISIONAL", "CANDIDATE_TRANSFORMATION", <||>, <||>
+];
+badPass = CanonMethodCard`WriteProviderResult[
+  task, args[[2]], "PASS", "INTEGRAL_CANDIDATES", <||>, <||>
+];
+badFail = CanonMethodCard`WriteProviderResult[
+  task, args[[2]], "FAIL", "INTEGRAL_CANDIDATES", <||>, <||>
+];
+badGenericError = CanonMethodCard`WriteProviderResult[
+  task, args[[2]], "ERROR", "ERROR", <||>, <||>
+];
+If[
+  MemberQ[{{good, goodSearch, goodRepair, goodEvidence}}, $Failed] ||
+    badSearchIntegral =!= $Failed || badProposalTransformation =!= $Failed ||
+    badPass =!= $Failed || badFail =!= $Failed || badGenericError =!= $Failed,
+  Exit[1]
+];
+''',
+            encoding="utf-8",
+        )
+        result = self.run_wls(
+            script,
+            input_path,
+            self.run_root / "integral-provider-guard-output",
+        )
+        self.assertEqual(
+            (result["status"], result["code"]),
+            ("PROVISIONAL", "INTEGRAL_CANDIDATES"),
+        )
+        self.assertNotIn(result["status"], {"PASS", "FAIL"})
+        for role, step, code in (
+            ("search", "SEARCH_CORE", "CANDIDATE_TRANSFORMATION"),
+            ("repair", "REPAIR_WITH_LIBRA", "CANDIDATE_TRANSFORMATION"),
+            ("evidence", "PROVIDE_UT_EVIDENCE", "EVIDENCE_AWAITING_VERIFICATION"),
+        ):
+            role_result = json.loads(
+                (
+                    self.run_root
+                    / "integral-provider-guard-output"
+                    / role
+                    / "result.json"
+                ).read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                (role_result["step"], role_result["code"]),
+                (step, code),
+            )
+
+    def test_retired_workflow_narratives_cannot_claim_current_authority(self) -> None:
+        architecture = (ROOT / "ARCHITECTURE.md").read_text(encoding="utf-8")
+        self.assertIn("历史架构（已退役）", architecture)
+        self.assertIn("不得恢复或作为当前事实引用", architecture)
+        self.assertIn("`AGENTS.md`", architecture)
+        self.assertIn("`README.md`", architecture)
+        self.assertIn("`statemng`", architecture)
+
+        worklist = (ROOT / "WORKLIST.md").read_text(encoding="utf-8")
+        self.assertIn("历史 scientific worklist（非状态看板）", worklist)
+        self.assertIn("不是当前任务状态或 authority", worklist)
+        self.assertIn("`statemng`", worklist)
+
+        interfaces = (ROOT / "INTERFACES.md").read_text(encoding="utf-8")
+        for retired in ("`delegate`", "`subreport`", "`state.json`"):
+            self.assertNotIn(retired, interfaces)
+        self.assertIn("根目录 `AGENTS.md` 和 `README.md`", interfaces)
+
+        legacy_skills = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in sorted((ROOT / "skills").glob("canon-*/SKILL.md"))
+        )
+        for retired in ("state.json", "workflow.py", "subreport"):
+            self.assertNotIn(retired, legacy_skills)
+        self.assertIn("governed only by `statemng`", legacy_skills)
 
     def test_initial_missing_registered_components_is_tool_error(self) -> None:
         fake_root = self.run_root / "empty-hep-tools"

@@ -51,9 +51,11 @@
   "ut_evidence_references" -> {},
   "search_history" -> <|
     "plateau" -> True,
-    "pool_exhausted" -> False,
-    "alternatives_remaining" -> 1,
-    "attempted_candidate_ids" -> {"fixture-structured-candidate-a"}
+    "pool_exhausted" -> True,
+    "alternatives_remaining" -> 0,
+    "attempted_candidate_ids" -> {
+      "fixture-structured-candidate-a", "fixture-structured-candidate-b"
+    }
   |>,
   "remaining_problem" -> <|
     "classification" -> "LOCALIZED_RATIONAL_DEFECT",

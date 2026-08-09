@@ -5,6 +5,10 @@ Method card 是附着在某个明确工作阶段上的有界科学能力单元�
 输入、筛选积分候选、求解 full-prefix tail，或提供独立 UT 证据。Method card 不负责
 sector 调度，不修改已接受的 lower-sector prefix，也不能接受自己的结果。
 
+Pre-reduction integral candidates 现在有独立的 `PROPOSE_INTEGRAL_CANDIDATES` 合同，
+位于 IBP、master-basis ordering 和 DE transformation 之前；它不再复用 `SEARCH_CORE`。
+`SEARCH_CORE` 保持为 Libra/CANONICA 兼容的 post-reduction transformation stage。
+
 ## 角色
 
 - **积分生成器**：在 IBP 约化前生成一个或多个可追溯的 Feynman integral candidate；
@@ -22,7 +26,15 @@ sector 调度，不修改已接受的 lower-sector prefix，也不能接受自�
 provider/checker 协议闭合，不表示它们是默认的物理 candidate 路线。计划中的默认路线
 是：使用 DLogBasis 或其他积分生成器提出候选，在冻结的 lower-sector prefix 上检查，
 并替换导致不良非对角块的候选。重型变换 provider 只保留为有界诊断/修复兜底。
-`dlogbasis` 仍是由合作者维护的 interface-only provider。
+`dlogbasis` 与 provisionally classified `gram-baikov` 都是 pre-reduction
+`PROPOSE_INTEGRAL_CANDIDATES` interface-only cards；没有实现任何 CANON scientific
+adapter，也没有选择 Gram-Baikov primary API。DLogBasis 的三个相关公共 API
+`IntegrandAnsatz`、`LeadingSingularities` 和 `GenerateDlogbasis` 提出 `G[...]` 积分或
+dlog combinations，不产生 ordered master-basis DE transformation。tracked bundles 中
+只有 `LeadingSingularitiesPortable.tar.gz` 是 self-contained；`LS_modified.zip` 不是。
+`IntegrandAnsatz` usage 把 optional argument 描述为 numerator power order，而 tracked
+implementation 以 `dim_:4` 在 power-counting formula 中使用它；在 adapter 设计前此歧义
+必须解决，不能把 dimension、numerator/power-counting 与 candidate budget 静默合并。
 
 `initial` 是独立的 evidence provider，不是变换搜索或 repair provider。它仅覆盖
 INITIAL 2.1 已登记的官方 26×26 massless planar 3-loop 4-point ladder candidate，
@@ -49,6 +61,14 @@ INITIAL 2.1 已登记的官方 26×26 massless planar 3-loop 4-point ladder cand
 `INCONCLUSIVE/METHOD_EXHAUSTED`，非法或非 flat differential system 返回
 `ERROR/INVALID_DIFFERENTIAL_SYSTEM`。Transformation provider 不能返回 `PASS` 或
 数学拒绝 `FAIL`。
+
+Pre-reduction generator 成功只能返回 `PROVISIONAL/INTEGRAL_CANDIDATES` 和
+`canon-neu/integral-candidates/v1`；`INCONCLUSIVE` 仍仅允许 `OUT_OF_SCOPE` 或
+`METHOD_EXHAUSTED`，`ERROR` 必须给出具体 code 而不能用 `ERROR/ERROR`。artifact 按
+`INTERFACES.md` 分别记录 family/sector identity、dimension policy、
+numerator-or-power-counting policy、candidate budget、pool exhaustion、candidate unit、
+normalization、稳定 ID、exact definitions、method evidence 与 tool provenance。它不声称
+候选为 UT/canonical；后续 reduction 和 independent checker 保留各自权限。
 
 ## `libra-dependent-row-hierarchy/v1`
 
@@ -142,8 +162,9 @@ localized/global classification 与 defect data 相矛盾等状态。失败是
 
 成功写出 `canon-neu/route-decision/v1`，结果为 `PROVISIONAL/ROUTE_DECISION`。决策优先级
 固定为：已经 canonical → `VERIFY_CANONICAL_DE`；suspicious candidate 或 localized defect
-且还有 alternatives、没有 plateau → `REFINE_SECTOR_UT_CANDIDATES`；localized defect 在
-plateau 或完整 pool exhaustion 后 → `REPAIR_WITH_LIBRA`；candidate selection 已完成后的
+且还有任何 declared alternatives（即使 plateau 为 true）→
+`REFINE_SECTOR_UT_CANDIDATES`；localized defect 只有在完整 pool exhaustion、零
+alternatives 且所有 declared candidate 都已尝试后 → `REPAIR_WITH_LIBRA`；candidate selection 已完成后的
 global rational defect → `FIND_RATIONAL_CANONICAL_WITH_CANONICA`；其余 →
 `DIAGNOSE_OR_CHANGE_VARIABLES`。`ut_evidence_references` 只用于追溯；改变 INITIAL evidence
 本身不能选择 backend、改变 decision 或终止 route。
@@ -156,7 +177,8 @@ global rational defect → `FIND_RATIONAL_CANONICAL_WITH_CANONICA`；其余 →
 basis/selected-candidate identity，完整 ordered basis 与精确 matrices，
 `old_basis = transformation . new_basis` 约定，冻结 prefix 的 ID/basis/order/dimension/
 accepted matrices，禁止混合块，localized target signature，单变量 rational dlog alphabet，
-以及与 prepared basis 完全相同的 plateau 或完整 pool-exhaustion 证据。上述身份、范围、
+以及与 prepared basis 完全相同的 complete pool-exhaustion 证据。plateau 只能作为诊断
+metadata，不能授权 repair。上述身份、范围、
 维数、pool state、约定或系数域的矛盾都在加载 Libra 前拒绝。
 
 v1 不宣称一般 localized/full-prefix repair：唯一支持的结构是一个 accepted canonical

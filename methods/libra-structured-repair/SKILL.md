@@ -7,7 +7,8 @@ description: 对显式满足 REPAIR_WITH_LIBRA 路由的精确单变量 1x1 acce
 
 本卡是 `methods/libra` 的 `SEARCH_CORE` 之外的独立能力。它只接受已经通过
 `canon-neu/prepared-basis/v1` 校验、route decision 恰为 `REPAIR_WITH_LIBRA`、且有 search
-plateau 或完整候选池耗尽证据的 `canon-neu/libra-structured-repair-input/v1`。
+完整候选池耗尽（零 remaining alternatives 且所有 declared candidate 已尝试）证据的
+`canon-neu/libra-structured-repair-input/v1`。plateau 只能作为诊断 metadata，不能授权 repair。
 
 使用 Mathematica 14 ARM64，以 `-noinit -noprompt -script` 运行
 `run.wls <input.json> <fresh-output-dir>`。调用方通过

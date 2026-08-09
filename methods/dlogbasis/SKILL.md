@@ -1,17 +1,25 @@
-# DlogBasis candidate route
+# DLogBasis pre-reduction integral-candidate route
 
 ## Purpose
 
-Produce one `SEARCH_CORE` result through the DlogBasis/4D leading-singularity route.
+Propose pre-reduction integral/dlog candidates through
+`PROPOSE_INTEGRAL_CANDIDATES`. This card does not produce a master-basis
+transformation.
 
 ## Required interaction
 
-The assigned agent reads the task `input.json`, invokes this directory's
-`run.wls`, and returns its `result.json`. The input and output are exactly the
-`SEARCH_CORE` contract in `../../INTERFACES.md`.
+The interface is exactly the `PROPOSE_INTEGRAL_CANDIDATES` and
+`canon-neu/integral-candidates/v1` contract in `../../INTERFACES.md`. A future runner
+may consume family/sector identity and the separately declared dimension,
+power-counting, budget, candidate-unit, and normalization policies. It must not consume
+`sector_basis` or `sector_cut_de`.
 
 ## Boundary
 
-This card does not own workflow state, sector ordering, acceptance, retries, or
-other providers. Scientific procedure and implementation are intentionally not
-specified yet.
+No CANON DLogBasis adapter is implemented. `LeadingSingularitiesPortable.tar.gz` is
+the only self-contained tracked bundle; `LS_modified.zip` is not self-contained.
+Upstream `IntegrandAnsatz` documentation describes its optional argument as a
+numerator power order, while the tracked implementation uses `dim_:4` in power-counting
+formulae. An adapter must resolve that discrepancy and may not conflate dimension,
+power counting, or candidate budget. This card cannot publish `PASS`, `FAIL`, or a
+UT/canonical claim.

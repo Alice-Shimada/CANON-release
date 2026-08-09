@@ -17,9 +17,10 @@ payload contains a `prepared_basis` Mathematica-expression descriptor. The resul
 
 1. Canonical diagonal and off-diagonal quality with no remaining problem:
    `VERIFY_CANONICAL_DE`.
-2. A suspicious selected candidate or localized defect, with alternatives remaining
-   and no plateau: `REFINE_SECTOR_UT_CANDIDATES`.
-3. A localized defect after a plateau or complete pool exhaustion:
+2. A suspicious selected candidate or localized defect with any declared alternatives
+   remaining, even when plateau is true: `REFINE_SECTOR_UT_CANDIDATES`.
+3. A localized defect only after complete pool exhaustion, zero remaining alternatives,
+   and every declared candidate attempted:
    `REPAIR_WITH_LIBRA`.
 4. A global rational defect after candidate selection is complete:
    `FIND_RATIONAL_CANONICAL_WITH_CANONICA`.
