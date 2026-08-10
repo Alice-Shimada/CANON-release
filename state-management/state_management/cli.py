@@ -15,6 +15,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
+from .state_ui import render_project_state
+
 
 SCHEMA_VERSION = 1
 STATES = {
@@ -380,7 +382,7 @@ def markdown_cell(value: Any) -> str:
     return str(value).replace("|", "\\|").replace("\n", " ")
 
 
-def rebuild_view(task_root: Path) -> None:
+def rebuild_views(task_root: Path) -> None:
     with file_lock(task_root, "PROJECT_STATE.lock"):
         meta = load_json(task_root / "meta.json")
         tasks = all_tasks(task_root)
@@ -420,10 +422,10 @@ def rebuild_view(task_root: Path) -> None:
                         "",
                     ]
                 )
-        atomic_write(
-            task_root / "views" / "PROJECT_STATE.md",
-            "\n".join(lines).encode("utf-8"),
-        )
+        markdown = "\n".join(lines).encode("utf-8")
+        html = render_project_state(meta, tasks).encode("utf-8")
+        atomic_write(task_root / "views" / "PROJECT_STATE.md", markdown)
+        atomic_write(task_root / "views" / "ui" / "PROJECT_STATE.html", html)
 
 
 def compact_task(task: dict[str, Any]) -> dict[str, Any]:
@@ -528,7 +530,7 @@ def command_init(args: argparse.Namespace) -> dict[str, Any]:
             "goal": goal,
         },
     )
-    rebuild_view(task_root)
+    rebuild_views(task_root)
     return {
         "ok": True,
         "task_name": args.task_name,
@@ -555,7 +557,7 @@ def command_project_resume(args: argparse.Namespace) -> dict[str, Any]:
     if meta.get("schema_version") != SCHEMA_VERSION:
         raise StateError("incompatible schema version", task_name)
     recompute_ready(task_root)
-    rebuild_view(task_root)
+    rebuild_views(task_root)
     tasks = all_tasks(task_root)
     return {
         "ok": True,
@@ -607,7 +609,7 @@ def command_task_create(args: argparse.Namespace) -> dict[str, Any]:
             }
             atomic_write_json(path, task)
             break
-    rebuild_view(task_root)
+    rebuild_views(task_root)
     return {
         "ok": True,
         "task_name": task_name,
@@ -653,7 +655,7 @@ def command_task_claim(args: argparse.Namespace) -> dict[str, Any]:
         task["status"] = "running"
         task["run_id"] = run_id
         atomic_write_json(task_path(task_root, args.task_id), task)
-    rebuild_view(task_root)
+    rebuild_views(task_root)
     return {
         "ok": True,
         "task_name": task_name,
@@ -793,7 +795,7 @@ def command_task_submit(args: argparse.Namespace) -> dict[str, Any]:
         task["summary"] = summary
         task["artifact_id"] = args.artifact_id
         atomic_write_json(task_path(task_root, args.task_id), task)
-    rebuild_view(task_root)
+    rebuild_views(task_root)
     return {"ok": True, "task_name": task_name, "status": "submitted"}
 
 
@@ -835,7 +837,7 @@ def command_task_accept(args: argparse.Namespace) -> dict[str, Any]:
         atomic_write_json(task_path(task_root, args.task_id), task)
 
     unlocked = recompute_ready(task_root)
-    rebuild_view(task_root)
+    rebuild_views(task_root)
     return {
         "ok": True,
         "task_name": task_name,
@@ -867,7 +869,7 @@ def command_task_unblock(args: argparse.Namespace) -> dict[str, Any]:
         ):
             task.pop(field, None)
         atomic_write_json(task_path(task_root, args.task_id), task)
-    rebuild_view(task_root)
+    rebuild_views(task_root)
     return {
         "ok": True,
         "task_name": task_name,
@@ -901,7 +903,7 @@ def finish_unsuccessful(
             task.pop("summary", None)
             task.pop("artifact_id", None)
         atomic_write_json(task_path(task_root, args.task_id), task)
-    rebuild_view(task_root)
+    rebuild_views(task_root)
     return {
         "ok": True,
         "task_name": task_name,
