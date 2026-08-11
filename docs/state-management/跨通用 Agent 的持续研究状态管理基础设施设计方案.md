@@ -469,17 +469,20 @@ statemng task create \
   "objective": "[目标]",
   "background": "[背景，如：前面已经完成了xxx，...]",
   "acceptance_criteria": [
-    "[酌情制定验收标准]",
+    "[酌情制定验收标准]"
+  ],
+  "required_skills": [
+    "methods/libra/SKILL.md"
   ]
 }
 ```
 
-其中，`objective` 必须是非空字符串；`background` 必须是字符串，没有额外背景时可以为空；`acceptance_criteria` 必须是至少包含一个非空字符串的数组。不得包含其他字段。该文件只作为创建任务的输入；CLI 将三个字段写入任务 JSON，不保存原文件路径，后续状态也不依赖该文件。
+其中，`objective` 必须是非空字符串；`background` 必须是字符串，没有额外背景时可以为空；`acceptance_criteria` 必须是至少包含一个非空字符串的数组。`required_skills` 是可选字符串数组；每项必须是仓库内实际存在的相对 `SKILL.md` 路径，不得使用绝对路径、`..`、其他文件名、缺失文件或重复路径。省略该字段的旧任务描述保持兼容。不得包含其他字段。该文件只作为创建任务的输入；CLI 将这些字段写入任务 JSON，不保存原文件路径，后续状态也不依赖原描述文件。
 
 设计要求：
 
 - 自动生成稳定任务 ID；
-- 校验并保存任务目标、背景、依赖和验收标准；
+- 校验并保存任务目标、背景、依赖、验收标准和可选 required skills；
 - JSON 描述文件无效时停止且不得创建任务。
 
 
@@ -491,7 +494,8 @@ statemng task create \
   "task_name": "[TASK_NAME]",
   "task_id": "T-012",
   "status": "pending",
-  "dependencies": ["T-001", "T-002"]
+  "dependencies": ["T-001", "T-002"],
+  "required_skills": ["methods/libra/SKILL.md"]
 }
 ```
 
@@ -575,10 +579,13 @@ statemng task show T-012 \
 返回：
 
 - 任务目标、背景和验收标准；
+- 研究前必须完整读取的 required skills（若有）；
 - 前置任务结果及相关 artifact；
 - 当前运行的工作目录。
 
 这样主 Agent 不需要在创建 subagent 时复制完整上下文。
+
+subagent 在 `claim` 和 `show` 之后、开始研究之前，必须按返回顺序完整读取每个 `required_skills` 路径；该字段缺失或为空时不增加额外 Skill。
 
 ### 6.7 登记产物
 
