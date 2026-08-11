@@ -1,36 +1,36 @@
 (*
-CANON_neu interface-only provider template: PROPOSE_INTEGRAL_CANDIDATES / DLogBasis
-Provider card:
+CANON_neu 仅接口的提供者模板：PROPOSE_INTEGRAL_CANDIDATES / DLogBasis
+提供者卡：
   SKILL.md
 
-Invocation:
+调用方式：
   wolframscript -file run.wls <input.json> <output_dir>
 
-Input envelope:
+输入封装：
   schema  = "canon-neu/script-input/v1"
   step    = "PROPOSE_INTEGRAL_CANDIDATES"
-  sector  = <|"id" -> integer, "propagator_count" -> integer|>
+  sector  = <|"id" -> 整数, "propagator_count" -> 整数|>
   payload = <|
-    "family_identity" -> <stable family identity>,
-    "sector_identity" -> <stable sector identity matching sector>,
-    "prepared_family" -> <artifact descriptor>,
-    "dimension_policy" -> <explicit dimension policy>,
-    "numerator_or_power_counting_policy" -> <explicit independent policy>,
-    "candidate_budget" -> <explicit budget and budget unit>,
+    "family_identity" -> <稳定族身份>,
+    "sector_identity" -> <与扇区匹配的稳定扇区身份>,
+    "prepared_family" -> <产物描述符>,
+    "dimension_policy" -> <显式维数策略>,
+    "numerator_or_power_counting_policy" -> <显式独立策略>,
+    "candidate_budget" -> <显式预算与预算单位>,
     "candidate_unit" -> "INDIVIDUAL_G_INTEGRAL" | "NORMALIZED_LINEAR_COMBINATION",
-    "normalization_policy" -> <explicit convention>,
-    "method_options" -> <opaque options object>
+    "normalization_policy" -> <显式约定>,
+    "method_options" -> <不透明选项对象>
   |>
 
-Required output:
-  <output_dir>/result.json with schema "canon-neu/script-result/v1".
-  PROVISIONAL/INTEGRAL_CANDIDATES with artifact "integral_candidates" using
-    "canon-neu/integral-candidates/v1".
-  INCONCLUSIVE/OUT_OF_SCOPE or INCONCLUSIVE/METHOD_EXHAUSTED.
-  Concrete ERROR codes for input, tool, or computation failure.
+必需输出：
+  <output_dir>/result.json，模式为 "canon-neu/script-result/v1"。
+  PROVISIONAL/INTEGRAL_CANDIDATES，并包含采用
+    "canon-neu/integral-candidates/v1" 的产物 "integral_candidates"。
+  INCONCLUSIVE/OUT_OF_SCOPE 或 INCONCLUSIVE/METHOD_EXHAUSTED。
+  输入、工具或计算故障使用具体 ERROR 代码。
 
-Checker-only outcomes, post-reduction transformations, and UT/canonical claims are
-forbidden. No runner or DLogBasis adapter is implemented.
+禁止仅供检查器使用的结果、约化后变换和 UT/典范形式结论。尚未实现运行器或 DLogBasis
+适配器。
 
-Scientific implementation is intentionally absent.
+科学实现有意留空。
 *)

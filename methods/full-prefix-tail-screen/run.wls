@@ -54,7 +54,7 @@ If[
   !CanonMethodCard`ValidSectorBasisQ[sectorBasis] ||
   !CanonMethodCard`ValidCutDEQ[cut] ||
   !CanonMethodCard`ValidCandidatesQ[coreCandidates],
-  writeFailure["ERROR", "INVALID_INPUT", "一个或多个 tail-screen artifact 无效"]
+  writeFailure["ERROR", "INVALID_INPUT", "一个或多个尾部筛选产物无效"]
 ];
 
 variables = cut["variables"];
@@ -70,7 +70,7 @@ If[
   !ListQ[Lookup[acceptedPrefix, "alphabet", None]] ||
   Lookup[acceptedPrefix, "variables", None] =!= variables ||
   Lookup[acceptedPrefix, "regulator", None] =!= regulator,
-  writeFailure["ERROR", "INVALID_ACCEPTED_PREFIX", "accepted lower prefix 的协议无效"]
+  writeFailure["ERROR", "INVALID_ACCEPTED_PREFIX", "已接受低扇区前缀的协议无效"]
 ];
 
 lowerDimension = Length[acceptedPrefix["basis"]];
@@ -80,7 +80,7 @@ If[
   !CanonMethodCard`FlatConnectionQ[prefixMatrices, variables] ||
   !CanonMethodCard`EpsilonFactorizedQ[prefixMatrices, regulator] ||
   !CanonMethodCard`DLogConnectionQ[prefixMatrices, variables, regulator, acceptedPrefix["alphabet"]],
-  writeFailure["ERROR", "INVALID_ACCEPTED_PREFIX", "accepted lower prefix 不是精确 canonical dlog system"]
+  writeFailure["ERROR", "INVALID_ACCEPTED_PREFIX", "已接受低扇区前缀不是精确的典范 dlog 系统"]
 ];
 
 fullDimension = lowerDimension + currentDimension;
@@ -100,7 +100,7 @@ If[
   Lookup[fullPool, "regulator", None] =!= regulator ||
   !ListQ[Lookup[fullPool, "alphabet", None]] || Lookup[fullPool, "alphabet", {}] === {} ||
   !ListQ[Lookup[fullPool, "candidates", None]] || Lookup[fullPool, "candidates", {}] === {},
-  writeFailure["ERROR", "INVALID_FULL_PREFIX_POOL", "full-prefix candidate pool 的协议或身份无效"]
+  writeFailure["ERROR", "INVALID_FULL_PREFIX_POOL", "完整前缀候选池的协议或身份无效"]
 ];
 
 If[
@@ -109,7 +109,7 @@ If[
   sectorBasis["basis_id"] =!= cut["basis_id"] || coreCandidates["basis_id"] =!= cut["basis_id"] ||
   sectorBasis["basis"] =!= cut["basis"] || coreCandidates["basis"] =!= cut["basis"] ||
   coreCandidates["variables"] =!= variables || coreCandidates["regulator"] =!= regulator,
-  writeFailure["ERROR", "IDENTITY_MISMATCH", "sector、family、basis、variable 或 regulator 身份不一致"]
+  writeFailure["ERROR", "IDENTITY_MISMATCH", "扇区、族、基、变量或正则化参数身份不一致"]
 ];
 
 coreList = coreCandidates["candidates"];
@@ -123,7 +123,7 @@ If[
   writeFailure[
     "ERROR",
     "INVALID_CANDIDATE_IDS",
-    "full-prefix candidates 必须为每个 core candidate ID 恰好提供一个 completion"
+    "完整前缀候选必须为每个核心候选 ID 恰好提供一个补全"
   ]
 ];
 
@@ -131,7 +131,7 @@ sourceMatrices = Lookup[fullPool, "source_matrices", None];
 If[
   !exactMatrixListQ[sourceMatrices, Length[variables], fullDimension] ||
   !CanonMethodCard`FlatConnectionQ[sourceMatrices, variables],
-  writeFailure["ERROR", "INVALID_SOURCE_DE", "source full-prefix connection 无效或非 flat"]
+  writeFailure["ERROR", "INVALID_SOURCE_DE", "源完整前缀联络无效或非平坦"]
 ];
 
 lowerRows = 1 ;; lowerDimension;
@@ -140,12 +140,12 @@ If[
   !sameMatricesQ[blockList[sourceMatrices, lowerRows, lowerRows], prefixMatrices] ||
   !And @@ (zeroBlockQ /@ blockList[sourceMatrices, lowerRows, currentRows]) ||
   !sameMatricesQ[blockList[sourceMatrices, currentRows, currentRows], cut["matrices"]],
-  writeFailure["ERROR", "SOURCE_BLOCK_MISMATCH", "source DE 不包含声明的冻结 lower prefix 和 current cut core"]
+  writeFailure["ERROR", "SOURCE_BLOCK_MISMATCH", "源 DE 不包含声明的冻结低扇区前缀和当前割核心"]
 ];
 
 screenOptions = Lookup[task["payload"], "screen_options", <||>];
 If[!AssociationQ[screenOptions],
-  writeFailure["ERROR", "INVALID_OPTIONS", "screen_options 必须是 object"]
+  writeFailure["ERROR", "INVALID_OPTIONS", "screen_options 必须是对象"]
 ];
 candidateBudget = Lookup[screenOptions, "candidate_budget", Length[poolList]];
 If[!IntegerQ[candidateBudget] || candidateBudget < 1,
@@ -250,7 +250,7 @@ If[MissingQ[accepted],
   writeFailure[
     If[poolExhausted, "FAIL", "INCONCLUSIVE"],
     If[poolExhausted, "CANDIDATE_POOL_EXHAUSTED", "CANDIDATE_BUDGET_EXHAUSTED"],
-    If[poolExhausted, "所有声明的 candidate 均未通过 full-prefix tail 筛选", "candidate budget 已用尽，但候选池尚未耗尽"],
+    If[poolExhausted, "所有声明的候选均未通过完整前缀尾部筛选", "候选预算已用尽，但候选池尚未耗尽"],
     <|
       "candidate_budget" -> candidateBudget,
       "candidate_count" -> Length[poolList],
@@ -281,7 +281,7 @@ screened = <|
 
 artifactPath = CanonMethodCard`WriteWLArtifact[screened, outputDir, "screened-candidate.wl"];
 If[artifactPath === $Failed,
-  writeFailure["ERROR", "OUTPUT_ERROR", "无法写入 screened candidate artifact"]
+  writeFailure["ERROR", "OUTPUT_ERROR", "无法写入已筛选候选产物"]
 ];
 resultPath = CanonMethodCard`WriteResult[
   task,

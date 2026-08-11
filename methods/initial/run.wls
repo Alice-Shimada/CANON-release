@@ -4,7 +4,7 @@ repoRoot = DirectoryName[DirectoryName[DirectoryName[ExpandFileName[$InputFileNa
 Get[FileNameJoin[{repoRoot, "mma", "lib", "MethodCardCore.wl"}]];
 
 args = CanonMethodCard`ScriptArguments[];
-If[Length[args] =!= 2, Print["usage: run.wls <input.json> <new-output-dir>"]; Quit[2]];
+If[Length[args] =!= 2, Print["用法：run.wls <input.json> <new-output-dir>"]; Quit[2]];
 {inputPath, outputDir} = ExpandFileName /@ args;
 task = CanonMethodCard`ReadTask[inputPath, "PROVIDE_UT_EVIDENCE"];
 If[FailureQ[task], Print[InputForm[task]]; Quit[2]];
@@ -49,16 +49,16 @@ writeOutcome[status_String, code_String, reason_String, details_: <||>] := (
 
 candidate = Lookup[task["payload"], "candidate", Missing["candidate"]];
 If[!AssociationQ[candidate],
-  writeOutcome["ERROR", "INVALID_INPUT", "payload.candidate must be an object"]
+  writeOutcome["ERROR", "INVALID_INPUT", "payload.candidate 必须是对象"]
 ];
 scopeKeys = Keys[expectedCandidate];
 If[!And @@ (KeyExistsQ[candidate, #] & /@ scopeKeys),
-  writeOutcome["INCONCLUSIVE", "OUT_OF_SCOPE", "candidate scope is incomplete"]
+  writeOutcome["INCONCLUSIVE", "OUT_OF_SCOPE", "候选范围不完整"]
 ];
 If[!And @@ (SameQ[Lookup[candidate, #], expectedCandidate[#]] & /@ scopeKeys),
   writeOutcome[
     "INCONCLUSIVE", "OUT_OF_SCOPE",
-    "only the fixed normalized official INITIAL ladder candidate is covered",
+    "本卡只覆盖固定归一化的 INITIAL 官方梯图候选",
     <|"requested_family_id" -> Lookup[candidate, "family_id", None],
       "requested_candidate_id" -> Lookup[candidate, "candidate_id", None]|>
   ]
@@ -66,21 +66,21 @@ If[!And @@ (SameQ[Lookup[candidate, #], expectedCandidate[#]] & /@ scopeKeys),
 
 options = Lookup[task["payload"], "method_options", <||>];
 If[!AssociationQ[options],
-  writeOutcome["ERROR", "TOOL_CONFIGURATION", "method_options must be an object"]
+  writeOutcome["ERROR", "TOOL_CONFIGURATION", "method_options 必须是对象"]
 ];
 hepToolsRoot = Lookup[options, "hep_tools_root", Missing["hep_tools_root"]];
 initialIdentity = Lookup[options, "initial_identity", Missing["initial_identity"]];
 finiteFlowIdentity = Lookup[options, "finiteflow_identity", Missing["finiteflow_identity"]];
 If[
   !StringQ[hepToolsRoot] || !StringStartsQ[hepToolsRoot, $PathnameSeparator],
-  writeOutcome["ERROR", "TOOL_CONFIGURATION", "method_options.hep_tools_root must be an absolute path"]
+  writeOutcome["ERROR", "TOOL_CONFIGURATION", "method_options.hep_tools_root 必须是绝对路径"]
 ];
 If[initialIdentity =!= expectedInitialIdentity || finiteFlowIdentity =!= expectedFiniteFlowIdentity,
-  writeOutcome["ERROR", "TOOL_IDENTITY_MISMATCH", "declared INITIAL or FiniteFlow identity is not the registered identity"]
+  writeOutcome["ERROR", "TOOL_IDENTITY_MISMATCH", "声明的 INITIAL 或 FiniteFlow 身份与登记身份不一致"]
 ];
 If[$VersionNumber =!= 14. || $SystemID =!= "MacOSX-ARM64" ||
    !MemberQ[$CommandLine, "-noinit"] || !MemberQ[$CommandLine, "-script"],
-  writeOutcome["ERROR", "TOOL_CONFIGURATION", "requires Mathematica 14 ARM64 with -noinit -script"]
+  writeOutcome["ERROR", "TOOL_CONFIGURATION", "需要使用带 -noinit -script 的 Mathematica 14 ARM64"]
 ];
 
 normalized[path_String] := StringReplace[ExpandFileName[path], RegularExpression["/+$"] -> ""];
@@ -99,30 +99,30 @@ finiteFlowCoreLibrary = FileNameJoin[{finiteFlowRoot, "lib", "libfflow.dylib"}];
 
 If[
   FileType[hepToolsRoot] =!= Directory || realPath[initialStableRoot] =!= expectedInitialRoot,
-  writeOutcome["ERROR", "TOOL_CONFIGURATION", "HEP tools root or INITIAL stable entry target does not match the registered layout"]
+  writeOutcome["ERROR", "TOOL_CONFIGURATION", "HEP 工具根目录或 INITIAL 稳定入口目标与登记布局不一致"]
 ];
 requiredComponents = {initialEntry, finiteFlowEntry, finiteFlowLibrary, finiteFlowCoreLibrary};
 If[Or @@ (FileType[#] =!= File & /@ requiredComponents),
-  writeOutcome["ERROR", "TOOL_COMPONENT_MISSING", "a registered INITIAL or FiniteFlow component is missing"]
+  writeOutcome["ERROR", "TOOL_COMPONENT_MISSING", "缺少已登记的 INITIAL 或 FiniteFlow 组件"]
 ];
 If[
   FileExistsQ[outputDir] || FileType[DirectoryName[outputDir]] =!= Directory ||
   insideQ[outputDir, hepToolsRoot],
-  writeOutcome["ERROR", "TOOL_CONFIGURATION", "output must be a new caller-owned directory outside the HEP tools root"]
+  writeOutcome["ERROR", "TOOL_CONFIGURATION", "输出目录必须是 HEP 工具根目录外由调用方拥有的新目录"]
 ];
 
 $LibraryPath = Prepend[DeleteCases[$LibraryPath, finiteFlowRoot], finiteFlowRoot];
 If[realPath[Quiet @ Check[FindLibrary["fflowmlink"], $Failed]] =!= finiteFlowLibrary,
-  writeOutcome["ERROR", "TOOL_COMPONENT_MISMATCH", "FiniteFlow library did not resolve to the registered prefix"]
+  writeOutcome["ERROR", "TOOL_COMPONENT_MISMATCH", "FiniteFlow 库未解析到登记的前缀"]
 ];
 If[Check[Get[finiteFlowEntry], $Failed] === $Failed,
-  writeOutcome["ERROR", "TOOL_LOAD_FAILED", "FiniteFlow load failed"]
+  writeOutcome["ERROR", "TOOL_LOAD_FAILED", "FiniteFlow 加载失败"]
 ];
 If[realPath[FiniteFlow`Private`fflowlib] =!= finiteFlowLibrary,
-  writeOutcome["ERROR", "TOOL_COMPONENT_MISMATCH", "FiniteFlow loaded an unexpected library"]
+  writeOutcome["ERROR", "TOOL_COMPONENT_MISMATCH", "FiniteFlow 加载了非预期库"]
 ];
 If[Check[Get[initialEntry], $Failed] === $Failed,
-  writeOutcome["ERROR", "TOOL_LOAD_FAILED", "INITIAL load failed"]
+  writeOutcome["ERROR", "TOOL_LOAD_FAILED", "INITIAL 加载失败"]
 ];
 
 exampleRoot = FileNameJoin[{initialStableRoot, "examples", "massless_3L4P"}];
@@ -130,7 +130,7 @@ amatrixPath = FileNameJoin[{exampleRoot, "AMatrix_ladder.m"}];
 basisPath = FileNameJoin[{exampleRoot, "initial_basis_ladder.m"}];
 referencePath = FileNameJoin[{exampleRoot, "TMatrix_ladder_to_UT.m"}];
 If[Or @@ (FileType[#] =!= File & /@ {amatrixPath, basisPath, referencePath}),
-  writeOutcome["ERROR", "TOOL_COMPONENT_MISSING", "official ladder A, basis, or reference is missing"]
+  writeOutcome["ERROR", "TOOL_COMPONENT_MISSING", "缺少官方梯图 A、基或参考"]
 ];
 
 amatrix = Together[Get[amatrixPath]];
@@ -143,11 +143,11 @@ nThreads = 4;
 If[
   Dimensions[amatrix] =!= {26, 26} || Length[initialBasis] =!= 26 ||
   First[initialBasis] =!= utSeed || Dimensions[referenceTransformation] =!= {26, 26},
-  writeOutcome["ERROR", "TOOL_REFERENCE_MISMATCH", "official ladder A, basis, seed, or reference changed"]
+  writeOutcome["ERROR", "TOOL_REFERENCE_MISMATCH", "官方梯图 A、基、种子或参考已改变"]
 ];
 
 If[Quiet @ Check[CreateDirectory[outputDir]; SetDirectory[outputDir]; True, False] =!= True,
-  writeOutcome["ERROR", "TOOL_CONFIGURATION", "could not create and enter the fresh output directory"]
+  writeOutcome["ERROR", "TOOL_CONFIGURATION", "无法创建并进入新的输出目录"]
 ];
 FiniteFlow`FFNThreads = nThreads;
 {elapsedSeconds, transformation} = AbsoluteTiming[
@@ -160,17 +160,17 @@ FiniteFlow`FFNThreads = nThreads;
   ]
 ];
 If[transformation === $Failed || !MatrixQ[transformation],
-  writeOutcome["ERROR", "TOOL_COMPUTATION_FAILED", "INITIAL TCalc failed"]
+  writeOutcome["ERROR", "TOOL_COMPUTATION_FAILED", "INITIAL TCalc 失败"]
 ];
 If[!SameQ[transformation, referenceTransformation],
   writeOutcome[
     "INCONCLUSIVE", "METHOD_EXHAUSTED",
-    "computed transformation differs from the official reference"
+    "计算得到的变换与官方参考不同"
   ]
 ];
 transformedMatrix = Quiet @ Check[basisChange[amatrix, transformation, x, "NThreads" -> nThreads], $Failed];
 If[transformedMatrix === $Failed || Dimensions[transformedMatrix] =!= {26, 26},
-  writeOutcome["ERROR", "TOOL_COMPUTATION_FAILED", "INITIAL basisChange failed"]
+  writeOutcome["ERROR", "TOOL_COMPUTATION_FAILED", "INITIAL basisChange 失败"]
 ];
 
 exactGauge = CanonMethodCard`ZeroMatrixQ[
@@ -181,7 +181,7 @@ declaredDLog = officialLadderDLogQ[transformedMatrix];
 If[!TrueQ[exactGauge && epsilonIndependent && declaredDLog],
   writeOutcome[
     "INCONCLUSIVE", "METHOD_EXHAUSTED",
-    "provider result did not establish exact gauge, epsilon, and declared dlog checks"
+    "提供者结果未通过精确规范检查、ε 因子分解与声明的 dlog 检查"
   ]
 ];
 
@@ -235,7 +235,7 @@ evidence = <|
 
 artifactPath = CanonMethodCard`WriteWLArtifact[evidence, outputDir, "ut-evidence.wl"];
 If[artifactPath === $Failed,
-  writeOutcome["ERROR", "OUTPUT_ERROR", "could not write ut-evidence artifact"]
+  writeOutcome["ERROR", "OUTPUT_ERROR", "无法写入 UT 证据产物"]
 ];
 resultPath = CanonMethodCard`WriteProviderResult[
   task, outputDir, "PROVISIONAL", "EVIDENCE_AWAITING_VERIFICATION",
@@ -252,5 +252,5 @@ resultPath = CanonMethodCard`WriteProviderResult[
     "workflow_action" -> "none"
   |>
 ];
-If[resultPath === $Failed, Print["failed to write result.json"]; Quit[1]];
+If[resultPath === $Failed, Print["写入 result.json 失败"]; Quit[1]];
 Quit[0];

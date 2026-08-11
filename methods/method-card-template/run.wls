@@ -1,27 +1,26 @@
 (*
-CANON_neu role-aware interface-only provider template
-Provider card:
+CANON_neu 可区分角色的仅接口提供者模板
+提供者卡：
   SKILL.md
 
-Invocation:
+调用方式：
   wolframscript -file run.wls <input.json> <output_dir>
 
-Input envelope:
+输入封装：
   schema  = "canon-neu/script-input/v1"
-  step    = one declared stage, for example
-              "PROPOSE_INTEGRAL_CANDIDATES" (pre-reduction integral generator), or
-              "SEARCH_CORE" (post-reduction transformation generator)
-  sector  = <|"id" -> integer, "propagator_count" -> integer|>
-  payload = the exact role-specific contract in ../../INTERFACES.md
+  step    = 一个已声明的阶段，例如
+              "PROPOSE_INTEGRAL_CANDIDATES"（约化前积分生成器），或
+              "SEARCH_CORE"（约化后变换生成器）
+  sector  = <|"id" -> 整数, "propagator_count" -> 整数|>
+  payload = ../../INTERFACES.md 中对应角色的精确合同
 
-Required output:
-  <output_dir>/result.json with schema "canon-neu/script-result/v1".
-  A provider uses only its declared PROVISIONAL code, bounded INCONCLUSIVE codes,
-  and concrete ERROR codes. PASS and FAIL are checker-only.
+必需输出：
+  <output_dir>/result.json，模式为 "canon-neu/script-result/v1"。
+  提供者只能使用已声明的 PROVISIONAL 代码、有界 INCONCLUSIVE 代码和具体 ERROR 代码。
+  PASS 与 FAIL 仅供检查器使用。
 
-Replace this directory to add one bounded MethodCard and delete all inapplicable role
-branches. A pre-reduction card must not consume sector_basis/sector_cut_de or emit a
-core transformation. A SEARCH_CORE card must consume the ordered post-reduction basis
-and cut DE and emit canon-neu/core-candidates/v1.
-Scientific implementation is intentionally absent.
+替换本目录以添加一个有界 MethodCard，并删除所有不适用的角色分支。约化前的卡不得
+读取 sector_basis/sector_cut_de 或输出核心变换。SEARCH_CORE 卡必须读取有序的约化后基
+与割 DE，并输出 canon-neu/core-candidates/v1。
+科学实现有意留空。
 *)

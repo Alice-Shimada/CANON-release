@@ -1,9 +1,9 @@
-# Libra 有理微分系统 candidate 路线（当前自动实现：单变量）
+# Libra 有理微分系统候选路线（当前自动实现：单变量）
 
 ## 目的
 
-使用与本卡兼容的 Libra 1.2，为有理 current-sector cut system 提出 epsilon-form
-transformation。Libra 本身可以保存并同步变换多变量微分系统；当前 `run.wls` 只实现并
+使用与本卡兼容的 Libra 1.2，为有理当前扇区割系统提出 ε 形式变换。Libra 本身可以保存
+并同步变换多变量微分系统；当前 `run.wls` 只实现并
 验收了小型单变量自动路线。CANON 不负责安装或登记 Libra，也不依赖某个工具工作区的
 目录布局。
 
@@ -19,37 +19,37 @@ Fermatica、`BirkhoffGrothendieck`、交互式可视操作、代数根和物理�
 
 ## Libra 的多变量能力与本卡边界
 
-Libra 的 `NewDSystem[ds,{x->Mx,y->My,...}]` 以变量到连接矩阵的 association 保存
+Libra 的 `NewDSystem[ds,{x->Mx,y->My,...}]` 以变量到连接矩阵的关联保存
 多变量系统；`Transform[ds,t]` 会对每个变量方向使用相应导数项同步更新连接矩阵，
 `EFormQ[ds,eps]` 也会检查全部变量方向。因此，“当前卡只接受一个变量”不是 Libra
 本身的能力限制。
 
-但 `Fuchsify[ds,x]`、`FactorOut[ds,x,eps,mu]` 和可视 balancing 接口都先从指定方向
-`ds[x]` 构造 transformation。随包教程的二维例子在需要时依次执行
+但 `Fuchsify[ds,x]`、`FactorOut[ds,x,eps,mu]` 和可视平衡接口都先从指定方向
+`ds[x]` 构造变换。随包教程的二维例子在需要时依次执行
 `Fuchsify[ds,x]`、`Fuchsify[ds,y]`，每次都用 `Transform[ds,t]` 作用于完整系统；随后
 把所有变量方向在共同精确运动学点的样本合并，交给 `FactorDependence` 寻找一个共同的
-epsilon-factorizing transformation。随包演示文稿的三变量例子则混合使用逐方向
+ε 因子分解变换。随包演示文稿的三变量例子则混合使用逐方向
 `VisBalancing`、单方向 `FactorOut`、`BlockTriangularToFuchsian`，并在
 `FactorDependence` 前只对各矩阵对应的微分变量作部分特化。两份材料都证明这些组件能
 用于多变量系统，但演示文稿同时把“更系统的多变量处理”列为待开发能力。
 
 CANON 若采用非交互的逐变量 `Fuchsify`，它只是基于现有接口和教程提出的有界设计，尚未
-通过本卡的多变量 kernel 验收。实现时必须明确变量遍历/回访和确定性取值策略，避开奇点
-并保存取值；部分或完整特化都只能帮助构造 candidate，不能作接受证据。结束时仍须对未
+通过本卡的多变量内核验收。实现时必须明确变量遍历/回访和确定性取值策略，避开奇点并
+保存取值；部分或完整特化都只能帮助构造候选，不能作接受证据。结束时仍须对未
 取值的完整符号系统联合检查
-精确 gauge relation、各方向 Fuchsian 性、平坦性与 epsilon factorization。完成这一
-闭环前，多变量输入仍由当前 runner 明确返回 `INCONCLUSIVE/OUT_OF_SCOPE`，而不是被
+精确规范关系、各方向弗克斯性、平坦性与 ε 因子分解。完成这一闭环前，多变量输入
+仍由当前运行器明确返回 `INCONCLUSIVE/OUT_OF_SCOPE`，而不是被
 描述为 Libra 不支持，也不会把尚未实现的卡范围
-解释为 candidate 的数学失败。
+解释为候选的数学失败。
 
 还要注意，Libra 的 `EFormQ[ds,eps]` 只判定每个连接矩阵除以 `eps` 后是否不再含
-`eps`；它不证明连接属于某个 dlog alphabet。多变量 canonical acceptance 因而还需要
-CANON 独立实现并验收多变量 dlog 分解，不能只依赖 provider 的 `EFormQ`。
+`eps`；它不证明连接属于某个 dlog 字母表。多变量典范形式的接受因而还需要 CANON 独立实现并
+验收多变量 dlog 分解，不能只依赖提供者的 `EFormQ`。
 
 ## 调用要求
 
-使用标准 `SEARCH_CORE` task input 和 output directory 运行 `run.wls`。调用环境必须
-提供可执行的 Wolfram kernel，并以以下二选一方式提供 Libra：
+使用标准 `SEARCH_CORE` 任务输入和输出目录运行 `run.wls`。调用环境必须提供可执行的
+Wolfram 内核，并以以下二选一方式提供 Libra：
 
 1. 在 `method_options.package_entry` 中给出 Libra 主文件路径；相对路径以
    `input.json` 所在目录为基准；
@@ -59,31 +59,29 @@ CANON 独立实现并验收多变量 dlog 分解，不能只依赖 provider 的 
 `$Version`/`$SystemID`，但不读取 hep-tools 的机器状态。
 
 `method_options.dependent_row_strategy` 未给出或为 `automatic` 时，卡保持 Libra 1.2
-原有的单次 `FactorOut` Automatic 调用。调用方也可显式选择 `sector-de-closure`，并在
-payload 提供 `canon-neu/libra-dependent-row-hierarchy/v1` artifact。该 artifact 的
-`sector_hierarchy` 是与 cut ordered basis 同序的 `n×n` 0/1 relation mask，不是 row list；
-对角必须全为 1，cycle 合法。它还必须精确绑定 sector/family/basis ID 与完整 basis order，
-记录每个 master 的 ordered sector label、producer/tool revision、`MappedSectors=False`、
-source artifact/hash 和正整数 `max_mask_nonzeros`。
+原有的单次 `FactorOut` 自动调用。调用方也可显式选择 `sector-de-closure`，并在 `payload`
+提供 `canon-neu/libra-dependent-row-hierarchy/v1` 产物。该产物的 `sector_hierarchy` 是与割中
+有序基同序的 `n×n` 0/1 关系掩码，不是行列表；对角必须全为 1，环路合法。它还必须精确
+绑定扇区/族/基 ID 与完整基顺序，记录每个主积分的有序扇区标签、`producer`/`tool_revision`、
+`MappedSectors=False`、源产物/哈希和正整数 `max_mask_nonzeros`。
 
-显式路线只从实际 post-Fuchsify 矩阵的 residues 构造与 Libra 1.2 Automatic 同语义的
-`hde`，计算 `TClosure[hsector+hde]`。闭包后按 mask 中 1 的个数检查预算；超限不截断、
+显式路线只从实际 Fuchsify 后矩阵的留数构造与 Libra 1.2 自动调用同语义的 `hde`，计算
+`TClosure[hsector+hde]`。闭包后按掩码中 1 的个数检查预算；超限不截断、
 不用 `All`、不重试，也不调用 `FactorOut`。预算内只调用一次
-`FactorOut[...,DependentRowIndices->combinedMask]`。artifact schema、identity/order、mask、
-provenance 或预算无效时，在搜索前 fail closed。
+`FactorOut[...,DependentRowIndices->combinedMask]`。产物模式、身份/顺序、掩码、来源信息或
+预算无效时，在搜索前以失败封闭方式拒绝。
 
 ## 结果与证据
 
-本卡要求实际加载版本为 Libra 1.2，并记录精确 transformation、transformed matrix
-和 Libra `EFormQ` 结果。在
-`mma/CheckSectorCore.wls` 独立验证前，provider 输出始终只是
+本卡要求实际加载版本为 Libra 1.2，并记录精确变换、变换后矩阵和 Libra `EFormQ` 结果。
+在 `mma/CheckSectorCore.wls` 独立验证前，提供者输出始终只是
 `PROVISIONAL/CANDIDATE_TRANSFORMATION`，不能返回 `PASS` 或数学拒绝 `FAIL`。
-显式 hierarchy 路线还记录 strategy、artifact identity/hash、`MappedSectors` mode、stage、
-维数、`hsector`/`hde`/combined mask 非零数、预算以及确定性的 `C[*] -> 1` specialization。
+显式层级路线还记录策略、产物身份/哈希、`MappedSectors` 模式、阶段、维数、
+`hsector`/`hde`/组合掩码非零数、预算以及确定性的 `C[*] -> 1` 特化。
 
 ## 边界
 
-本卡是有界自动或调用方显式 hierarchy 路线。若 `Fuchsify` 或 `FactorOut` 无法给出结论，则返回
-`INCONCLUSIVE/METHOD_EXHAUSTED`；非法或非 flat 系统返回
+本卡是有界自动或调用方显式层级路线。若 `Fuchsify` 或 `FactorOut` 无法给出结论，则返回
+`INCONCLUSIVE/METHOD_EXHAUSTED`；非法或非平坦系统返回
 `ERROR/INVALID_DIFFERENTIAL_SYSTEM`。不得静默回退到 `Rookie`、交互式操作、
-Fermatica、CANONICA、INITIAL 或 lower-sector 重写。
+Fermatica、CANONICA、INITIAL 或低扇区重写。

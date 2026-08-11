@@ -1,25 +1,20 @@
-# DLogBasis pre-reduction integral-candidate route
+# DLogBasis 约化前积分候选路线
 
-## Purpose
+## 目的
 
-Propose pre-reduction integral/dlog candidates through
-`PROPOSE_INTEGRAL_CANDIDATES`. This card does not produce a master-basis
-transformation.
+通过 `PROPOSE_INTEGRAL_CANDIDATES` 提出约化前的积分/dlog 候选。本卡不生成主积分基变换。
 
-## Required interaction
+## 必需交互
 
-The interface is exactly the `PROPOSE_INTEGRAL_CANDIDATES` and
-`canon-neu/integral-candidates/v1` contract in `../../INTERFACES.md`. A future runner
-may consume family/sector identity and the separately declared dimension,
-power-counting, budget, candidate-unit, and normalization policies. It must not consume
-`sector_basis` or `sector_cut_de`.
+接口严格采用 `../../INTERFACES.md` 中的 `PROPOSE_INTEGRAL_CANDIDATES` 和
+`canon-neu/integral-candidates/v1` 合同。未来的运行器可以读取族/扇区身份，以及分别声明的
+维数、幂计数、预算、候选单位和归一化策略；不得读取 `sector_basis` 或
+`sector_cut_de`。
 
-## Boundary
+## 边界
 
-No CANON DLogBasis adapter is implemented. `LeadingSingularitiesPortable.tar.gz` is
-the only self-contained tracked bundle; `LS_modified.zip` is not self-contained.
-Upstream `IntegrandAnsatz` documentation describes its optional argument as a
-numerator power order, while the tracked implementation uses `dim_:4` in power-counting
-formulae. An adapter must resolve that discrepancy and may not conflate dimension,
-power counting, or candidate budget. This card cannot publish `PASS`, `FAIL`, or a
-UT/canonical claim.
+尚未实现 CANON DLogBasis 适配器。受版本控制的软件包中只有
+`LeadingSingularitiesPortable.tar.gz` 是自包含的；`LS_modified.zip` 不是。上游
+`IntegrandAnsatz` 文档把可选参数描述为分子幂次数，而受版本控制的实现在幂计数公式中
+使用 `dim_:4`。适配器必须先解决这一差异，且不得混淆维数、幂计数或候选预算。本卡不能
+发布 `PASS`、`FAIL` 或 UT/典范形式结论。

@@ -50,7 +50,7 @@ hierarchyValidationReason[hierarchy_, cut_] := Module[
     !AssociationQ[hierarchy] ||
       Lookup[hierarchy, "schema", None] =!=
         "canon-neu/libra-dependent-row-hierarchy/v1",
-    Return["dependent_row_hierarchy schema 无效"]
+    Return["dependent_row_hierarchy 模式无效"]
   ];
   n = Length[cut["basis"]];
   If[
@@ -63,7 +63,7 @@ hierarchyValidationReason[hierarchy_, cut_] := Module[
       Lookup[hierarchy, "family_id", None] =!= cut["family_id"] ||
       Lookup[hierarchy, "basis_id", None] =!= cut["basis_id"] ||
       Lookup[hierarchy, "basis", None] =!= cut["basis"],
-    Return["dependent_row_hierarchy 与 cut sector/family/basis/order 不匹配"]
+    Return["dependent_row_hierarchy 与割的扇区/族/基/顺序不匹配"]
   ];
   labels = Lookup[hierarchy, "master_sector_labels", None];
   If[!ListQ[labels] || Length[labels] =!= n,
@@ -71,7 +71,7 @@ hierarchyValidationReason[hierarchy_, cut_] := Module[
   ];
   mask = Lookup[hierarchy, "sector_hierarchy", None];
   If[!binarySquareMaskQ[mask, n],
-    Return["dependent_row_hierarchy sector_hierarchy 必须是 n-by-n 0/1 mask"]
+    Return["dependent_row_hierarchy sector_hierarchy 必须是 n×n 0/1 掩码"]
   ];
   If[Diagonal[mask] =!= ConstantArray[1, n],
     Return["dependent_row_hierarchy sector_hierarchy 对角必须全为 1"]
@@ -82,7 +82,7 @@ hierarchyValidationReason[hierarchy_, cut_] := Module[
   ];
   provenance = Lookup[hierarchy, "provenance", None];
   If[!AssociationQ[provenance],
-    Return["dependent_row_hierarchy provenance 无效"]
+    Return["dependent_row_hierarchy 来源信息无效"]
   ];
   sourceHash = Lookup[provenance, "source_sha256", None];
   If[
@@ -98,7 +98,7 @@ hierarchyValidationReason[hierarchy_, cut_] := Module[
       !StringQ[sourceHash] ||
       !StringMatchQ[sourceHash, RegularExpression["[0-9a-fA-F]{64}"]],
     Return[
-      "dependent_row_hierarchy provenance 必须完整记录 producer/tool/revision/MappedSectors=False/source/hash"
+      "dependent_row_hierarchy 来源信息必须完整记录生成者/工具/修订版/MappedSectors=False/来源/哈希"
     ]
   ];
   None
@@ -131,7 +131,7 @@ If[
     !CanonMethodCard`ValidCutDEQ[cut],
   writeFailure[
     "ERROR", "INVALID_DIFFERENTIAL_SYSTEM",
-    "sector_basis 或 sector_cut_de artifact 无效"
+    "sector_basis 或 sector_cut_de 产物无效"
   ]
 ];
 If[
@@ -142,11 +142,11 @@ If[
     sectorBasis["basis"] =!= cut["basis"],
   writeFailure[
     "ERROR", "INVALID_DIFFERENTIAL_SYSTEM",
-    "task、sector_basis 与 sector_cut_de 的 sector/family/basis/order 不匹配"
+    "任务、sector_basis 与 sector_cut_de 的扇区/族/基/顺序不匹配"
   ]
 ];
 If[!CanonMethodCard`FlatConnectionQ[cut["matrices"], cut["variables"]],
-  writeFailure["ERROR", "INVALID_DIFFERENTIAL_SYSTEM", "输入 differential connection 不可积"]
+  writeFailure["ERROR", "INVALID_DIFFERENTIAL_SYSTEM", "输入微分联络不可积"]
 ];
 If[Length[cut["variables"]] =!= 1,
   writeFailure["INCONCLUSIVE", "OUT_OF_SCOPE", "当前 Libra 卡只接受恰好一个变量"]
@@ -154,7 +154,7 @@ If[Length[cut["variables"]] =!= 1,
 
 methodOptions = Lookup[Lookup[task, "payload", <||>], "method_options", <||>];
 If[!AssociationQ[methodOptions],
-  writeFailure["ERROR", "INVALID_OPTIONS", "method_options 必须是 Association"]
+  writeFailure["ERROR", "INVALID_OPTIONS", "method_options 必须是关联"]
 ];
 If[Complement[Keys[methodOptions], {"package_entry", "dependent_row_strategy"}] =!= {},
   writeFailure["ERROR", "INVALID_OPTIONS", "method_options 含未知选项"]
@@ -175,7 +175,7 @@ If[dependentRowStrategy === "sector-de-closure",
   If[hierarchyPath === $Failed || FileType[hierarchyPath] =!= File,
     writeFailure[
       "ERROR", "INVALID_DIFFERENTIAL_SYSTEM",
-      "dependent_row_hierarchy artifact 缺失或 descriptor 无效"
+      "dependent_row_hierarchy 产物缺失或描述符无效"
     ]
   ];
   hierarchyHash = Quiet @ Check[FileHash[hierarchyPath, "SHA256", "HexString"], $Failed];
@@ -184,7 +184,7 @@ If[dependentRowStrategy === "sector-de-closure",
       !StringMatchQ[hierarchyHash, RegularExpression["[0-9a-fA-F]{64}"]],
     writeFailure[
       "ERROR", "INVALID_DIFFERENTIAL_SYSTEM",
-      "无法计算 dependent_row_hierarchy artifact SHA-256"
+      "无法计算 dependent_row_hierarchy 产物的 SHA-256"
     ]
   ];
   hierarchy = CanonMethodCard`LoadArtifact[
@@ -238,10 +238,10 @@ If[!TrueQ[Quiet @ Check[NewDSystem[cardSystem, variable -> matrix]; True, False]
 ];
 fuchsTransformation = Quiet @ Check[Fuchsify[cardSystem, variable], $Failed];
 If[fuchsTransformation === $Failed || !MatrixQ[fuchsTransformation],
-  writeFailure["INCONCLUSIVE", "METHOD_EXHAUSTED", "Libra Fuchsify 未生成矩阵 transformation"]
+  writeFailure["INCONCLUSIVE", "METHOD_EXHAUSTED", "Libra Fuchsify 未生成矩阵变换"]
 ];
 If[!TrueQ[Quiet @ Check[Transform[cardSystem, fuchsTransformation]; True, False]],
-  writeFailure["INCONCLUSIVE", "METHOD_EXHAUSTED", "Libra 无法应用 Fuchsify transformation"]
+  writeFailure["INCONCLUSIVE", "METHOD_EXHAUSTED", "Libra 无法应用 Fuchsify 变换"]
 ];
 
 strategyEvidence = <|
@@ -260,7 +260,7 @@ If[dependentRowStrategy === "automatic",
   If[hde === $Failed,
     writeFailure[
       "ERROR", "INVALID_DIFFERENTIAL_SYSTEM",
-      "无法从 post-Fuchsify residue matrices 构造 Libra hierarchy"
+      "无法从 Fuchsify 后的留数矩阵构造 Libra 层级"
     ]
   ];
   combinedMask = Quiet @ Check[TClosure[hsector + hde], $Failed];
@@ -269,7 +269,7 @@ If[dependentRowStrategy === "automatic",
       Diagonal[combinedMask] =!= ConstantArray[1, n],
     writeFailure[
       "ERROR", "INVALID_DIFFERENTIAL_SYSTEM",
-      "sector 与 residue hierarchy 的 closure 维数或 domain 无效"
+      "扇区与留数层级的闭包维数或域无效"
     ]
   ];
   hsectorNonzeros = Count[hsector, 1, {2}];
@@ -295,7 +295,7 @@ If[dependentRowStrategy === "automatic",
   If[combinedNonzeros > maskBudget,
     writeFailure[
       "INCONCLUSIVE", "METHOD_EXHAUSTED",
-      "combined dependent-row mask 超出 max_mask_nonzeros；未调用 FactorOut",
+      "组合依赖行掩码超出 max_mask_nonzeros；未调用 FactorOut",
       strategyEvidence
     ]
   ];
@@ -310,20 +310,20 @@ If[dependentRowStrategy === "automatic",
 If[factorTransformation === $Failed || !MatrixQ[factorTransformation],
   writeFailure[
     "INCONCLUSIVE", "METHOD_EXHAUSTED",
-    "Libra FactorOut 未生成矩阵 transformation", strategyEvidence
+    "Libra FactorOut 未生成矩阵变换", strategyEvidence
   ]
 ];
 If[!TrueQ[Quiet @ Check[Transform[cardSystem, factorTransformation]; True, False]],
-  writeFailure["INCONCLUSIVE", "METHOD_EXHAUSTED", "Libra 无法应用 FactorOut transformation"]
+  writeFailure["INCONCLUSIVE", "METHOD_EXHAUSTED", "Libra 无法应用 FactorOut 变换"]
 ];
 transformation = Quiet @ Check[OverallTransformation[cardSystem][Transform], $Failed];
 transformed = Quiet @ Check[cardSystem[variable], $Failed];
 If[transformation === $Failed || !MatrixQ[transformation] || transformed === $Failed,
-  writeFailure["INCONCLUSIVE", "METHOD_EXHAUSTED", "Libra 无法合并 transformation history"]
+  writeFailure["INCONCLUSIVE", "METHOD_EXHAUSTED", "Libra 无法合并变换历史"]
 ];
 providerEFormQ = TrueQ @ Quiet @ Check[EFormQ[transformed, regulator], False];
 If[!providerEFormQ,
-  writeFailure["INCONCLUSIVE", "METHOD_EXHAUSTED", "Libra stages 未生成 epsilon form candidate"]
+  writeFailure["INCONCLUSIVE", "METHOD_EXHAUSTED", "Libra 各阶段未生成 ε 形式候选"]
 ];
 
 candidateArtifact = <|
@@ -364,7 +364,7 @@ candidateArtifact = <|
 
 artifactPath = CanonMethodCard`WriteWLArtifact[candidateArtifact, outputDir, "core-candidates.wl"];
 If[artifactPath === $Failed,
-  writeFailure["ERROR", "OUTPUT_ERROR", "无法写入 core candidate artifact"]
+  writeFailure["ERROR", "OUTPUT_ERROR", "无法写入核心候选产物"]
 ];
 resultPath = CanonMethodCard`WriteProviderResult[
   task,
