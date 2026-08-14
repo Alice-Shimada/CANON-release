@@ -1,4 +1,8 @@
-# CANON Worklist
+# CANON 历史 scientific worklist（非状态看板）
+
+> 本文件保留尚有参考价值的 remote scientific design intent；checkbox 与旧
+> `workflow.py` 里程碑不是当前任务状态或 authority，不得用于推进状态。当前研究状态
+> 只通过根目录 `AGENTS.md` 与 `README.md` 所定义的 `statemng` 管理。
 
 ## 背景
 

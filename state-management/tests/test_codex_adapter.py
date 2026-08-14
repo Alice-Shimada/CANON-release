@@ -53,6 +53,8 @@ class CodexAdapterTests(unittest.TestCase):
         self.assertIn("persistent_research_worker", body)
         self.assertIn("install_launcher.py --check", body)
         self.assertIn("new Local session", body)
+        self.assertIn("required_skills", body)
+        self.assertLess(body.index("task_show"), body.index("read every `SKILL.md`"))
 
     def test_main_and_worker_mcp_configs_use_the_stable_launcher(self) -> None:
         main_path = ROOT / ".codex" / "config.toml"
@@ -82,6 +84,8 @@ class CodexAdapterTests(unittest.TestCase):
         self.assertTrue(worker["developer_instructions"])
         self.assertIn("Codex Local session", worker["developer_instructions"])
         self.assertIn("statemng tools are unavailable", worker["developer_instructions"])
+        self.assertIn("required_skills", worker["developer_instructions"])
+        self.assertIn("before starting research", worker["developer_instructions"])
         self.assertEqual(
             set(worker["mcp_servers"]["statemng"]["disabled_tools"]),
             {"statemng_task_accept", "statemng_task_unblock"},

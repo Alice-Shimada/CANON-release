@@ -52,16 +52,18 @@ class StateManagementTestCase(unittest.TestCase):
         objective: str,
         background: str = "",
         criteria: list[str] | None = None,
+        required_skills: list[str] | None = None,
     ) -> Path:
+        description = {
+            "objective": objective,
+            "background": background,
+            "acceptance_criteria": criteria or ["The result is verified."],
+        }
+        if required_skills is not None:
+            description["required_skills"] = required_skills
         return self.write(
             filename,
-            json.dumps(
-                {
-                    "objective": objective,
-                    "background": background,
-                    "acceptance_criteria": criteria or ["The result is verified."],
-                }
-            ),
+            json.dumps(description),
         )
 
     def create_task(
@@ -218,6 +220,120 @@ class TaskLifecycleTests(StateManagementTestCase):
             "bad.json",
         )
         self.assertEqual(code, 1)
+        self.assertEqual(list((self.task_root / "tasks").iterdir()), [])
+
+    def test_old_description_without_required_skills_remains_compatible(self) -> None:
+        created = self.create_task()
+        task_path = self.task_root / "tasks" / f"{created['task_id']}.json"
+        persisted = json.loads(task_path.read_text(encoding="utf-8"))
+        self.assertNotIn("required_skills", persisted)
+
+        claimed = self.claim(created["task_id"])
+        code, shown = self.invoke(
+            "task",
+            "show",
+            created["task_id"],
+            "--task-name",
+            "family-a",
+            "--run-id",
+            claimed["run_id"],
+        )
+        self.assertEqual(code, 0, shown)
+        self.assertNotIn("required_skills", shown)
+
+    def test_required_skills_round_trip_through_lifecycle_and_rebuild(self) -> None:
+        required_skills = [
+            "skills/canon-check-core/SKILL.md",
+            ".agents/skills/persistent-scientific-research/SKILL.md",
+        ]
+        for path in required_skills:
+            self.write(path, f"# {path}\n")
+        self.description(
+            "with-skills.json",
+            "Use the required methods.",
+            required_skills=required_skills,
+        )
+
+        code, created = self.invoke(
+            "task",
+            "create",
+            "--task-name",
+            "family-a",
+            "--title",
+            "Skilled task",
+            "--description-file",
+            "with-skills.json",
+        )
+        self.assertEqual(code, 0, created)
+        self.assertEqual(created["required_skills"], required_skills)
+        task_path = self.task_root / "tasks" / f"{created['task_id']}.json"
+        persisted = json.loads(task_path.read_text(encoding="utf-8"))
+        self.assertEqual(persisted["required_skills"], required_skills)
+
+        claimed = self.claim(created["task_id"])
+        code, shown = self.invoke(
+            "task",
+            "show",
+            created["task_id"],
+            "--task-name",
+            "family-a",
+            "--run-id",
+            claimed["run_id"],
+        )
+        self.assertEqual(code, 0, shown)
+        self.assertEqual(shown["required_skills"], required_skills)
+
+        markdown_path = self.task_root / "views" / "PROJECT_STATE.md"
+        html_path = self.task_root / "views" / "ui" / "PROJECT_STATE.html"
+        markdown_path.unlink()
+        html_path.unlink()
+        code, resumed = self.invoke("project", "resume", "--task-name", "family-a")
+        self.assertEqual(code, 0, resumed)
+        resumed_task = next(
+            task for task in resumed["tasks"] if task["task_id"] == created["task_id"]
+        )
+        self.assertEqual(resumed_task["required_skills"], required_skills)
+        markdown = markdown_path.read_text(encoding="utf-8")
+        html = html_path.read_text(encoding="utf-8")
+        self.assertIn("Required Skills", markdown)
+        self.assertIn(required_skills[0], markdown)
+        self.assertIn("必需 Skills", html)
+        self.assertIn(required_skills[1], html)
+
+    def test_required_skills_reject_invalid_paths_types_and_duplicates(self) -> None:
+        valid = "skills/canon-check-core/SKILL.md"
+        self.write(valid, "# Valid skill\n")
+        invalid_values = [
+            valid,
+            [1],
+            [valid, valid],
+            ["/tmp/SKILL.md"],
+            [r"C:\\skills\\foreign\\SKILL.md"],
+            ["../outside/SKILL.md"],
+            ["skills/canon-check-core/README.md"],
+            ["skills/missing/SKILL.md"],
+        ]
+        for index, required_skills in enumerate(invalid_values):
+            with self.subTest(required_skills=required_skills):
+                description = {
+                    "objective": "Do work",
+                    "background": "",
+                    "acceptance_criteria": ["Verified"],
+                    "required_skills": required_skills,
+                }
+                filename = f"bad-skills-{index}.json"
+                self.write(filename, json.dumps(description))
+                code, _ = self.invoke(
+                    "task",
+                    "create",
+                    "--task-name",
+                    "family-a",
+                    "--title",
+                    "Bad skill task",
+                    "--description-file",
+                    filename,
+                )
+                self.assertEqual(code, 1)
         self.assertEqual(list((self.task_root / "tasks").iterdir()), [])
 
     def test_dependency_unlock_and_complete_research_handoff(self) -> None:

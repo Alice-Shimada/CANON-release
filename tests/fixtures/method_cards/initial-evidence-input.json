@@ -1,0 +1,22 @@
+{
+  "schema": "canon-neu/script-input/v1",
+  "task_id": "T-FIXTURE-INITIAL-EVIDENCE",
+  "step": "PROVIDE_UT_EVIDENCE",
+  "payload": {
+    "candidate": {
+      "family_id": "initial-official-massless-3l4p",
+      "candidate_id": "official-planar-ladder-26x26",
+      "basis_id": "initial-2.1-massless-3l4p-ladder-basis-26",
+      "basis_order": "initial_basis_ladder.m:official-order",
+      "normalization": "D=4-2 eps;x=t/s",
+      "reference_id": "INITIAL-2.1:massless_3L4P/TMatrix_ladder_to_UT.m",
+      "dimension": 26,
+      "variable": "x",
+      "regulator": "eps",
+      "alphabet": ["x", "1+x"],
+      "ut_seed": "G[2,{1,1,1,1,1,1,1,1,1,1,-1,0,0,0,0}]",
+      "take_row": 1
+    },
+    "method_options": {}
+  }
+}

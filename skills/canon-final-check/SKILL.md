@@ -23,5 +23,6 @@ PASS output:
 
 Boundary:
 - Do not declare DONE without the script result.
-- Do not mutate state.json.
+- This historical scientific scaffold declares no state transition; current research
+  state is governed only by `statemng` under root `AGENTS.md` and `README.md`.
 -->

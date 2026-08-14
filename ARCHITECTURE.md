@@ -1,4 +1,9 @@
-# CANON_neu 架构
+# CANON_neu 历史架构（已退役）
+
+> 本文件仅保存早期 scientific pipeline 设计意图，不描述当前状态权限、agent 交接或
+> 可执行 coordinator。下文的 `workflow.py`、`state.json`、`delegate`、`subreport` 和
+> 单一旧控制流均已退役，不得恢复或作为当前事实引用。当前唯一持续研究状态协议由
+> 根目录 `AGENTS.md` 与 `README.md` 的 `statemng` 规则定义。
 
 ## 目标
 

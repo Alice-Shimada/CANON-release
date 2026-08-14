@@ -16,7 +16,7 @@ Follow the complete `## 四、整体架构` protocol in the applicable root `AGE
 1. In Codex, before the first state call, internally run `state-management/adapters/codex/install_launcher.py --check`. If it fails, reinstall the launcher, stop the current research, and require a new Local session; never use tools that may target another checkout or ask the user to run the installer.
 2. Determine one unambiguous overall `task_name`. If none is clear, call `statemng_project_list` and ask the user to choose; do not guess between existing tasks.
 3. Call `statemng_init` for a new overall task or `statemng_project_resume` for an existing one.
-4. Create only necessary subtasks. Write each description as JSON containing exactly `objective`, `background`, and `acceptance_criteria`; do not place priority or unrelated context in it.
+4. Create only necessary subtasks. Write each description as JSON containing `objective`, `background`, and `acceptance_criteria`; when the task requires repository skills, also add the optional `required_skills` array with each repository-relative `SKILL.md` path. Do not place priority or unrelated context in it.
 5. Dispatch each ready subtask only through the Codex `persistent_research_worker` custom agent, passing only the overall task name, task ID, and necessary research instructions. Do not use an unrestricted built-in worker.
 6. Review submitted summaries and artifacts against the acceptance criteria. Independently verify important results when necessary.
 7. Alone call `statemng_task_accept` after successful review. Alone call `statemng_task_unblock` after confirming that a recorded blocking condition has actually been removed.
@@ -26,8 +26,9 @@ Follow the complete `## 四、整体架构` protocol in the applicable root `AGE
 
 1. Receive an explicit overall task name and task ID; do not infer another task.
 2. Call `statemng_task_claim`, then `statemng_task_show` with the returned run ID.
-3. Work only in the returned run workspace. Use only the objective, background, acceptance criteria, and accepted dependency results supplied by `task_show`.
-4. Register each formal deliverable with `statemng_artifact_add`, then finish with exactly one of `statemng_task_submit`, `statemng_task_block`, or `statemng_task_fail`.
-5. Never accept a task or unblock it. If either tool is visible, still do not call it and report the configuration error to the main Agent.
+3. After `task_show` and before beginning research, read every `SKILL.md` listed in `required_skills` completely, in the supplied order. If the field is absent or empty, no additional skill is required.
+4. Work only in the returned run workspace. Use only the objective, background, acceptance criteria, required skills, and accepted dependency results supplied by `task_show`.
+5. Register each formal deliverable with `statemng_artifact_add`, then finish with exactly one of `statemng_task_submit`, `statemng_task_block`, or `statemng_task_fail`.
+6. Never accept a task or unblock it. If either tool is visible, still do not call it and report the configuration error to the main Agent.
 
 Do not use `workflow.py`.
