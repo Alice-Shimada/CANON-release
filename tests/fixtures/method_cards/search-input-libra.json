@@ -1,0 +1,24 @@
+{
+  "schema": "canon-neu/script-input/v1",
+  "task_id": "T-FIXTURE-SEARCH-LIBRA",
+  "step": "SEARCH_CORE",
+  "sector": {
+    "id": 3,
+    "propagator_count": 2
+  },
+  "payload": {
+    "prepared_family": {
+      "type": "mathematica-expression",
+      "path": "prepared-family.wl"
+    },
+    "sector_basis": {
+      "type": "mathematica-expression",
+      "path": "sector-basis.wl"
+    },
+    "sector_cut_de": {
+      "type": "mathematica-expression",
+      "path": "sector-cut-de.wl"
+    },
+    "method_options": {}
+  }
+}

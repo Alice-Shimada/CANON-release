@@ -1,0 +1,41 @@
+{
+  "schema": "canon-neu/script-input/v1",
+  "task_id": "T-PROPOSE-INTEGRAL-CANDIDATES",
+  "step": "PROPOSE_INTEGRAL_CANDIDATES",
+  "sector": {
+    "id": 7,
+    "propagator_count": 3
+  },
+  "payload": {
+    "family_identity": {
+      "family_id": "stable-family-id",
+      "family_spec_id": "stable-family-spec-id"
+    },
+    "sector_identity": {
+      "sector_id": "stable-sector-id",
+      "id": 7,
+      "propagator_count": 3
+    },
+    "prepared_family": {
+      "type": "mathematica-expression",
+      "path": "/absolute/path/prepared-family.wl"
+    },
+    "dimension_policy": {
+      "spacetime_dimension": "D",
+      "per_loop_policy": "provider-declared"
+    },
+    "numerator_or_power_counting_policy": {
+      "policy_id": "bounded-power-counting-v1",
+      "definition": "provider-declared-exact-policy"
+    },
+    "candidate_budget": {
+      "maximum": 32,
+      "unit": "PROVIDER_CANDIDATE"
+    },
+    "candidate_unit": "INDIVIDUAL_G_INTEGRAL",
+    "normalization_policy": {
+      "convention": "provider-declared-exact-normalization"
+    },
+    "method_options": {}
+  }
+}

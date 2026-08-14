@@ -12,7 +12,7 @@ import sys
 import tempfile
 from contextlib import contextmanager
 from datetime import datetime, timezone
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any, Iterator
 
 from .state_ui import render_project_state
@@ -252,14 +252,48 @@ def all_tasks(task_root: Path) -> list[dict[str, Any]]:
     return [load_json(path) for path in all_task_paths(task_root)]
 
 
-def validate_description(value: Any) -> dict[str, Any]:
-    if not isinstance(value, dict) or set(value) != {
-        "objective",
-        "background",
-        "acceptance_criteria",
-    }:
+def validate_required_skills(value: Any, project_root: Path) -> list[str]:
+    if not isinstance(value, list) or any(not isinstance(item, str) for item in value):
+        raise StateError("required_skills must be an array of strings")
+    if len(set(value)) != len(value):
+        raise StateError("required_skills contains duplicate paths")
+
+    resolved_project_root = project_root.resolve()
+    resolved_skills: set[Path] = set()
+    for item in value:
+        path = Path(item)
+        if not item or path.is_absolute() or PureWindowsPath(item).is_absolute():
+            raise StateError("required_skills paths must be repository-relative")
+        if ".." in path.parts:
+            raise StateError("required_skills paths must not contain ..")
+        if path.name != "SKILL.md":
+            raise StateError("required_skills paths must name SKILL.md")
+        try:
+            resolved = (resolved_project_root / path).resolve(strict=True)
+            resolved.relative_to(resolved_project_root)
+        except (OSError, ValueError) as exc:
+            raise StateError(
+                f"required skill does not exist inside the repository: {item}"
+            ) from exc
+        if not resolved.is_file():
+            raise StateError(f"required skill is not a file: {item}")
+        if resolved in resolved_skills:
+            raise StateError("required_skills contains duplicate paths")
+        resolved_skills.add(resolved)
+    return value
+
+
+def validate_description(value: Any, project_root: Path) -> dict[str, Any]:
+    required_fields = {"objective", "background", "acceptance_criteria"}
+    allowed_fields = required_fields | {"required_skills"}
+    if (
+        not isinstance(value, dict)
+        or not required_fields.issubset(value)
+        or not set(value).issubset(allowed_fields)
+    ):
         raise StateError(
-            "description must contain only objective, background, and acceptance_criteria"
+            "description must contain objective, background, acceptance_criteria, "
+            "and optional required_skills only"
         )
     objective = value["objective"]
     background = value["background"]
@@ -274,17 +308,20 @@ def validate_description(value: Any) -> dict[str, Any]:
         or any(not isinstance(item, str) or not item.strip() for item in criteria)
     ):
         raise StateError("acceptance_criteria must contain non-empty strings")
+    if "required_skills" in value:
+        validate_required_skills(value["required_skills"], project_root)
     return value
 
 
-def validate_task_description_fields(task: dict[str, Any]) -> None:
-    validate_description(
-        {
-            "objective": task.get("objective"),
-            "background": task.get("background"),
-            "acceptance_criteria": task.get("acceptance_criteria"),
-        }
-    )
+def validate_task_description_fields(task: dict[str, Any], task_root: Path) -> None:
+    description = {
+        "objective": task.get("objective"),
+        "background": task.get("background"),
+        "acceptance_criteria": task.get("acceptance_criteria"),
+    }
+    if "required_skills" in task:
+        description["required_skills"] = task["required_skills"]
+    validate_description(description, task_root.parent.parent)
 
 
 def parse_dependencies(raw: str | None) -> list[str]:
@@ -395,17 +432,19 @@ def rebuild_views(task_root: Path) -> None:
             "",
             "## Tasks",
             "",
-            "| Task | Title | Status | Dependencies |",
-            "| --- | --- | --- | --- |",
+            "| Task | Title | Status | Dependencies | Required Skills |",
+            "| --- | --- | --- | --- | --- |",
         ]
         for task in tasks:
             dependencies = ", ".join(task.get("dependencies", [])) or "—"
+            required_skills = ", ".join(task.get("required_skills", [])) or "—"
             lines.append(
-                "| {task_id} | {title} | {status} | {dependencies} |".format(
+                "| {task_id} | {title} | {status} | {dependencies} | {required_skills} |".format(
                     task_id=markdown_cell(task.get("task_id", "")),
                     title=markdown_cell(task.get("title", "")),
                     status=markdown_cell(task.get("status", "")),
                     dependencies=markdown_cell(dependencies),
+                    required_skills=markdown_cell(required_skills),
                 )
             )
         submitted = [task for task in tasks if isinstance(task.get("summary"), str)]
@@ -435,7 +474,14 @@ def compact_task(task: dict[str, Any]) -> dict[str, Any]:
         "status": task.get("status"),
         "dependencies": task.get("dependencies"),
     }
-    for field in ("run_id", "summary", "artifact_id", "accepted_run_id", "reason"):
+    for field in (
+        "required_skills",
+        "run_id",
+        "summary",
+        "artifact_id",
+        "accepted_run_id",
+        "reason",
+    ):
         if field in task:
             result[field] = task[field]
     return result
@@ -579,7 +625,7 @@ def command_task_create(args: argparse.Namespace) -> dict[str, Any]:
         description_value = json.loads(read_utf8_file(description_path, "description"))
     except json.JSONDecodeError as exc:
         raise StateError(f"description file is invalid JSON: {exc}", task_name) from exc
-    description = validate_description(description_value)
+    description = validate_description(description_value, task_root.parent.parent)
     dependencies = parse_dependencies(args.depends_on)
     for dependency in dependencies:
         get_task(task_root, dependency)
@@ -607,16 +653,21 @@ def command_task_create(args: argparse.Namespace) -> dict[str, Any]:
                 "dependencies": dependencies,
                 "status": status,
             }
+            if "required_skills" in description:
+                task["required_skills"] = description["required_skills"]
             atomic_write_json(path, task)
             break
     rebuild_views(task_root)
-    return {
+    result = {
         "ok": True,
         "task_name": task_name,
         "task_id": task_id,
         "status": status,
         "dependencies": dependencies,
     }
+    if "required_skills" in description:
+        result["required_skills"] = description["required_skills"]
+    return result
 
 
 def command_task_ready(args: argparse.Namespace) -> dict[str, Any]:
@@ -656,13 +707,14 @@ def command_task_claim(args: argparse.Namespace) -> dict[str, Any]:
         task["run_id"] = run_id
         atomic_write_json(task_path(task_root, args.task_id), task)
     rebuild_views(task_root)
-    return {
+    result = {
         "ok": True,
         "task_name": task_name,
         "task_id": args.task_id,
         "run_id": run_id,
         "status": "running",
     }
+    return result
 
 
 def require_current_run(
@@ -698,7 +750,7 @@ def command_task_show(args: argparse.Namespace) -> dict[str, Any]:
             if field in dependency:
                 result[field] = dependency[field]
         dependency_results.append(result)
-    return {
+    result = {
         "ok": True,
         "task_name": task_name,
         "task_id": args.task_id,
@@ -708,6 +760,9 @@ def command_task_show(args: argparse.Namespace) -> dict[str, Any]:
         "dependencies": dependency_results,
         "workspace": str((task_root / "runs" / args.run_id / "workspace").resolve()),
     }
+    if "required_skills" in task:
+        result["required_skills"] = task["required_skills"]
+    return result
 
 
 def command_artifact_add(args: argparse.Namespace) -> dict[str, Any]:
@@ -813,7 +868,7 @@ def command_task_accept(args: argparse.Namespace) -> dict[str, Any]:
         task, run = require_current_run(
             task_root, args.task_id, args.run_id, {"submitted"}
         )
-        validate_task_description_fields(task)
+        validate_task_description_fields(task, task_root)
         summary = task.get("summary")
         artifact_id = task.get("artifact_id")
         if not isinstance(summary, str) or not summary:
@@ -1020,6 +1075,10 @@ def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
                 issues.append(f"{path.name}: task ID is invalid")
             if task.get("status") not in STATES:
                 issues.append(f"{path.stem}: invalid status")
+            try:
+                validate_task_description_fields(task, task_root)
+            except StateError as exc:
+                issues.append(f"{path.stem}: {exc.error}")
         except StateError as exc:
             issues.append(exc.error)
     issues.extend(dependency_issues(tasks))

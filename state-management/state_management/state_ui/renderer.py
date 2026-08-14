@@ -56,6 +56,13 @@ def _render_details(task: dict[str, Any], *, hidden: bool) -> str:
             sections.append(_detail_section(label, task[field]))
     if "acceptance_criteria" in task and isinstance(task["acceptance_criteria"], list):
         sections.append(_detail_section("验收标准", task["acceptance_criteria"], ordered=True))
+    if "required_skills" in task and isinstance(task["required_skills"], list):
+        required_skills = task["required_skills"]
+        sections.append(
+            _detail_section("必需 Skills", required_skills, ordered=True)
+            if required_skills
+            else _detail_section("必需 Skills", "无")
+        )
     if "dependencies" in task and isinstance(task["dependencies"], list):
         dependencies = task["dependencies"]
         sections.append(_detail_section("依赖", "、".join(map(str, dependencies)) or "无"))

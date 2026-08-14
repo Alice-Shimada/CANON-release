@@ -65,6 +65,7 @@ class RendererTests(unittest.TestCase):
         task = complete_task("T-001", "completed")
         task.update(
             {
+                "required_skills": ["methods/libra/SKILL.md"],
                 "run_id": "R-002",
                 "summary": "Checked result",
                 "artifact_id": "A-003",
@@ -73,6 +74,8 @@ class RendererTests(unittest.TestCase):
         )
         html = render_project_state({"task_name": "x", "goal": "g"}, [task])
         self.assertIn("当前 run ID", html)
+        self.assertIn("必需 Skills", html)
+        self.assertIn("methods/libra/SKILL.md", html)
         self.assertIn("结果摘要", html)
         self.assertIn("Artifact ID", html)
         self.assertIn("完成时间", html)
