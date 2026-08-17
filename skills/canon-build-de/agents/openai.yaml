@@ -1,0 +1,4 @@
+interface:
+  display_name: "Build CANON Differential Equations"
+  short_description: "Build exact DE matrices from in-memory reductions"
+  default_prompt: "Use $canon-build-de to assemble and validate an exact differential-equation system from prepared operators, ordered masters, and reduction rules already in memory."

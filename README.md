@@ -92,6 +92,58 @@ $HOME/.codex/statemng/CANON/mcp
 
 `.state-management/` 已加入 `.gitignore`。其中的状态、run workspace 和 artifact 均保留在当前项目本地，不随 Git 提交。
 
+## 科学接口
+
+准备、IBP 和 DE 是三个独立边界。生产准备程序由合作者提供；仓库中的
+`PrepareFamily.wls` 只是 one-loop demo。科学脚本不接收 task/run envelope，Agent
+只需在状态机分配的 workspace 中运行它们并登记结果文件。
+
+IBP 的最小调用是：
+
+```text
+wolframscript -file mma/ReduceIBP.wls REQUEST.json RESULT.wl
+```
+
+请求给出 Kira executable、已准备 project、两个 job、topology、targets、fresh
+output 和 argv options。结果只含 Kira 原序 masters 与完全回代 rules；没有版本
+探测、hash、provenance、sector manifest 或状态副作用。
+
+DE 只消费内存中的数学对象：
+
+```wl
+Get[FileNameJoin[{repoRoot, "mma", "lib", "DEBuilder.wl"}]];
+result = BuildDifferentialEquations[family, masters, rules];
+```
+
+成功只返回 `matrices` 和 `validity`。master 先替换为单位向量，rule 右端只向量化
+一次，然后逐行拼装。完整契约见 `INTERFACES.md`。
+
+快速 DE 测试只需要 Wolfram：
+
+```text
+wolframscript -file tests/RunDEBuilderUnitTests.wls
+```
+
+IBP 与导数选择的离线测试为：
+
+```text
+wolframscript -file tests/RunKiraIBPUnitTests.wls
+wolframscript -file tests/RunBaikovDerivativeUnitTests.wls
+wolframscript -file tests/RunPentaboxFixtureUnitTests.wls
+```
+
+其中 IBP 使用临时 fake reducer，不需要 Kira，也不写入仓库。
+
+两圈五点无质量 pentabox 的 Kira 约化仍是 opt-in live test：
+
+```text
+wolframscript -file tests/RunPentaboxIBPLiveTest.wls KIRA_EXECUTABLE FRESH_OUTPUT
+```
+
+该脚本固定传入 `--parallel=20`。普通测试不启动真实 Kira。发布分支不保存任何
+live run 的日志、数据库、rules 或矩阵；需要科学验收时，应在 fresh、被忽略的
+workspace 中运行，并用完整导数 targets 检查五个运动学方向的 DE 全链路。
+
 ## 维护与故障处理
 
 - checkout 路径、Python 路径或当前主要 checkout 发生变化后，Agent 必须重新安装并校验 launcher，然后使用全新 Local 会话。

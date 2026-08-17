@@ -1,25 +1,19 @@
 ---
 name: canon-prepare-family
-description: "Prepare the normalized family artifact for CANON_neu. Use when an agent is assigned the PREPARE workflow step."
+description: Run the replaceable one-loop preparation demo when a small prepared Kira project is needed for interface testing.
 ---
 
-<!--
-Placeholder skill: keep the scientific procedure empty for now.
+# Prepare family demo
 
-Responsibility:
-- Read the PREPARE task packet and its script input.
-- Run mma/PrepareFamily.wls.
-- Return one canon-neu/script-result/v1 report.
+This is not the production collaborator interface. In the assigned workspace,
+run:
 
-Input payload:
-- family_spec
+```text
+wolframscript -file mma/PrepareFamily.wls FRESH_OUTPUT_DIR
+```
 
-PASS output:
-- code: OK
-- artifact: prepared_family
-
-Boundary:
-- This historical scientific scaffold declares no state transition; current research
-  state is governed only by `statemng` under root `AGENTS.md` and `README.md`.
-- Do not add a second workflow or persistent Mathematica session.
--->
+The result prints only the copied Kira project and prepared-family paths. Do not
+add a task envelope, reducer discovery, version probe, manifest, hash, or
+natural-language compiler. The Agent, not this script, registers any retained
+artifact with the state manager. Research state is governed only by `statemng`;
+the demo does not create or update task state.

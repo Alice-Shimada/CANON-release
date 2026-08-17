@@ -128,3 +128,33 @@ CANON_neu/
 ```
 
 旧 CANON 只提供过概念参考；本目录不导入、迁移或兼容它的代码和状态。
+
+# 当前 IBP/DE 科学平面
+
+本节只描述当前无状态科学组件，不恢复上面的历史 coordinator。持续研究的 task、
+run、workspace 与 artifact 仍由根目录 `AGENTS.md` 和 `README.md` 所规定的
+`statemng` 管理；科学程序既不知道 task ID，也不修改 `.state-management/`。
+
+```text
+collaborator preparation
+  -> prepared family + Kira project/jobs
+  -> derivative choice (zero-growth first, affine fallback)
+  -> Kira reduction/export
+  -> ordered masters + fully reduced rules
+  -> DEBuilder
+  -> matrices + curvature validity
+```
+
+- `mma/PrepareFamily.wls` 是可整体替换的 one-loop demo，不是生产准备层；
+- `mma/lib/BaikovDerivative.wl` 提供有界 exact zero-growth 搜索与 affine fallback；
+- `mma/ReduceIBP.wls` 只运行请求中指定的两个 Kira job，交付 masters 与 rules；
+- `mma/lib/DEBuilder.wl` 只消费内存数学对象，交付 matrices 与 validity。
+
+enhanced-Baikov cofactor 到 reducer targets 的转换仍属于合作者准备接口，不能把
+cofactor search PASS 冒充为完整 reduction/DE 交付。DE 使用 column-vector convention
+`D[I,x] == A_x.I`；二变量曲率做全局精确检查，多变量只声明记录下来的 exact-rational
+bivariate slices，不把 slice PASS 外推为全局 flatness。
+
+发布代码不保存用户名、home path、固定 Kira 位置、live-run 日志、数据库、rules 或
+矩阵结果。冻结 fixture 与离线测试属于可复用输入契约；真实 Kira pentabox 始终是显式
+opt-in，并在 Git 忽略的 fresh workspace 中运行。

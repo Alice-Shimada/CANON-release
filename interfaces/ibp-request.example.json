@@ -1,0 +1,9 @@
+{
+  "executable": "kira",
+  "project": "prepared-kira-project",
+  "jobs": ["jobs.yaml", "export-math.yaml"],
+  "topology": "box",
+  "targets": "myintegrals",
+  "output": "fresh-kira-output",
+  "options": ["--parallel=20"]
+}

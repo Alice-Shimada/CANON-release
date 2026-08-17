@@ -1,21 +1,32 @@
-(*
-CANON_neu interface-only template: PREPARE
-Corresponding agent skill:
-  ../skills/canon-prepare-family/SKILL.md
+#!/usr/bin/env wolframscript
 
-Invocation:
-  wolframscript -file PrepareFamily.wls <input.json> <output_dir>
+(* Demo only. The production preparation step belongs to the collaborator. *)
 
-Input envelope:
-  schema  = "canon-neu/script-input/v1"
-  step    = "PREPARE"
-  sector  = Null
-  payload = <|"family_spec" -> <artifact descriptor>|>
+scriptDirectory = DirectoryName[$InputFileName];
+source = FileNameJoin[{
+  DirectoryName[scriptDirectory], "tests", "fixtures", "kira-one-loop-box"
+}];
+arguments = Rest[$ScriptCommandLine];
 
-Required output:
-  <output_dir>/result.json with schema "canon-neu/script-result/v1".
-  PASS code: "OK".
-  PASS artifact: "prepared_family" -> <path to an opaque prepared-family file>.
+If[Length[arguments] =!= 1,
+  Print["Usage: wolframscript -file mma/PrepareFamily.wls OUTPUT_DIR"];
+  Exit[2]
+];
 
-Scientific implementation is intentionally absent.
-*)
+output = ExpandFileName[First[arguments]];
+If[
+  $VersionNumber < 14 || FileType[source] =!= Directory || FileExistsQ[output],
+  Print[InputForm @ Failure[
+    "PREPARE_DEMO_FAILED",
+    <|"MessageTemplate" -> "The demo requires Wolfram 14+, its bundled fixture, and a fresh output directory."|>
+  ]];
+  Exit[1]
+];
+
+CopyDirectory[source, output];
+result = <|
+  "project" -> output,
+  "family" -> FileNameJoin[{output, "prepared-derivatives-v2.wl"}]
+|>;
+Print[InputForm[result]];
+Exit[0];

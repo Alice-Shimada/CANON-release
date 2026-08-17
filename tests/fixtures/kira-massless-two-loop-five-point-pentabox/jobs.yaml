@@ -1,0 +1,10 @@
+jobs:
+  - reduce_sectors:
+      reduce:
+        - {sectors: [255], r: 10, s: 2}
+      select_integrals:
+        select_mandatory_list:
+          - [pentabox5, targets]
+      run_initiate: true
+      run_firefly: true
+      preferred_masters: "preferred-masters"
