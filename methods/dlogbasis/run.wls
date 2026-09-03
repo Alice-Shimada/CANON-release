@@ -1,36 +1,243 @@
 (*
-CANON_neu 仅接口的提供者模板：PROPOSE_INTEGRAL_CANDIDATES / DLogBasis
-提供者卡：
-  SKILL.md
-
-调用方式：
-  wolframscript -file run.wls <input.json> <output_dir>
-
-输入封装：
-  schema  = "canon-neu/script-input/v1"
   step    = "PROPOSE_INTEGRAL_CANDIDATES"
-  sector  = <|"id" -> 整数, "propagator_count" -> 整数|>
-  payload = <|
-    "family_identity" -> <稳定族身份>,
-    "sector_identity" -> <与扇区匹配的稳定扇区身份>,
-    "prepared_family" -> <产物描述符>,
-    "dimension_policy" -> <显式维数策略>,
-    "numerator_or_power_counting_policy" -> <显式独立策略>,
-    "candidate_budget" -> <显式预算与预算单位>,
-    "candidate_unit" -> "INDIVIDUAL_G_INTEGRAL" | "NORMALIZED_LINEAR_COMBINATION",
-    "normalization_policy" -> <显式约定>,
-    "method_options" -> <不透明选项对象>
-  |>
-
-必需输出：
-  <output_dir>/result.json，模式为 "canon-neu/script-result/v1"。
-  PROVISIONAL/INTEGRAL_CANDIDATES，并包含采用
-    "canon-neu/integral-candidates/v1" 的产物 "integral_candidates"。
-  INCONCLUSIVE/OUT_OF_SCOPE 或 INCONCLUSIVE/METHOD_EXHAUSTED。
-  输入、工具或计算故障使用具体 ERROR 代码。
-
-禁止仅供检查器使用的结果、约化后变换和 UT/典范形式结论。尚未实现运行器或 DLogBasis
-适配器。
-
-科学实现有意留空。
+  success = "PROVISIONAL/INTEGRAL_CANDIDATES"
 *)
+$HistoryLength = 0;
+
+repoRoot = DirectoryName[DirectoryName[DirectoryName[ExpandFileName[$InputFileName]]]];
+Get[FileNameJoin[{repoRoot, "mma", "lib", "MethodCardCore.wl"}]];
+
+args = CanonMethodCard`ScriptArguments[];
+If[Length[args] =!= 2, Print["usage: run.wls <input.json> <output_dir>"]; Quit[2]];
+{inputPath, outputDir} = ExpandFileName /@ args;
+task = CanonMethodCard`ReadTask[inputPath, "PROPOSE_INTEGRAL_CANDIDATES"];
+prepared = CanonMethodCard`LoadArtifact[task, inputPath, "prepared_family"];
+payload = task["payload"];
+methodOptions = payload["method_options"];
+package = CanonMethodCard`ResolveMethodPackage[task, inputPath, "DlogBasis`"];
+entry = package["entry"];
+entryHash = FileHash[entry, "SHA256", "HexString"];
+packageRevision = StringTrim @ RunProcess[
+  {"git", "-C", DirectoryName[entry], "rev-parse", "HEAD"}, "StandardOutput"
+];
+Get[entry];
+
+(* The family data contains the package-native family object.  The CANON
+   manifest fixes the exact sector mask and the required current-sector rank. *)
+familyData = Get[prepared["family_data", "path"]];
+family = familyData["Family"];
+sourceManifest = Get[prepared["sector_source", "path"]];
+sectorRecord = SelectFirst[
+  sourceManifest["Sectors"], #1["Sector"] === task["sector", "id"] &
+];
+sector = Join[
+  sectorRecord["BitsA1ToA8"],
+  ConstantArray[
+    0, Length[family["Propagators"]] - Length[sectorRecord["BitsA1ToA8"]]
+  ]
+];
+loopOrder = family["LoopMomenta"][[methodOptions["loop_order"]]];
+loopSpecifications = MapThread[
+  <|"Momentum" -> #1, "BaseDimension" -> #2|> &,
+  {loopOrder, methodOptions["loop_dimensions"]}
+];
+powerDefinition = payload["numerator_or_power_counting_policy", "definition"];
+If[
+  payload["candidate_unit"] =!= "NORMALIZED_LINEAR_COMBINATION" ||
+    payload["normalization_policy", "convention"] =!=
+      "first-integral-coefficient-outside-definition" ||
+    payload["normalization_policy", "factors", "placement"] =!=
+      "normalization.factor",
+  CanonMethodCard`WriteProviderResult[
+    task, outputDir, "ERROR", "UNSUPPORTED_CANDIDATE_NORMALIZATION", <||>,
+    <|"reason" ->
+      "DlogBasis candidate combinations use first-integral projective normalization"|>
+  ];
+  Quit[0]
+];
+If[payload["candidate_budget", "unit"] =!= "PROVIDER_CANDIDATE",
+  CanonMethodCard`WriteProviderResult[
+    task, outputDir, "ERROR", "UNSUPPORTED_CANDIDATE_BUDGET", <||>,
+    <|"reason" -> "candidate_budget.maximum counts DlogBasis candidate directions"|>
+  ];
+  Quit[0]
+];
+If[powerDefinition["max_dots_per_propagator"] < powerDefinition["max_added_dots"],
+  CanonMethodCard`WriteProviderResult[
+    task, outputDir, "ERROR", "UNSUPPORTED_POWER_COUNTING", <||>,
+    <|"reason" ->
+      "DlogBasisSearch supports a total dot bound; max_dots_per_propagator must not be smaller"|>
+  ];
+  Quit[0]
+];
+
+methodId = "dlogbasis-refine-search";
+result = DlogBasis`DlogBasisSearch[
+  family, sector,
+  "LoopSpecifications" -> loopSpecifications,
+  "NumeratorDegreeBound" -> powerDefinition["numerator_degree"],
+  "DotDegreeBound" -> powerDefinition["max_added_dots"],
+  "NumeratorPositions" -> Lookup[methodOptions, "numerator_positions", Automatic],
+  "FiniteFlowPackageFile" -> methodOptions["finite_flow_package_file"],
+  "ResidualBackend" -> Lookup[methodOptions, "residual_backend", "Current"],
+  "SingularExecutable" -> Lookup[methodOptions, "singular_executable", "Singular"]
+];
+If[FailureQ[result],
+  CanonMethodCard`WriteProviderResult[
+    task, outputDir, "ERROR", "DLOGBASIS_SEARCH_FAILED", <||>,
+    <|"failure_tag" -> ToString[First[result]],
+      "failure" -> ToString[result, InputForm], "entry" -> entry|>
+  ];
+  Quit[0]
+];
+
+(* DlogBasis uses an inert integral head and its own symbol contexts.  Map only
+   those two coordinate systems; the mathematical coefficients are unchanged. *)
+integralHead = Symbol["CANON`DEData`j"];
+topology = Symbol["CANON`DEData`" <> prepared["topology"]];
+kinematicRules = Thread[family["KinematicVariables"] -> prepared["variables"]];
+canonExpression[expression_] := Factor[
+  expression /.
+    HoldPattern[DlogBasis`DlogIntegral[_, indices_List]] :>
+      Apply[integralHead, Prepend[indices, topology]] /.
+    kinematicRules /.
+    DlogBasis`DimensionalRegulator -> prepared["regulator"]
+];
+
+candidateRecord[expression_, index_] := Module[{integral, factor},
+  integral = First @ Cases[
+    expression, item_ /; Head[Unevaluated[item]] === integralHead :> item, Infinity
+  ];
+  factor = Coefficient[expression, integral];
+  <|
+    "candidate_id" -> methodId <> ":" <> ToString[First[index]],
+    "exact_definition" -> (HoldComplete @@ {Together[expression/factor]}),
+    "candidate_unit" -> payload["candidate_unit"],
+    "normalization" -> <|
+      "convention" -> payload["normalization_policy", "convention"],
+      "factor" -> factor
+    |>
+  |>
+];
+
+allCandidateRecords = MapIndexed[
+  candidateRecord, canonExpression /@ Lookup[result, "CandidateCombinations", {}]
+];
+budget = payload["candidate_budget"];
+candidateRecords = Take[allCandidateRecords, UpTo[budget["maximum"]]];
+groupSize = Length[sectorRecord["BasisIndices"]];
+declaredIndexGroups = Subsets[Range[Length[allCandidateRecords]], {groupSize}];
+eligibleIndexGroups = Select[
+  declaredIndexGroups, Max[#1] <= Length[candidateRecords] &
+];
+candidateGroups = (
+  <|
+    "candidate_id" -> methodId <> ":group:" <>
+      StringRiffle[ToString /@ #1, "-"],
+    "member_candidate_ids" -> Lookup[candidateRecords[[#1]], "candidate_id"]
+  |> & /@ eligibleIndexGroups
+);
+remainingCandidates = Length[allCandidateRecords] - Length[candidateRecords];
+remainingGroups = Length[declaredIndexGroups] - Length[candidateGroups];
+poolExhausted = remainingCandidates === 0 && remainingGroups === 0;
+
+summary = <|
+  "method_id" -> methodId,
+  "tool" -> "DlogBasis-refine",
+  "public_entry" -> "DlogBasis`DlogBasisSearch",
+  "scientific_status" -> result["ScientificStatus"],
+  "sector" -> sector,
+  "loop_order" -> methodOptions["loop_order"],
+  "loop_dimensions" -> methodOptions["loop_dimensions"],
+  "candidate_lattice_count" -> result["CandidateLattice", "CandidateCount"],
+  "represented_candidate_count" -> Length[result["RepresentedCandidates"]],
+  "candidate_count" -> Length[candidateRecords],
+  "available_candidate_count" -> Length[allCandidateRecords],
+  "candidate_group_size" -> groupSize,
+  "candidate_group_count" -> Length[candidateGroups],
+  "candidate_groups_remaining" -> remainingGroups,
+  "candidate_chart_complete" -> result["CandidateChartCompleteQ"],
+  "affine_finite_constant_residues_verified" ->
+    result["AffineFiniteConstantResiduesVerifiedQ"],
+  "constant_leading_singularity_certified" ->
+    result["ConstantLeadingSingularityCertifiedQ"],
+  "uniform_transcendentality_certified" ->
+    result["UniformTranscendentalityCertifiedQ"],
+  "canonical_basis_certified" -> result["CanonicalBasisCertifiedQ"],
+  "package_source" -> package["source"],
+  "package_revision" -> packageRevision,
+  "entry" -> entry,
+  "entry_sha256" -> entryHash,
+  "runtime" -> $Version <> "; " <> $SystemID
+|>;
+
+If[allCandidateRecords === {} || candidateGroups === {},
+  CanonMethodCard`WriteProviderResult[
+    task, outputDir, "INCONCLUSIVE", "METHOD_EXHAUSTED", <||>,
+    Append[
+      summary,
+      "reason" -> If[
+        allCandidateRecords === {},
+        "DlogBasisSearch returned no constant-LS candidate combinations",
+        "the candidate budget did not contain one complete current-sector group"
+      ]
+    ]
+  ];
+  Quit[0]
+];
+
+artifact = <|
+  "schema" -> "canon-neu/integral-candidates/v1",
+  "proposal_id" -> methodId <> ":proposal",
+  "family_identity" -> payload["family_identity"],
+  "sector_identity" -> payload["sector_identity"],
+  "dimension_policy" -> payload["dimension_policy"],
+  "numerator_or_power_counting_policy" ->
+    payload["numerator_or_power_counting_policy"],
+  "candidate_budget" -> <|
+    "maximum" -> budget["maximum"],
+    "consumed" -> Length[candidateRecords],
+    "unit" -> budget["unit"]
+  |>,
+  "candidate_group_pool" -> <|
+    "declared" -> Length[declaredIndexGroups],
+    "eligible" -> Length[candidateGroups],
+    "remaining" -> remainingGroups,
+    "unconsumed_candidates" -> remainingCandidates,
+    "pool_exhausted" -> poolExhausted
+  |>,
+  "pool_exhausted" -> poolExhausted,
+  "candidate_unit" -> payload["candidate_unit"],
+  "normalization_policy" -> payload["normalization_policy"],
+  "candidates" -> candidateRecords,
+  "candidate_groups" -> candidateGroups,
+  "method_evidence" -> <|
+    "method_id" -> methodId,
+    "evidence" -> {
+      <|"stage" -> "DlogBasis`DlogBasisSearch", "output" -> result|>
+    }
+  |>,
+  "tool_provenance" -> <|
+    "tool" -> "DlogBasis-refine",
+    "tool_revision" -> packageRevision,
+    "entry" -> entry,
+    "entry_sha256" -> entryHash,
+    "runtime" -> $Version <> "; " <> $SystemID
+  |>
+|>;
+artifactPath = Block[
+  {$ContextPath = {"System`"}},
+  CanonMethodCard`WriteWLArtifact[
+    artifact, outputDir, "integral-candidates.wl"
+  ]
+];
+CanonMethodCard`WriteProviderResult[
+  task, outputDir, "PROVISIONAL", "INTEGRAL_CANDIDATES",
+  <|
+    "integral_candidates" -> <|
+      "type" -> "mathematica-expression",
+      "path" -> FileNameTake[artifactPath]
+    |>
+  |>,
+  summary
+];

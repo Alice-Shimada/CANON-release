@@ -18,6 +18,10 @@
     "maximum" -> 2, "consumed" -> 2, "unit" -> "PROVIDER_CANDIDATE"
   |>,
   "pool_exhausted" -> True,
+  "candidate_group_pool" -> <|
+    "declared" -> 1, "eligible" -> 1, "remaining" -> 0,
+    "unconsumed_candidates" -> 0, "pool_exhausted" -> True
+  |>,
   "candidate_unit" -> "INDIVIDUAL_G_INTEGRAL",
   "normalization_policy" -> <|
     "convention" -> "explicit-rational-prefactor", "factors" -> <||>
@@ -25,7 +29,7 @@
   "candidates" -> {
     <|
       "candidate_id" -> "fixture-integral-candidate-a",
-      "exact_definition" -> HoldComplete[G[fixtureFamily, {1, 1, 1, 0}]],
+      "exact_definition" -> HoldComplete[j[fixtureFamily, 1, 1, 1, 0]],
       "candidate_unit" -> "INDIVIDUAL_G_INTEGRAL",
       "normalization" -> <|
         "convention" -> "explicit-rational-prefactor", "factor" -> 1
@@ -33,11 +37,19 @@
     |>,
     <|
       "candidate_id" -> "fixture-integral-candidate-b",
-      "exact_definition" -> HoldComplete[G[fixtureFamily, {1, 1, 1, -1}]],
+      "exact_definition" -> HoldComplete[j[fixtureFamily, 1, 1, 1, -1]],
       "candidate_unit" -> "INDIVIDUAL_G_INTEGRAL",
       "normalization" -> <|
         "convention" -> "explicit-rational-prefactor", "factor" -> 1
       |>
+    |>
+  },
+  "candidate_groups" -> {
+    <|
+      "candidate_id" -> "fixture-integral-group-1",
+      "member_candidate_ids" -> {
+        "fixture-integral-candidate-a", "fixture-integral-candidate-b"
+      }
     |>
   },
   "method_evidence" -> <|

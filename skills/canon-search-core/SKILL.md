@@ -1,39 +1,31 @@
 ---
 name: canon-search-core
-description: "Produce bounded current-sector core candidates through an assigned provider. Use when an agent is assigned the SEARCH_CORE workflow step."
+description: Route one declared post-reduction candidate pool into independent current-sector core checking.
 ---
 
-<!--
-Historical scientific scaffold: it does not define current agent delegation or state
-transitions. Keep all transformation-generation algorithms empty for now.
+# Current-sector core candidates
 
-Responsibility:
-- Read the SEARCH_CORE task packet.
-- Invoke one explicitly selected post-reduction transformation provider under the
-  `SEARCH_CORE` contract.
-- Preserve the provider's typed `canon-neu/script-result/v1` result for an independent
-  `CHECK_CORE` invocation.
+For DlogBasis-refine candidates, run `mma/RouteCoreCandidates.wls` with the accepted
+`prepared_family`, `sector_basis`, `sector_cut_de`, and `candidate_ibp_bridge`.
+It preserves the adapter's eligible-group order; those groups are subsets of
+the package's module-lift candidate directions with size fixed by the sector
+manifest. For each group it takes only
+the reduced coefficients of the resident current-sector basis,
 
-Allowed provider scripts:
-- methods/libra/run.wls
-- methods/canonica/run.wls
-- a role-specialized instance of methods/method-card-template/run.wls
+```wl
+newBasis = R . oldBasis; transformation = Inverse[R]
+```
 
-Input payload:
-- prepared_family
-- sector_basis
-- sector_cut_de
-- method_options
+and emits `PROVISIONAL/CORE_CANDIDATES_ROUTED`.  Proper-subsector terms remain in
+the bridge for the later full-prefix stage and never enter `R`.
 
-Output:
-- PROVISIONAL/CANDIDATE_TRANSFORMATION with artifact core_candidates
-- INCONCLUSIVE/OUT_OF_SCOPE or INCONCLUSIVE/METHOD_EXHAUSTED
-- concrete ERROR codes
+Alternatively, an explicitly chosen `methods/libra/run.wls` or
+`methods/canonica/run.wls` may emit
+`PROVISIONAL/CANDIDATE_TRANSFORMATION`.  No provider result is a PASS.
 
-Boundary:
-- Integral/dlog candidate generators use the earlier
-  `PROPOSE_INTEGRAL_CANDIDATES` contract, not this step.
-- Providers cannot publish PASS/FAIL or accept their own transformation.
-- Current research state is governed only by `statemng` under root `AGENTS.md` and
-  `README.md`; this scaffold declares no state transition.
--->
+Always pass the resulting `core_candidates` to `mma/CheckSectorCore.wls`.  The
+checker follows declared order, records exact rejection signatures, and stops at
+the first PASS.  `REPAIR_WITH_LIBRA` is eligible only when every declared group
+was attempted and the upstream group pool is exactly exhausted; otherwise use
+the existing `route-prepared-basis` refinement decision.  Do not run a retry,
+fallback provider, parallel scheduler, or repair inside this step.

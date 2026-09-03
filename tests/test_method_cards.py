@@ -29,6 +29,8 @@ CANONICA_ENTRY = optional_entry("CANON_TEST_CANONICA_ENTRY")
 LIBRA_ENTRY = optional_entry("CANON_TEST_LIBRA_ENTRY")
 INITIAL_HEP_TOOLS_ROOT = optional_entry("CANON_TEST_INITIAL_HEP_TOOLS_ROOT")
 STRUCTURED_OUTPUT_ROOT = optional_entry("CANON_TEST_STRUCTURED_OUTPUT_ROOT")
+DLOGBASIS_REFINE_ENTRY = optional_entry("CANON_TEST_DLOGBASIS_REFINE_ENTRY")
+FINITEFLOW_ENTRY = optional_entry("CANON_TEST_FINITEFLOW_ENTRY")
 REGISTERED_LIBRA_ENTRY = Path(
     "/Users/balth/Works/hep-tools/tools/libra/Source/Libra.m"
 )
@@ -1883,26 +1885,44 @@ Quit[If[derived === automatic, 0, 1]];
             '"normalization_policy"',
             '"candidate_id"',
             '"exact_definition"',
+            '"candidate_groups"',
+            '"candidate_group_pool"',
             '"method_evidence"',
             '"tool_provenance"',
         ):
             self.assertIn(field, artifact)
 
-        for method in ("dlogbasis", "gram-baikov"):
-            runner = (ROOT / "methods" / method / "run.wls").read_text(
-                encoding="utf-8"
-            )
-            self.assertIn('step    = "PROPOSE_INTEGRAL_CANDIDATES"', runner)
-            self.assertIn("PROVISIONAL/INTEGRAL_CANDIDATES", runner)
-            for forbidden in (
-                'step    = "SEARCH_CORE"',
-                '"sector_basis"',
-                '"sector_cut_de"',
-                "CANDIDATE_READY",
-                "NO_CANDIDATE",
-                "CANDIDATE_TRANSFORMATION",
-            ):
-                self.assertNotIn(forbidden, runner)
+        runner = (ROOT / "methods" / "dlogbasis" / "run.wls").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('step    = "PROPOSE_INTEGRAL_CANDIDATES"', runner)
+        self.assertIn("PROVISIONAL/INTEGRAL_CANDIDATES", runner)
+        self.assertIn("INCONCLUSIVE", runner)
+        self.assertIn(
+            "result = DlogBasis`DlogBasisSearch[",
+            runner,
+        )
+        self.assertIn('prepared["family_data", "path"]', runner)
+        self.assertIn('prepared["sector_source", "path"]', runner)
+        self.assertIn('methodOptions["loop_order"]', runner)
+        self.assertIn('methodOptions["loop_dimensions"]', runner)
+        for forbidden in (
+            'step    = "SEARCH_CORE"',
+            '"sector_basis"',
+            '"sector_cut_de"',
+            "CANDIDATE_READY",
+            "NO_CANDIDATE",
+            "CANDIDATE_TRANSFORMATION",
+            "LeadingSingularities",
+            "UTCandidateGroupSearch",
+            "DlogBasisRefine`",
+            "GenerateSectorCandidates",
+            "Quiet",
+            "Check[",
+            "Catch[",
+            "Fallback",
+        ):
+            self.assertNotIn(forbidden, runner)
 
         template = (ROOT / "methods" / "method-card-template" / "run.wls").read_text(
             encoding="utf-8"
@@ -1913,6 +1933,238 @@ Quit[If[derived === automatic, 0, 1]];
         self.assertLess(
             interfaces.index("`PROPOSE_INTEGRAL_CANDIDATES`"),
             interfaces.index("`DISCOVER`"),
+        )
+
+    def test_dlogbasis_refine_generates_sector_148_candidate_through_contract(
+        self,
+    ) -> None:
+        if (
+            DLOGBASIS_REFINE_ENTRY is None
+            or not DLOGBASIS_REFINE_ENTRY.is_file()
+            or FINITEFLOW_ENTRY is None
+            or not FINITEFLOW_ENTRY.is_file()
+        ):
+            self.skipTest(
+                "set CANON_TEST_DLOGBASIS_REFINE_ENTRY and CANON_TEST_FINITEFLOW_ENTRY"
+            )
+        package_entry = DLOGBASIS_REFINE_ENTRY
+        package_root = package_entry.parent
+        family_data = package_root / "Resources" / "Pentabox2L5P" / "family.wl"
+        sector_source = (
+            package_root / "Resources" / "Pentabox2L5P" / "sector-manifest.wl"
+        )
+        prepared_family = self.run_root / "dlogbasis-refine-prepared-family.wl"
+        prepared_family.write_text(
+            '<|"topology" -> "pentabox5", '
+            '"variables" -> {CANON`DEData`s12, CANON`DEData`s23, '
+            'CANON`DEData`s34, CANON`DEData`s45, CANON`DEData`s51}, '
+            '"regulator" -> CANON`DEData`eps, '
+            '"family_data" -> <|"path" -> '
+            + json.dumps(str(family_data))
+            + '|>, "sector_source" -> <|"path" -> '
+            + json.dumps(str(sector_source))
+            + "|>|>\n",
+            encoding="utf-8",
+        )
+        value = {
+            "schema": "canon-neu/script-input/v1",
+            "task_id": "T-DLOGBASIS-REFINE-SECTOR-148",
+            "step": "PROPOSE_INTEGRAL_CANDIDATES",
+            "sector": {"id": 148, "propagator_count": 3},
+            "payload": {
+                "family_identity": {
+                    "family_id": "massless-planar-two-loop-five-point-pentabox",
+                    "family_spec_id": "dlogbasis-refine-2l5p-v1",
+                },
+                "sector_identity": {
+                    "sector_id": "pentabox5-sector-148",
+                    "id": 148,
+                    "propagator_count": 3,
+                },
+                "prepared_family": {
+                    "type": "mathematica-expression",
+                    "path": str(prepared_family),
+                },
+                "dimension_policy": {
+                    "spacetime_dimension": 4,
+                    "per_loop_policy": "loop-order (1,2), dimensions (4,4)",
+                },
+                "numerator_or_power_counting_policy": {
+                    "policy_id": "dlogbasis-refine-degree-0-total-dot-2",
+                    "definition": {
+                        "numerator_degree": 0,
+                        "max_added_dots": 2,
+                        "max_dots_per_propagator": 2,
+                    },
+                },
+                "candidate_budget": {
+                    "maximum": 4,
+                    "unit": "PROVIDER_CANDIDATE",
+                },
+                "candidate_unit": "NORMALIZED_LINEAR_COMBINATION",
+                "normalization_policy": {
+                    "convention": "first-integral-coefficient-outside-definition",
+                    "factors": {"placement": "normalization.factor"},
+                },
+                "method_options": {
+                    "package_entry": str(package_entry),
+                    "finite_flow_package_file": str(FINITEFLOW_ENTRY),
+                    "loop_order": [1, 2],
+                    "loop_dimensions": [4, 4],
+                    "numerator_positions": [],
+                },
+            },
+        }
+        input_path = self.run_root / "dlogbasis-refine-sector-148-input.json"
+        input_path.write_text(
+            json.dumps(value, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        output = self.run_root / "dlogbasis-refine-sector-148-output"
+        result = self.run_wls(
+            ROOT / "methods" / "dlogbasis" / "run.wls",
+            input_path,
+            output,
+            timeout=180,
+        )
+        self.assertEqual(
+            (result["status"], result["code"]),
+            ("PROVISIONAL", "INTEGRAL_CANDIDATES"),
+        )
+        self.assertEqual(result["summary"]["tool"], "DlogBasis-refine")
+        self.assertEqual(
+            result["summary"]["scientific_status"],
+            "AffineFiniteMaximalCutCandidatePartialGeneralizedCutCoverage",
+        )
+        self.assertEqual(result["summary"]["candidate_count"], 1)
+        self.assertEqual(result["summary"]["candidate_group_count"], 1)
+        self.assertEqual(result["summary"]["candidate_group_size"], 1)
+        self.assertFalse(
+            result["summary"]["constant_leading_singularity_certified"]
+        )
+        self.assertEqual(
+            result["summary"]["entry_sha256"],
+            hashlib.sha256(package_entry.read_bytes()).hexdigest(),
+        )
+        self.assertEqual(
+            result["summary"]["package_revision"],
+            subprocess.run(
+                ["git", "-C", str(package_root), "rev-parse", "HEAD"],
+                check=True,
+                text=True,
+                capture_output=True,
+            ).stdout.strip(),
+        )
+        artifact_path = output / result["artifacts"]["integral_candidates"]["path"]
+        self.assertTrue(artifact_path.is_file())
+        artifact = artifact_path.read_text(encoding="utf-8")
+        compact_artifact = " ".join(artifact.split())
+        self.assertIn(
+            "HoldComplete[CANON`DEData`j[CANON`DEData`pentabox5, "
+            "0, 0, 1, 0, 1, 0, 0, 2, 0, 0, 0]]",
+            compact_artifact,
+        )
+        self.assertIn('"factor" -> 16', compact_artifact)
+        self.assertIn("DlogBasis`DlogIntegral", artifact)
+        self.assertNotIn("Global`DlogIntegral", artifact)
+        for field in (
+            '"schema" -> "canon-neu/integral-candidates/v1"',
+            '"candidate_id"',
+            '"exact_definition"',
+            '"candidate_groups"',
+            '"candidate_group_pool"',
+            '"method_evidence"',
+            '"AffineFiniteMaximalCutCandidatePartialGeneralizedCutCoverage"',
+            '"ModuleLiftVerifiedQ" -> True',
+            '"ConstantLeadingSingularityCertifiedQ" -> False',
+            '"tool_provenance"',
+        ):
+            self.assertIn(field, artifact)
+
+        value["task_id"] = "T-DLOGBASIS-REFINE-SECTOR-182"
+        value["sector"] = {"id": 182, "propagator_count": 5}
+        value["payload"]["sector_identity"] = {
+            "sector_id": "pentabox5-sector-182",
+            "id": 182,
+            "propagator_count": 5,
+        }
+        power_definition = value["payload"][
+            "numerator_or_power_counting_policy"
+        ]["definition"]
+        power_definition["max_added_dots"] = 1
+        power_definition["max_dots_per_propagator"] = 1
+        value["payload"]["candidate_budget"]["maximum"] = 2
+        sector_182_input = self.run_root / "dlogbasis-refine-sector-182-input.json"
+        sector_182_input.write_text(
+            json.dumps(value, indent=2) + "\n", encoding="utf-8"
+        )
+        sector_182_output = self.run_root / "dlogbasis-refine-sector-182-output"
+        sector_182_result = self.run_wls(
+            ROOT / "methods" / "dlogbasis" / "run.wls",
+            sector_182_input,
+            sector_182_output,
+            timeout=180,
+        )
+        self.assertEqual(
+            (sector_182_result["status"], sector_182_result["code"]),
+            ("PROVISIONAL", "INTEGRAL_CANDIDATES"),
+        )
+        self.assertEqual(
+            sector_182_result["summary"]["candidate_group_size"], 2
+        )
+        sector_182_artifact = (
+            sector_182_output
+            / sector_182_result["artifacts"]["integral_candidates"]["path"]
+        ).read_text(encoding="utf-8")
+        self.assertIn('"dlogbasis-refine-search:group:1-2"', sector_182_artifact)
+
+        power_definition["max_added_dots"] = 2
+        unsupported_input = (
+            self.run_root / "dlogbasis-refine-unsupported-dots.json"
+        )
+        unsupported_input.write_text(
+            json.dumps(value, indent=2) + "\n", encoding="utf-8"
+        )
+        unsupported_result = self.run_wls(
+            ROOT / "methods" / "dlogbasis" / "run.wls",
+            unsupported_input,
+            self.run_root / "dlogbasis-refine-unsupported-dots-output",
+        )
+        self.assertEqual(
+            (unsupported_result["status"], unsupported_result["code"]),
+            ("ERROR", "UNSUPPORTED_POWER_COUNTING"),
+        )
+
+        power_definition["max_added_dots"] = 1
+        value["payload"]["candidate_unit"] = "INDIVIDUAL_G_INTEGRAL"
+        normalization_input = self.run_root / "dlogbasis-refine-normalization.json"
+        normalization_input.write_text(
+            json.dumps(value, indent=2) + "\n", encoding="utf-8"
+        )
+        normalization_result = self.run_wls(
+            ROOT / "methods" / "dlogbasis" / "run.wls",
+            normalization_input,
+            self.run_root / "dlogbasis-refine-normalization-output",
+        )
+        self.assertEqual(
+            (normalization_result["status"], normalization_result["code"]),
+            ("ERROR", "UNSUPPORTED_CANDIDATE_NORMALIZATION"),
+        )
+
+        value["payload"]["candidate_unit"] = "NORMALIZED_LINEAR_COMBINATION"
+        value["payload"]["candidate_budget"]["unit"] = "GROUP"
+        budget_input = self.run_root / "dlogbasis-refine-budget.json"
+        budget_input.write_text(
+            json.dumps(value, indent=2) + "\n", encoding="utf-8"
+        )
+        budget_result = self.run_wls(
+            ROOT / "methods" / "dlogbasis" / "run.wls",
+            budget_input,
+            self.run_root / "dlogbasis-refine-budget-output",
+        )
+        self.assertEqual(
+            (budget_result["status"], budget_result["code"]),
+            ("ERROR", "UNSUPPORTED_CANDIDATE_BUDGET"),
         )
 
     def test_provider_result_guard_accepts_only_typed_integral_candidate_outcome(self) -> None:
