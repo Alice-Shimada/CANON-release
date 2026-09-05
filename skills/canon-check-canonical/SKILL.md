@@ -1,28 +1,19 @@
 ---
 name: canon-check-canonical
-description: "Check the full current-sector transformation and classify a failure as core or tail. Use when an agent is assigned the CHECK_CANONICAL workflow step."
+description: Independently check the selected full-prefix transformation and classify a current-core or tail failure.
 ---
 
-<!--
-Placeholder skill: keep the scientific check empty for now.
+# Check the complete canonical prefix
 
-Responsibility:
-- Read the CHECK_CANONICAL task packet.
-- Run mma/CheckCanonical.wls.
-- Preserve the script's exact PASS or failure classification.
+Run `mma/CheckCanonical.wls` with `full_sector_de` and `sector_transform`.  The checker recomputes
+the full gauge transformation from `source_matrices`; it does not trust the
+declared transformed matrices.
 
-Input payload:
-- full_sector_de
-- sector_transform
-- accepted_prefix, or null for the first sector
-
-Output:
-- PASS/CANONICAL_PASS with artifact canonical_sector_de
-- FAIL/CORE_FAIL
-- FAIL/TAIL_FAIL
-
-Boundary:
-- Mathematica, not Python, classifies CORE_FAIL versus TAIL_FAIL.
-- This historical scientific scaffold declares no state transition; current research
-  state is governed only by `statemng` under root `AGENTS.md` and `README.md`.
--->
+`PASS/CANONICAL_PASS` requires the exact full gauge identity, flatness at one
+deterministic exact-rational point, epsilon factorization, the constant-residue dlog alphabet carried by `sector_transform`, and a zero
+upper-right block. The lower basis can be renormalized by the complete
+transformation; it is checked as part of the full system.  Failure is `CORE_FAIL` exactly when the
+current-current gauge, deterministic exact-rational-point flatness, epsilon, or dlog check fails.  If that complete
+current block passes but a full-prefix condition fails, the code is
+`TAIL_FAIL`.  A pass writes `canon-neu/canonical-sector-de/v1` from the
+independently computed matrices.

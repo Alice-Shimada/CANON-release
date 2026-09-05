@@ -12,12 +12,14 @@
   "candidates" -> {
     <|
       "candidate_id" -> "fixture-plain-candidate",
+      "construction_rejection" -> None,
       "transformation" -> {{1}},
       "transformed_matrices" -> {{{eps/(1 - x)}}},
       "provider_evidence" -> <|"claim" -> "core-valid but bad full-prefix tail"|>
     |>,
     <|
       "candidate_id" -> "fixture-completed-candidate",
+      "construction_rejection" -> None,
       "transformation" -> {{1}},
       "transformed_matrices" -> {{{eps/(1 - x)}}},
       "provider_evidence" -> <|"claim" -> "same cut core with a good lower-sector completion"|>

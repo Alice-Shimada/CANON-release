@@ -22,7 +22,7 @@
 现有 JSON 状态目录
 ```
 
-四个宿主共用同一个 Skill 协议和 MCP server。宿主适配层只负责自动发现与注册，不保存状态，也不实现状态转换。
+四个宿主共用同一个 Skill 协议和 MCP server。宿主适配层只负责自动发现、注册和必要的调用权限约束，不保存研究状态，也不实现状态转换。机器本地的 adapter 授权记录不属于 task/run/artifact 事实源。
 
 ## 三、规则与 Skill
 
@@ -34,7 +34,7 @@
 2. 用户只与主 Agent 交互，不得要求用户执行内部 CLI；
 3. 所有状态操作必须通过项目提供的 `statemng` tools 完成；
 4. `task accept` 和 `task unblock` 只允许主 Agent 调用，subagent 不得调用；
-5. 主 Agent 创建 subagent 时，必须通过宿主原生的 tool 权限或限制机制禁止其调用 `statemng_task_accept` 和 `statemng_task_unblock`；
+5. 主 Agent 创建 subagent 时，优先通过宿主原生的 tool 权限或限制机制禁止其调用 `statemng_task_accept` 和 `statemng_task_unblock`；若已确认宿主版本无法应用该限制，只允许使用该宿主 adapter 明确定义、运行时可验证且 fail-closed 的兼容 guard；
 6. tools 不可用时停止并报告接入错误，不得绕过状态管理继续研究；
 7. 不得使用已经删除的 `workflow.py`。
 
@@ -133,7 +133,7 @@ CANON/
 
 所有宿主最终都启动同一个 `state-management/mcp_server.py`，不得增加宿主专用 MCP 实现。宿主适配层可以增加不保存状态的机器本地启动入口，用于把仓库配置映射到当前机器上的绝对 server 路径。
 
-主 Agent 可以使用全部 `statemng` tools。各宿主创建 subagent 时必须使用自身原生的 tool 权限或限制机制，至少禁止 `statemng_task_accept` 和 `statemng_task_unblock`；不得仅依靠 subagent 自觉区分权限。该限制只属于宿主接入层，不改变 MCP server 和 CLI 的统一实现。
+主 Agent 可以使用全部 `statemng` tools。各宿主创建 subagent 时必须优先使用自身原生的 tool 权限或限制机制，至少禁止 `statemng_task_accept` 和 `statemng_task_unblock`；不得仅依靠 subagent 自觉区分权限。若特定宿主版本已知无法应用角色级 tool restriction，同一个 MCP facade 可以在该宿主 launcher 显式启用的模式下执行调用时授权，但必须保持通用启动方式、CLI 与研究 schema 不变，并提供 Agent 可核对的运行时授权结果。
 
 OpenCode 和 Claude Code 使用仓库级配置；OpenCode 对该 server 设置 `codemode: false`，使 tools 直接暴露给 Agent。宿主可以在显示名称中增加 server 命名空间，但 MCP tool 的协议名称不变。
 
@@ -141,11 +141,11 @@ OpenCode 和 Claude Code 使用仓库级配置；OpenCode 对该 server 设置 `
 
 Codex 使用仓库级 `.codex/config.toml` 声明 server，但不在配置中使用 checkout 相对路径。接入 Agent 运行 `state-management/adapters/codex/install_launcher.py`，在 `$HOME/.codex/statemng/CANON/mcp` 原子安装机器本地入口；入口记录当前 checkout 中 `state-management/mcp_server.py` 和可执行 Python 的绝对路径。该文件不保存研究状态，不进入版本控制；checkout 或 Python 路径变化时由接入 Agent 重新安装，不得要求用户执行。
 
-主 Agent 与 `persistent_research_worker` 都通过 `/bin/sh` 调用上述入口，设置 `enabled = true`、`required = false`，并且不设置 `cwd`。`required = false` 是会话保活边界：MCP 启动失败时，Codex 会话仍能创建和恢复；但规则与 Skill 继续要求 tools 不可用时立即停止持续研究并报告接入错误，绝不允许绕过状态管理。worker 的配置还必须从 tool surface 禁止 `statemng_task_accept` 和 `statemng_task_unblock`。
+主 Agent 与 `persistent_research_worker` 都通过 `/bin/sh` 调用上述入口，设置 `enabled = true`、`required = false`，并且不设置 `cwd`。`required = false` 是会话保活边界：MCP 启动失败时，Codex 会话仍能创建和恢复；但规则与 Skill 继续要求 tools 不可用时立即停止持续研究并报告接入错误，绝不允许绕过状态管理。worker 的配置使用六项 `enabled_tools` allowlist。对受 role-MCP 配置回归影响的 Codex 版本，launcher 还显式启用 coordinator runtime guard：主 Agent 在创建任何 worker 前先以 `init/resume` 绑定总体任务；不同 Codex `threadId` 只允许六项 worker tools。绑定记录按 checkout/task 保存到机器本地 `0700` adapter 目录，不进入 `.state-management` 或 Git；不得自动抢占。
 
 初版只允许在机器本地入口所注册的 Codex Local 会话中执行持续研究。主 Agent 在首次状态调用前自行运行安装程序的 `--check`；若入口缺失或指向其他 checkout，主 Agent 重新安装入口并停止当前持续研究，待全新 Local 会话重新加载 MCP。Worktree 会话可以正常启动并处理其他工作，但不得运行持续研究。后续若要支持 Worktree，必须先提供能够按会话 checkout 选择入口的宿主机制。
 
-Codex 接入必须完成四层验证：配置静态校验；从 `/` 启动入口并完成 MCP initialize、tools/list 和只读 tool 调用；在全新 Local 会话中确认 tools 实际暴露；用不可启动的临时 MCP 配置确认 server 失败时会话仍可启动。配置或入口发生变化后，必须重新执行验证。
+Codex 接入必须完成五层验证：配置静态校验；从 `/` 启动入口并完成 MCP initialize、tools/list 和只读 tool 调用；授权 guard 的 first-bind、跨线程拒绝、进程重启和显式接管测试；在全新 Local 会话中确认主 Agent/worker 的实际 `threadId` 隔离；用不可启动的临时 MCP 配置确认 server 失败时会话仍可启动。配置或入口发生变化后，必须重新执行验证。
 
 Hermes 的 MCP 与外部 Skill 目录需要在宿主配置中注册一次；该机器相关配置不写入仓库。完成注册后，用户仍只需用自然语言提出任务。
 
@@ -173,7 +173,7 @@ state-management/adapters/claude-code/ADAPTER.md
 state-management/adapters/hermes/ADAPTER.md
 ```
 
-每份 Adapter 只说明该宿主如何发现规则、加载 Skill、注册同一个 MCP server，以及主 Agent 创建 subagent 时如何禁止其调用 `statemng_task_accept` 和 `statemng_task_unblock`。Codex Adapter 还必须说明机器本地入口、会话保活边界、Local 限制和宿主级验证。Adapter 不重复 CLI 协议或状态机运行流程，但必须明确：只有主 Agent 可以接受任务和解除阻塞，subagent 只能提交、阻塞或报告失败。
+每份 Adapter 只说明该宿主如何发现规则、加载 Skill、注册同一个 MCP server，以及主 Agent 创建 subagent 时如何禁止其调用 `statemng_task_accept` 和 `statemng_task_unblock`。Codex Adapter 还必须说明机器本地入口、会话保活边界、Local 限制、条件化 runtime guard、显式接管和宿主级验证。Adapter 不重复 CLI 协议或状态机运行流程，但必须明确：只有主 Agent 可以接受任务和解除阻塞，subagent 只能提交、阻塞或报告失败。
 
 ## 七、文件布局
 

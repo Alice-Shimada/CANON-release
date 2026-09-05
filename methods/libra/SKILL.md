@@ -2,7 +2,7 @@
 
 ## 目的
 
-使用与本卡兼容的 Libra 1.2，为有理当前扇区割系统提出 ε 形式变换。Libra 本身可以保存
+使用调用方注入并实际加载的 Libra，为有理当前扇区割系统提出 ε 形式变换。Libra 本身可以保存
 并同步变换多变量微分系统；当前 `run.wls` 只实现并
 验收了小型单变量自动路线。CANON 不负责安装或登记 Libra，也不依赖某个工具工作区的
 目录布局。
@@ -58,14 +58,14 @@ Wolfram 内核，并以以下二选一方式提供 Libra：
 卡会记录实际解析入口、入口 SHA-256、解析方式、Libra 报告的版本以及 Wolfram
 `$Version`/`$SystemID`，但不读取 hep-tools 的机器状态。
 
-`method_options.dependent_row_strategy` 未给出或为 `automatic` 时，卡保持 Libra 1.2
+`method_options.dependent_row_strategy` 未给出或为 `automatic` 时，卡保持 Libra
 原有的单次 `FactorOut` 自动调用。调用方也可显式选择 `sector-de-closure`，并在 `payload`
 提供 `canon-neu/libra-dependent-row-hierarchy/v1` 产物。该产物的 `sector_hierarchy` 是与割中
 有序基同序的 `n×n` 0/1 关系掩码，不是行列表；对角必须全为 1，环路合法。它还必须精确
 绑定扇区/族/基 ID 与完整基顺序，记录每个主积分的有序扇区标签、`producer`/`tool_revision`、
 `MappedSectors=False`、源产物/哈希和正整数 `max_mask_nonzeros`。
 
-显式路线只从实际 Fuchsify 后矩阵的留数构造与 Libra 1.2 自动调用同语义的 `hde`，计算
+显式路线只从实际 Fuchsify 后矩阵的留数构造与 Libra 自动调用同语义的 `hde`，计算
 `TClosure[hsector+hde]`。闭包后按掩码中 1 的个数检查预算；超限不截断、
 不用 `All`、不重试，也不调用 `FactorOut`。预算内只调用一次
 `FactorOut[...,DependentRowIndices->combinedMask]`。产物模式、身份/顺序、掩码、来源信息或
@@ -73,7 +73,8 @@ Wolfram 内核，并以以下二选一方式提供 Libra：
 
 ## 结果与证据
 
-本卡要求实际加载版本为 Libra 1.2，并记录精确变换、变换后矩阵和 Libra `EFormQ` 结果。
+本卡记录实际加载的 Libra 版本身份、精确变换、变换后矩阵和 Libra `EFormQ` 结果，不设置
+字面版本等值门。
 在 `mma/CheckSectorCore.wls` 独立验证前，提供者输出始终只是
 `PROVISIONAL/CANDIDATE_TRANSFORMATION`，不能返回 `PASS` 或数学拒绝 `FAIL`。
 显式层级路线还记录策略、产物身份/哈希、`MappedSectors` 模式、阶段、维数、

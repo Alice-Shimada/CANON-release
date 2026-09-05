@@ -22,20 +22,11 @@ packageRevision = StringTrim @ RunProcess[
 ];
 Get[entry];
 
-(* The family data contains the package-native family object.  The CANON
-   manifest fixes the exact sector mask and the required current-sector rank. *)
+(* Sector bits follow the full propagator/ISP index order. *)
 familyData = Get[prepared["family_data", "path"]];
 family = familyData["Family"];
-sourceManifest = Get[prepared["sector_source", "path"]];
-sectorRecord = SelectFirst[
-  sourceManifest["Sectors"], #1["Sector"] === task["sector", "id"] &
-];
-sector = Join[
-  sectorRecord["BitsA1ToA8"],
-  ConstantArray[
-    0, Length[family["Propagators"]] - Length[sectorRecord["BitsA1ToA8"]]
-  ]
-];
+sector = Reverse @ IntegerDigits[
+  task["sector", "id"], 2, Length[family["Propagators"]]];
 loopOrder = family["LoopMomenta"][[methodOptions["loop_order"]]];
 loopSpecifications = MapThread[
   <|"Momentum" -> #1, "BaseDimension" -> #2|> &,
@@ -125,21 +116,8 @@ allCandidateRecords = MapIndexed[
 ];
 budget = payload["candidate_budget"];
 candidateRecords = Take[allCandidateRecords, UpTo[budget["maximum"]]];
-groupSize = Length[sectorRecord["BasisIndices"]];
-declaredIndexGroups = Subsets[Range[Length[allCandidateRecords]], {groupSize}];
-eligibleIndexGroups = Select[
-  declaredIndexGroups, Max[#1] <= Length[candidateRecords] &
-];
-candidateGroups = (
-  <|
-    "candidate_id" -> methodId <> ":group:" <>
-      StringRiffle[ToString /@ #1, "-"],
-    "member_candidate_ids" -> Lookup[candidateRecords[[#1]], "candidate_id"]
-  |> & /@ eligibleIndexGroups
-);
 remainingCandidates = Length[allCandidateRecords] - Length[candidateRecords];
-remainingGroups = Length[declaredIndexGroups] - Length[candidateGroups];
-poolExhausted = remainingCandidates === 0 && remainingGroups === 0;
+poolExhausted = remainingCandidates === 0;
 
 summary = <|
   "method_id" -> methodId,
@@ -153,9 +131,6 @@ summary = <|
   "represented_candidate_count" -> Length[result["RepresentedCandidates"]],
   "candidate_count" -> Length[candidateRecords],
   "available_candidate_count" -> Length[allCandidateRecords],
-  "candidate_group_size" -> groupSize,
-  "candidate_group_count" -> Length[candidateGroups],
-  "candidate_groups_remaining" -> remainingGroups,
   "candidate_chart_complete" -> result["CandidateChartCompleteQ"],
   "affine_finite_constant_residues_verified" ->
     result["AffineFiniteConstantResiduesVerifiedQ"],
@@ -171,16 +146,12 @@ summary = <|
   "runtime" -> $Version <> "; " <> $SystemID
 |>;
 
-If[allCandidateRecords === {} || candidateGroups === {},
+If[candidateRecords === {},
   CanonMethodCard`WriteProviderResult[
     task, outputDir, "INCONCLUSIVE", "METHOD_EXHAUSTED", <||>,
     Append[
       summary,
-      "reason" -> If[
-        allCandidateRecords === {},
-        "DlogBasisSearch returned no constant-LS candidate combinations",
-        "the candidate budget did not contain one complete current-sector group"
-      ]
+      "reason" -> "DlogBasisSearch produced no candidates within the requested budget"
     ]
   ];
   Quit[0]
@@ -199,18 +170,15 @@ artifact = <|
     "consumed" -> Length[candidateRecords],
     "unit" -> budget["unit"]
   |>,
-  "candidate_group_pool" -> <|
-    "declared" -> Length[declaredIndexGroups],
-    "eligible" -> Length[candidateGroups],
-    "remaining" -> remainingGroups,
-    "unconsumed_candidates" -> remainingCandidates,
+  "candidate_pool" -> <|
+    "available" -> Length[allCandidateRecords],
+    "remaining" -> remainingCandidates,
     "pool_exhausted" -> poolExhausted
   |>,
   "pool_exhausted" -> poolExhausted,
   "candidate_unit" -> payload["candidate_unit"],
   "normalization_policy" -> payload["normalization_policy"],
   "candidates" -> candidateRecords,
-  "candidate_groups" -> candidateGroups,
   "method_evidence" -> <|
     "method_id" -> methodId,
     "evidence" -> {

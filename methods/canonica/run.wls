@@ -76,7 +76,7 @@ variables = cut["variables"];
 regulator = cut["regulator"];
 matrices = cut["matrices"];
 toolRegulator = CANONICA`eps;
-aFull = matrices /. regulator -> toolRegulator;
+aFull = Map[Together, matrices /. regulator -> toolRegulator, {3}];
 
 If[Length[variables] > 1 && !TrueQ[Quiet @ Check[CANONICA`CheckIntegrability[aFull, variables], False]],
   writeFailure["ERROR", "INVALID_DIFFERENTIAL_SYSTEM", "输入联络未通过 CANONICA 可积性检查"]
@@ -125,6 +125,7 @@ candidateArtifact = <|
   "basis_id" -> cut["basis_id"],
   "coefficient_domain" -> "exact-rational-functions",
   "basis" -> cut["basis"],
+  "source_basis" -> cut["basis"],
   "variables" -> variables,
   "regulator" -> regulator,
   "convention" -> "old_basis = transformation . new_basis",
@@ -138,9 +139,16 @@ candidateArtifact = <|
     "wolfram_version" -> $Version,
     "system_id" -> $SystemID
   |>,
+  "candidate_group_pool" -> <|
+    "declared" -> 1, "eligible" -> 1, "remaining" -> 0,
+    "unconsumed_candidates" -> 0, "pool_exhausted" -> True|>,
   "candidates" -> {
     <|
       "candidate_id" -> "canonica-recursive:1",
+      "member_candidate_ids" -> Table["canonica-recursive:row:" <> ToString[i],
+        {i, Length[cut["basis"]]}],
+      "full_new_basis_rows" -> Map[Together, Inverse[transformation], {2}],
+      "construction_rejection" -> None,
       "transformation" -> transformation,
       "transformed_matrices" -> transformedMatrices,
       "provider_evidence" -> <|

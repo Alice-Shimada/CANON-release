@@ -5,13 +5,11 @@ description: 用 DlogBasis-refine 的 DlogBasisSearch API 提出有界、维数�
 
 # DlogBasis-refine 约化前积分候选路线
 
-本卡只处理 `PROPOSE_INTEGRAL_CANDIDATES`。它在 IBP、主积分排序和微分方程检查之前调用
+本卡只处理 `PROPOSE_INTEGRAL_CANDIDATES`。它在候选 IBP 约化之前调用
 ``DlogBasis`DlogBasisSearch``，不生成或接受 canonical basis。
 
-`prepared_family["family_data","path"]` 必须返回含有 `"Family"` 的关联；
-`prepared_family["sector_source","path"]` 给出同一 family 的 sector manifest。
-manifest 的 `BitsA1ToA8` 是实际传入包的 sector mask，尾随 ISP 位补零；`BasisIndices`
-的长度只决定 CANON 后续要组装的 current-sector candidate group 大小。
+`prepared_family["family_data","path"]` 返回含有 `"Family"` 的关联。
+sector mask 从请求中的 sector ID 按完整传播子/ISP 指标顺序展开，不读取文献 manifest。
 
 在 `method_options` 中提供：
 
@@ -31,8 +29,8 @@ manifest 的 `BitsA1ToA8` 是实际传入包的 sector mask，尾随 ISP 位补�
 ``DlogBasis`DlogIntegral[hash,{a1,...}]`` 映成 CANON 的 `j[topology,a1,...]`，再按首个
 积分系数作 projective normalization；本卡只接受 `NORMALIZED_LINEAR_COMBINATION` 与
 `first-integral-coefficient-outside-definition`，候选预算单位固定为
-`PROVIDER_CANDIDATE`。预算内候选按 sector rank 取全部子集形成 groups；
-是否 IBP 独立和是否给出 canonical DE 均由后续 checker 决定。
+`PROVIDER_CANDIDATE`。预算仅截取候选方向。IBP 后由 `RouteCoreCandidates` 根据实际 master rank
+选择独立基及单行替换，不枚举全部子集；完整 DE 决定 canonical 性。
 
 保留 `ScientificStatus`、有限仿射覆盖和四个 certification flag。即使有候选，
 `ConstantLeadingSingularityCertifiedQ`、`UniformTranscendentalityCertifiedQ` 与

@@ -1,29 +1,28 @@
 ---
 name: canon-build-full-de
-description: "Build the full current-sector differential equation after the core passes. Use when an agent is assigned the BUILD_FULL_DE workflow step."
+description: Build the exact lower-prefix-plus-current-sector DE and declared full-row completions without rebuilding the ordered master DE.
 ---
 
-<!--
-Placeholder skill: keep the scientific procedure empty for now.
+# Build the full prefix DE
 
-Responsibility:
-- Read the BUILD_FULL_DE task packet.
-- Run mma/BuildFullSectorDE.wls.
-- Return the full current-sector DE as an opaque artifact.
+Run `mma/BuildFullSectorDE.wls` with `ordered_master_de`, `sector_cut_de`,
+`core_candidates`, `core_transform`, `declared_alphabet`, and `accepted_prefix`.
+The first sector uses `accepted_prefix -> null`.
 
-Input payload:
-- prepared_family
-- master_basis
-- sector_manifest
-- core_transform
-- accepted_prefix, or null for the first sector
+`ordered_master_de` is the full result already written by `BUILD_CUT_DE`.
+Never rerun Kira or DEBuilder.  For a nonempty accepted prefix use its explicit
+raw `source_basis` and `old_source_basis = transformation . accepted_basis`.
+For every declared core group use its complete reduced `full_new_basis_rows`;
+embed these rows by their explicit source-basis order, using zero coefficients
+for raw masters absent from a DE provider's source basis.
 
-PASS output:
-- code: OK
-- artifact: full_sector_de
+With `old_lower = Tlower.new_lower`, form the mixed source using
+`T0 = diag(Tlower,Icurrent)`.  For reduced rows `[Rlower,Rcurrent]`, publish
+`Tfull = Inverse[{{I,0},{Rlower.Tlower,Rcurrent}}]` under the repository
+convention `old_prefix_basis = Tfull . candidate_prefix_basis`.
 
-Boundary:
-- Do not parse the DE in Python.
-- This historical scientific scaffold declares no state transition; current research
-  state is governed only by `statemng` under root `AGENTS.md` and `README.md`.
--->
+PASS writes one `full_sector_de` descriptor whose sole schema is
+`canon-neu/full-prefix-candidates/v1`: one source matrix list, block
+boundaries, and one completion for every declared core group.  Use `declared_alphabet -> null` for pole-factor inference in SOLVE_TAIL, or
+supply a `canon-neu/declared-alphabet/v1` artifact with exact rational or
+algebraic letters.  This step makes no canonical or tail-solvability claim.

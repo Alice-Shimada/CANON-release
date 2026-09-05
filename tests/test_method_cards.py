@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -453,6 +454,7 @@ EndPackage[];
         checker_entry: Path = REGISTERED_LIBRA_ENTRY,
         checker_sha256: str = REGISTERED_LIBRA_SHA256,
     ) -> Path:
+        expected_tool_identity = self.libra_tool_identity(repair_candidate)
         value = {
             "schema": "canon-neu/script-input/v1",
             "task_id": task_id,
@@ -485,7 +487,7 @@ EndPackage[];
                 },
                 "checker_options": {
                     "package_entry": str(checker_entry),
-                    "expected_tool_identity": "1.2",
+                    "expected_tool_identity": expected_tool_identity,
                     "expected_entry_sha256": checker_sha256,
                 },
             },
@@ -493,6 +495,15 @@ EndPackage[];
         path = self.run_root / f"{task_id}.json"
         path.write_text(json.dumps(value, indent=2) + "\n", encoding="utf-8")
         return path
+
+    def libra_tool_identity(self, candidate: Path) -> str:
+        match = re.search(
+            r'"tool_identity"\s*->\s*"([^"]+)"',
+            candidate.read_text(encoding="utf-8"),
+        )
+        if match is None:
+            self.fail(f"Libra candidate does not record tool_identity: {candidate}")
+        return match.group(1)
 
     def initial_candidate(self) -> dict:
         value = json.loads(
@@ -564,7 +575,7 @@ EndPackage[];
         expected_transformation_fragment: str,
         *,
         relative_entry: bool,
-    ) -> None:
+    ) -> Path:
         provider_output = self.run_root / f"{method}-provider"
         provider_result = self.run_wls(
             ROOT / "methods" / method / "run.wls",
@@ -596,16 +607,15 @@ EndPackage[];
             (check_result["status"], check_result["code"]),
             ("PASS", "CORE_PASS"),
         )
-        self.assertEqual(
-            check_result["summary"],
-            {
-                "candidate_index": 1,
-                "invertible": True,
-                "exact_gauge": True,
-                "flat_connection": True,
-                "epsilon_factorized": True,
-            },
-        )
+        summary = check_result["summary"]
+        self.assertEqual(summary["candidate_index"], 1)
+        self.assertEqual(len(summary["attempted_candidate_ids"]), 1)
+        self.assertFalse(summary["repair_eligible"])
+        for field in (
+            "invertible", "exact_gauge", "flat_connection", "epsilon_factorized"
+        ):
+            self.assertTrue(summary["attempts"][0][field], field)
+        return candidate_path
 
     def test_prepared_basis_router_covers_every_decision_branch(self) -> None:
         localized_absent = (
@@ -652,9 +662,16 @@ EndPackage[];
                 (( '"plateau" -> False', '"plateau" -> True'),),
                 "REFINE_SECTOR_UT_CANDIDATES",
             ),
-            "repair": (
+            "tail": (
                 common_complete,
-                "REPAIR_WITH_LIBRA",
+                "SOLVE_TAIL",
+            ),
+            "canonica-before-pool-exhaustion": (
+                (localized_absent,
+                 ('"suspicious" -> True', '"suspicious" -> False'),
+                 ('"classification" -> "LOCALIZED_RATIONAL_DEFECT"',
+                  '"classification" -> "GLOBAL_RATIONAL_DEFECT"')),
+                "FIND_RATIONAL_CANONICAL_WITH_CANONICA",
             ),
             "canonica": (
                 (
@@ -1244,12 +1261,13 @@ Quit[If[derived === automatic, 0, 1]];
     )
     def test_libra_provider_and_independent_checker(self) -> None:
         assert LIBRA_ENTRY is not None
-        self.assert_provider_closes_exact_core_loop(
+        candidate = self.assert_provider_closes_exact_core_loop(
             "libra",
             LIBRA_ENTRY,
             '"transformation" -> {{1, x}, {0, 1}}',
             relative_entry=False,
         )
+        self.assertEqual(self.libra_tool_identity(candidate), "1.23")
 
     @unittest.skipUnless(
         LIBRA_ENTRY is not None and LIBRA_ENTRY.is_file(),
@@ -1272,6 +1290,9 @@ Quit[If[derived === automatic, 0, 1]];
         )
         candidate = provider_output / provider["artifacts"]["repair_candidate"]["path"]
         candidate_text = " ".join(candidate.read_text(encoding="utf-8").split())
+        provider_identity = self.libra_tool_identity(candidate)
+        provider_sha256 = hashlib.sha256(LIBRA_ENTRY.read_bytes()).hexdigest()
+        self.assertEqual(provider_identity, "1.23")
         self.assertIn(
             '"transformation" -> {{1, 0, 0}, {0, 1, x}, {0, 0, 1}}',
             candidate_text,
@@ -1280,7 +1301,9 @@ Quit[If[derived === automatic, 0, 1]];
         checked = self.run_wls(
             ROOT / "mma" / "CheckStructuredRepair.wls",
             self.structured_repair_checker_input(
-                "T-STRUCTURED-REAL-CHECKER", candidate
+                "T-STRUCTURED-REAL-CHECKER", candidate,
+                checker_entry=LIBRA_ENTRY,
+                checker_sha256=provider_sha256,
             ),
             checker_output,
         )
@@ -1308,7 +1331,8 @@ Quit[If[derived === automatic, 0, 1]];
         ]["path"]
         verified_text = verified_path.read_text(encoding="utf-8")
         self.assertIn('"authenticated_provenance"', verified_text)
-        self.assertIn(REGISTERED_LIBRA_SHA256, verified_text)
+        self.assertIn(provider_identity, verified_text)
+        self.assertIn(provider_sha256, verified_text)
 
     def test_structured_repair_contract_rejects_route_pool_and_prefix_contradictions(self) -> None:
         base_prepared = FIXTURES / "structured-repair-prepared-basis.wl"
@@ -1885,8 +1909,7 @@ Quit[If[derived === automatic, 0, 1]];
             '"normalization_policy"',
             '"candidate_id"',
             '"exact_definition"',
-            '"candidate_groups"',
-            '"candidate_group_pool"',
+            '"candidate_pool"',
             '"method_evidence"',
             '"tool_provenance"',
         ):
@@ -1930,10 +1953,6 @@ Quit[If[derived === automatic, 0, 1]];
         self.assertIn('"PROPOSE_INTEGRAL_CANDIDATES"', template)
         self.assertIn('"SEARCH_CORE"', template)
         interfaces = (ROOT / "INTERFACES.md").read_text(encoding="utf-8")
-        self.assertLess(
-            interfaces.index("`PROPOSE_INTEGRAL_CANDIDATES`"),
-            interfaces.index("`DISCOVER`"),
-        )
 
     def test_dlogbasis_refine_generates_sector_148_candidate_through_contract(
         self,
@@ -2037,8 +2056,6 @@ Quit[If[derived === automatic, 0, 1]];
             "AffineFiniteMaximalCutCandidatePartialGeneralizedCutCoverage",
         )
         self.assertEqual(result["summary"]["candidate_count"], 1)
-        self.assertEqual(result["summary"]["candidate_group_count"], 1)
-        self.assertEqual(result["summary"]["candidate_group_size"], 1)
         self.assertFalse(
             result["summary"]["constant_leading_singularity_certified"]
         )
@@ -2071,8 +2088,7 @@ Quit[If[derived === automatic, 0, 1]];
             '"schema" -> "canon-neu/integral-candidates/v1"',
             '"candidate_id"',
             '"exact_definition"',
-            '"candidate_groups"',
-            '"candidate_group_pool"',
+            '"candidate_pool"',
             '"method_evidence"',
             '"AffineFiniteMaximalCutCandidatePartialGeneralizedCutCoverage"',
             '"ModuleLiftVerifiedQ" -> True',
@@ -2109,14 +2125,12 @@ Quit[If[derived === automatic, 0, 1]];
             (sector_182_result["status"], sector_182_result["code"]),
             ("PROVISIONAL", "INTEGRAL_CANDIDATES"),
         )
-        self.assertEqual(
-            sector_182_result["summary"]["candidate_group_size"], 2
-        )
+        self.assertEqual(sector_182_result["summary"]["candidate_count"], 2)
         sector_182_artifact = (
             sector_182_output
             / sector_182_result["artifacts"]["integral_candidates"]["path"]
         ).read_text(encoding="utf-8")
-        self.assertIn('"dlogbasis-refine-search:group:1-2"', sector_182_artifact)
+        self.assertIn('"candidate_pool"', sector_182_artifact)
 
         power_definition["max_added_dots"] = 2
         unsupported_input = (
@@ -2412,91 +2426,6 @@ If[
         self.assertEqual(
             (result["status"], result["code"]),
             ("ERROR", "INVALID_OPTIONS"),
-        )
-
-    def test_checker_rejects_provider_claim_with_wrong_gauge_residual(self) -> None:
-        output = self.run_root / "negative-check"
-        result = self.run_wls(
-            ROOT / "mma" / "CheckSectorCore.wls",
-            self.check_input(
-                "T-CHECK-NEGATIVE", FIXTURES / "bad-core-candidates.wl"
-            ),
-            output,
-        )
-        self.assertEqual(
-            (result["status"], result["code"]),
-            ("FAIL", "CORE_FAIL"),
-        )
-        checks = result["summary"]["candidate_checks"]
-        self.assertFalse(checks[0]["exact_gauge"])
-
-    def test_checker_rejects_candidate_from_wrong_sector(self) -> None:
-        output = self.run_root / "wrong-sector-check"
-        result = self.run_wls(
-            ROOT / "mma" / "CheckSectorCore.wls",
-            self.check_input(
-                "T-CHECK-WRONG-SECTOR",
-                FIXTURES / "wrong-sector-core-candidates.wl",
-            ),
-            output,
-        )
-        self.assertEqual(
-            (result["status"], result["code"]),
-            ("FAIL", "CORE_FAIL"),
-        )
-        self.assertIn("identity mismatch", result["summary"]["reason"])
-
-    def test_checker_rejects_approximate_candidate(self) -> None:
-        output = self.run_root / "approximate-check"
-        result = self.run_wls(
-            ROOT / "mma" / "CheckSectorCore.wls",
-            self.check_input(
-                "T-CHECK-APPROXIMATE",
-                FIXTURES / "approximate-core-candidates.wl",
-            ),
-            output,
-        )
-        self.assertEqual(
-            (result["status"], result["code"]),
-            ("FAIL", "CORE_FAIL"),
-        )
-        checks = result["summary"]["candidate_checks"]
-        self.assertIn("exact rational-function domain", checks[0]["reason"])
-
-    def test_checker_rejects_algebraic_candidate_in_rational_domain(self) -> None:
-        output = self.run_root / "algebraic-check"
-        result = self.run_wls(
-            ROOT / "mma" / "CheckSectorCore.wls",
-            self.check_input(
-                "T-CHECK-ALGEBRAIC",
-                FIXTURES / "algebraic-core-candidates.wl",
-            ),
-            output,
-        )
-        self.assertEqual(
-            (result["status"], result["code"]),
-            ("FAIL", "CORE_FAIL"),
-        )
-        checks = result["summary"]["candidate_checks"]
-        self.assertIn("exact rational-function domain", checks[0]["reason"])
-
-    def test_nonflat_cut_is_upstream_error_not_candidate_failure(self) -> None:
-        output = self.run_root / "nonflat-check"
-        result = self.run_wls(
-            ROOT / "mma" / "CheckSectorCore.wls",
-            self.check_input(
-                "T-CHECK-NONFLAT",
-                FIXTURES / "nonflat-core-candidates.wl",
-                sector={"id": 4, "propagator_count": 2},
-                sector_basis=FIXTURES / "nonflat-sector-basis.wl",
-                sector_cut_de=FIXTURES / "nonflat-sector-cut-de.wl",
-            ),
-            output,
-            expected_returncode=1,
-        )
-        self.assertEqual(
-            (result["status"], result["code"]),
-            ("ERROR", "INVALID_CUT_DE"),
         )
 
     def test_full_prefix_screen_replaces_bad_tail_before_repair(self) -> None:

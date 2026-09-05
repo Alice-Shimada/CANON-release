@@ -12,7 +12,8 @@ description: 对显式满足 REPAIR_WITH_LIBRA 路由的精确单变量 1x1 已�
 
 使用 Mathematica 14 ARM64，以 `-noinit -noprompt -script` 运行
 `run.wls <input.json> <fresh-output-dir>`。调用方通过
-`method_options.package_entry` 注入只读 Libra 1.2 主文件；运行器禁用 Fermatica，仅运行
+`method_options.package_entry` 注入只读 Libra 主文件；运行器记录实际加载的版本身份、
+禁用 Fermatica，并仅运行
 `NewDSystem`、`Fuchsify`、`Transform`、`FactorOut`、`OverallTransformation` 与 `EFormQ`。
 输出目录必须不存在，且必须由调用方拥有。卡不调用其他求解提供者，也没有回退。
 

@@ -17,8 +17,10 @@ Follow `INTERFACES.md`: `family` contains only declared parameters and ordered
 must already close exactly on those masters. Require a result with exactly
 `matrices` and `validity`.
 
-`global-exact` is a global two-variable proof. `exact-bivariate-slices` proves
-only the recorded spectator assignments. Do not make the core find executables,
-run Kira, generate targets, choose operators, read/write files, or produce
-state/provenance metadata. The Agent serializes and registers the accepted
-result outside the core when the workflow requires an artifact.
+`exact-point-samples` proves only the one recorded exact-rational assignment of
+all declared parameters, including dimension, per pair after symbolic differentiation. Require
+`validity["flat"] === True` and every pair record's `"zero"` value to be `True`;
+there is no sampling retry or alternate point. Do not make the core find
+executables, run Kira, generate targets, choose operators, read/write files, or
+produce state/provenance metadata. The Agent serializes and registers the
+accepted result outside the core when the workflow requires an artifact.

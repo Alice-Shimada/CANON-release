@@ -1,5 +1,7 @@
 BeginPackage["CanonMethodCard`"];
 
+SectorBits::usage = "SectorBits[integral, propagatorSlots] returns the full index-order sector mask, with ISP slots set to zero.";
+
 ReadTask::usage = "ReadTask[path, step] reads and validates a script input envelope.";
 ScriptArguments::usage = "ScriptArguments[] returns arguments following the active WL script.";
 LoadArtifact::usage = "LoadArtifact[task, inputPath, name] reads one WL Association artifact.";
@@ -14,16 +16,24 @@ ValidatePreparedBasis::usage = "ValidatePreparedBasis[expr] validates canon-neu/
 PreparedBasisRoute::usage = "PreparedBasisRoute[prepared] returns a deterministic canon-neu/route-decision/v1 artifact for a valid prepared basis.";
 CheckCoreCandidate::usage = "CheckCoreCandidate[candidate, matrices, variables, regulator, index] independently checks one exact core candidate.";
 GaugeTransform::usage = "GaugeTransform[matrices, variables, T] applies old=T.new exactly.";
+FermatGaugeIdentityQ::usage = "FermatGaugeIdentityQ[matrices, variables, T, target] proves A.T-D[T]-T.target=0 in the binomial algebraic extension using a loaded Fermatica backend.";
 ZeroMatrixQ::usage = "ZeroMatrixQ[matrix] tests exact entrywise vanishing.";
-FlatConnectionQ::usage = "FlatConnectionQ[matrices, variables] tests exact integrability.";
+FlatConnectionQ::usage = "FlatConnectionQ[matrices, variables] tests curvature vanishing at one deterministic exact-rational point.";
 EpsilonFactorizedQ::usage = "EpsilonFactorizedQ[matrices, eps] tests exact epsilon factorization.";
-DLogConnectionQ::usage = "DLogConnectionQ[matrices, variables, eps, alphabet] tests the bounded exact one-variable dlog form.";
+DLogResidues::usage = "DLogResidues[matrices, variables, eps, alphabet] solves shared constant residues using exact Wolfram algebraic expressions.";
+DLogAlphabet::usage = "DLogAlphabet[matrices, variables, eps] extracts regulator-free pole factors as candidate letters.";
+AlgebraicPrimitive::usage = "AlgebraicPrimitive[components, variables] solves a polynomial-over-poles primitive in the algebraic components of an exact one-form.";
+DLogConnectionQ::usage = "DLogConnectionQ[matrices, variables, eps, alphabet] tests the exact shared-residue dlog form across all directions.";
 ExactRationalExpressionQ::usage = "ExactRationalExpressionQ[expr] accepts only finite exact rational functions.";
 ValidateStructuredRepairInput::usage = "ValidateStructuredRepairInput[prepared, route, request] validates the frozen-prefix Libra repair contract.";
 DeclaredCoefficientDomainQ::usage = "DeclaredCoefficientDomainQ[expr, symbols] checks exact rational syntax and rejects undeclared coefficient symbols.";
 StructuredRepairPublicationGate::usage = "StructuredRepairPublicationGate[request, candidate] applies only the provider's minimal structural publication gate.";
 
 Begin["`Private`"];
+
+SectorBits[integral_, propagatorSlots_List] := ReplacePart[
+  ConstantArray[0, Length[integral]],
+  Thread[({#} & /@ propagatorSlots) -> (Boole[# > 0] & /@ (List @@ integral)[[propagatorSlots]])]];
 
 failure[tag_String, message_String] := Failure[tag, <|"Message" -> message|>];
 
@@ -479,13 +489,12 @@ PreparedBasisRoute[prepared_Association] := Module[
   {decision, reason} = Which[
     canonicalQ,
       {"VERIFY_CANONICAL_DE", "ALREADY_CANONICAL"},
-    (suspiciousQ || localizedQ) && alternativesQ,
+    suspiciousQ && alternativesQ,
       {"REFINE_SECTOR_UT_CANDIDATES", "ALTERNATIVES_REMAIN"},
-    localizedQ && TrueQ[history["pool_exhausted"]],
-      {"REPAIR_WITH_LIBRA", "LOCALIZED_POOL_EXHAUSTED"},
-    remaining["classification"] === "GLOBAL_RATIONAL_DEFECT" &&
-      TrueQ[remaining["candidate_selection_complete"]] &&
-      TrueQ[remaining["rational_transformation_expected"]],
+    localizedQ && quality["diagonal"] === "CANONICAL" &&
+      defect["block"] === "lower-to-current",
+      {"SOLVE_TAIL", "NONZERO_SUBSECTOR_COUPLING"},
+    TrueQ[remaining["rational_transformation_expected"]],
       {"FIND_RATIONAL_CANONICAL_WITH_CANONICA", "GLOBAL_RATIONAL_DEFECT"},
     True,
       {"DIAGNOSE_OR_CHANGE_VARIABLES", "NO_BOUNDED_PROVIDER_ROUTE"}
@@ -504,23 +513,64 @@ PreparedBasisRoute[prepared_Association] := Module[
 ];
 
 ZeroMatrixQ[expr_] := MatrixQ[expr] &&
-  And @@ (TrueQ[Together[#] === 0] & /@ Flatten[expr]);
+  And @@ (TrueQ[FullSimplify[Together[#]] === 0] & /@ Flatten[expr]);
+
+FermatGaugeIdentityQ[matrices_List, variables_List, transformation_?MatrixQ, target_List] := Module[
+  {powers, bases, orders, roots, formal, relations, t, residual},
+  powers = DeleteDuplicates @ Cases[{matrices, transformation, target},
+    Power[b_, p_Rational] :> {Factor[b], Denominator[p]}, Infinity];
+  bases = DeleteDuplicates[First /@ powers];
+  orders = (LCM @@ Cases[powers, {#, n_} :> n]) & /@ bases;
+  roots = Table[Unique["root$"], {Length[bases]}];
+  formal[expr_] := expr /. Power[b_, p_Rational] /;
+      MemberQ[bases, Factor[b]] :> With[
+        {i = First @ FirstPosition[bases, Factor[b]]}, roots[[i]]^(p orders[[i]])];
+  relations = MapThread[#1 -> #1^#2 - formal[#3] &, {roots, orders, bases}];
+  t = formal[transformation];
+  And @@ Table[
+    residual = Fermatica`FPlus[
+      Fermatica`FDot[formal[matrices[[i]]], t],
+      -formal[D[transformation, variables[[i]]]],
+      -Fermatica`FDot[t, formal[target[[i]]]]];
+    residual = Fermatica`FQuolyMod[residual, relations];
+    And @@ (TrueQ[# === 0] & /@ Flatten[residual]),
+    {i, Length[variables]}]
+];
 
 GaugeTransform[matrices_List, variables_List, transformation_?MatrixQ] :=
+ With[{inverse = Inverse[transformation]},
   MapThread[
-    Map[Together, Inverse[transformation].(#1.transformation - D[transformation, #2]), {2}] &,
+    Map[Together, inverse.(#1.transformation - D[transformation, #2]), {2}] &,
     {matrices, variables}
-  ];
+  ]];
 
-FlatConnectionQ[matrices_List, variables_List] := Module[{pairs, residual},
-  If[Length[matrices] =!= Length[variables], Return[False]];
+FlatConnectionQ[matrices_List, variables_List] := Module[
+  {pairs, symbols, assignments},
   pairs = Subsets[Range[Length[variables]], {2}];
+  symbols = DeleteDuplicates[Join[variables, Cases[matrices, _Symbol, Infinity]]];
+  assignments = Thread[symbols -> Table[
+    Prime[index]/Prime[index + 1], {index, Length[symbols]}]];
   And @@ Map[
     Function[pair,
-      With[{i = pair[[1]], j = pair[[2]]},
-        residual = D[matrices[[j]], variables[[i]]] - D[matrices[[i]], variables[[j]]] +
-          matrices[[j]].matrices[[i]] - matrices[[i]].matrices[[j]];
-        ZeroMatrixQ[Map[Together, residual, {2}]]
+      Module[{i, j, pairVariables, pairAssignments, spectatorAssignments,
+        matrixI, matrixJ, derivativeJI, derivativeIJ, residual},
+        {i, j} = pair;
+        pairVariables = variables[[pair]];
+        pairAssignments = Select[assignments,
+          MemberQ[pairVariables, First[#]] &];
+        spectatorAssignments = Select[assignments,
+          !MemberQ[pairVariables, First[#]] &];
+        matrixI = matrices[[i]] /. spectatorAssignments;
+        matrixJ = matrices[[j]] /. spectatorAssignments;
+        derivativeJI = D[matrixJ, variables[[i]]];
+        derivativeIJ = D[matrixI, variables[[j]]];
+        matrixI = SparseArray[matrixI /. pairAssignments];
+        matrixJ = SparseArray[matrixJ /. pairAssignments];
+        derivativeJI = SparseArray[derivativeJI /. pairAssignments];
+        derivativeIJ = SparseArray[derivativeIJ /. pairAssignments];
+        residual = SparseArray[
+          derivativeJI - derivativeIJ + matrixJ.matrixI - matrixI.matrixJ];
+        ZeroMatrixQ[Normal[residual]]
       ]
     ],
     pairs
@@ -537,74 +587,140 @@ CheckCoreCandidate[
   regulator_Symbol,
   index_Integer
 ] := Module[
-  {basisDimension, transformation, declared, computed, residuals, invertible, exactGauge, flat, epsilonForm},
-  basisDimension = Length[First[matrices]];
-  transformation = Lookup[candidate, "transformation", None];
-  declared = Lookup[candidate, "transformed_matrices", None];
-  If[
-    !MatrixQ[transformation] || Dimensions[transformation] =!= {basisDimension, basisDimension} ||
-    !ListQ[declared] || Length[declared] =!= Length[variables] ||
-    !And @@ (MatrixQ[#] && Dimensions[#] === {basisDimension, basisDimension} & /@ declared),
-    Return[<|"index" -> index, "pass" -> False, "reason" -> "candidate shape mismatch"|>]
-  ];
-  If[
-    !And @@ (ExactRationalExpressionQ /@ Flatten[transformation]) ||
-    !And @@ (ExactRationalExpressionQ /@ Flatten[declared]),
-    Return[<|"index" -> index, "pass" -> False, "reason" -> "candidate is outside the exact rational-function domain"|>]
-  ];
+  {candidateID, construction, transformation, declared, computed, residuals,
+    invertible, exactGauge, flat, epsilonForm, reasons},
+  candidateID = candidate["candidate_id"];
+  construction = candidate["construction_rejection"];
+  If[StringQ[construction], Return[<|
+    "candidate_id" -> candidateID, "index" -> index, "pass" -> False,
+    "invertible" -> False, "rejection_signature" -> {construction}|>]];
+  transformation = candidate["transformation"];
+  declared = candidate["transformed_matrices"];
   invertible = TrueQ[Together[Det[transformation]] =!= 0];
-  If[!invertible, Return[<|"index" -> index, "pass" -> False, "reason" -> "singular transformation"|>]];
-  computed = Quiet @ Check[GaugeTransform[matrices, variables, transformation], $Failed];
-  If[computed === $Failed,
-    Return[<|"index" -> index, "pass" -> False, "reason" -> "gauge transformation failed"|>]
-  ];
+  If[!invertible, Return[<|
+    "candidate_id" -> candidateID, "index" -> index, "pass" -> False,
+    "invertible" -> False, "rejection_signature" -> {"singular_transformation"}|>]];
+  computed = GaugeTransform[matrices, variables, transformation];
   residuals = MapThread[Map[Together, #1 - #2, {2}] &, {computed, declared}];
   exactGauge = And @@ (ZeroMatrixQ /@ residuals);
   flat = FlatConnectionQ[computed, variables];
   epsilonForm = EpsilonFactorizedQ[computed, regulator];
+  reasons = Pick[
+    {"gauge_residual", "nonflat_connection", "not_epsilon_factorized"},
+    Not /@ {exactGauge, flat, epsilonForm}];
   <|
-    "index" -> index,
-    "pass" -> TrueQ[invertible && exactGauge && flat && epsilonForm],
+    "candidate_id" -> candidateID, "index" -> index, "pass" -> (reasons === {}),
     "invertible" -> invertible,
     "exact_gauge" -> exactGauge,
     "flat_connection" -> flat,
     "epsilon_factorized" -> epsilonForm,
+    "rejection_signature" -> reasons,
     "transformation" -> transformation,
     "transformed_matrices" -> computed
   |>
 ];
 
-dLogExpressionQ[expr_, variable_Symbol, derivatives_List] := Module[
-  {coefficients, residual, numerator, equations, instance},
-  coefficients = Table[Unique["dlogCoefficient$"], {Length[derivatives]}];
-  residual = Together[expr - coefficients.derivatives];
-  numerator = Expand[Numerator[residual]];
-  If[!PolynomialQ[numerator, variable], Return[False]];
-  equations = Thread[CoefficientList[numerator, variable] == 0];
-  instance = Quiet @ Check[FindInstance[equations, coefficients, Rationals, 1], {}];
-  If[instance === {}, Return[False]];
-  TrueQ[Together[residual /. First[instance]] === 0]
-];
+DLogAlphabet[matrices_List, variables_List, regulator_Symbol] := DeleteDuplicates @ Select[
+  Flatten[(First /@ Rest[FactorList[Denominator[Together[#/regulator]]]]) & /@
+    Flatten[matrices]],
+  FreeQ[#, regulator] && !FreeQ[#, Alternatives @@ variables] &];
 
-DLogConnectionQ[
-  matrices_List,
-  variables_List,
-  regulator_Symbol,
-  alphabet_List
-] := Module[{variable, derivatives},
-  (* The first executable gate is deliberately bounded to one exact rational variable. *)
-  If[Length[variables] =!= 1 || alphabet === {} || !EpsilonFactorizedQ[matrices, regulator], Return[False]];
-  variable = First[variables];
-  If[
-    !MatchQ[variable, _Symbol] ||
-    !And @@ (ExactRationalExpressionQ /@ alphabet) ||
-    !FreeQ[alphabet, regulator],
-    Return[False]
+DLogResidues[matrices_List, variables_List, regulator_Symbol, alphabet_List] := Catch[Module[
+  {powers, bases, orders, roots, relations, formal, numerator, fieldPowers,
+   fieldBasis, fieldVector, points, logarithmicDerivatives, sampled, coefficientMatrix,
+   pivotPositions, rows, columns, inverse, entry, entryResidues},
+  If[!FreeQ[alphabet, regulator] || !EpsilonFactorizedQ[matrices, regulator],
+    Return[$Failed]];
+  If[alphabet === {}, Return[If[And @@ (ZeroMatrixQ /@ matrices), {}, $Failed]]];
+  powers = DeleteDuplicates @ Cases[{matrices, alphabet},
+    Power[b_, p_Rational] /; !FreeQ[b, Alternatives @@ variables] :>
+      {Factor[b], Denominator[p]}, Infinity];
+  bases = DeleteDuplicates[First /@ powers];
+  orders = (LCM @@ Cases[powers, {#, n_} :> n]) & /@ bases;
+  roots = Table[Unique["root$"], {Length[bases]}];
+  formal[expr_] := expr /. Power[b_, p_Rational] /;
+      MemberQ[bases, Factor[b]] :> With[
+        {i = First @ FirstPosition[bases, Factor[b]]}, roots[[i]]^(p orders[[i]])];
+  relations = MapThread[#1^#2 - formal[#3] &, {roots, orders, bases}];
+  numerator[expr_] := With[{n = Numerator[Together[expr]]},
+    If[roots === {}, n, Numerator[Together[Last @ PolynomialReduce[n, relations, roots]]]]];
+  fieldPowers = Tuples[Range[0, # - 1] & /@ orders];
+  fieldBasis = Times @@ MapThread[Power, {roots, #}] & /@ fieldPowers;
+  fieldVector[expr_, point_] := Module[{q, rel, vector, n, d},
+    q = Together[expr /. point];
+    If[roots === {}, Return[{q}]];
+    rel = relations /. point;
+    vector[poly_] := With[{rules = CoefficientRules[
+        Last @ PolynomialReduce[poly, rel, roots], roots]},
+      Replace[fieldPowers, Join[rules, {_List -> 0}], {1}]];
+    n = vector[Numerator[q]]; d = Denominator[q];
+    LinearSolve[Transpose[vector[d #] & /@ fieldBasis], n]
   ];
-  derivatives = Quiet @ Check[Together[D[#, variable]/#] & /@ alphabet, $Failed];
-  If[derivatives === $Failed || !And @@ (ExactRationalExpressionQ /@ derivatives), Return[False]];
-  And @@ (dLogExpressionQ[Together[#/regulator], variable, derivatives] & /@ Flatten[matrices])
-];
+  logarithmicDerivatives = Table[formal[Together[D[letter, direction]/letter]],
+    {direction, variables}, {letter, alphabet}];
+  points = Table[Thread[variables -> Prime[Range[Length[variables]] + k Length[variables]]],
+    {k, 0, Ceiling[Length[alphabet]/Max[1, Length[variables] - 1]] + 1}];
+  sampled = Table[Transpose[fieldVector[#, point] & /@ logarithmicDerivatives[[i]]],
+    {point, points}, {i, Length[variables]}];
+  coefficientMatrix = Flatten[sampled, 2];
+  pivotPositions[a_] := (First @ FirstPosition[#, x_ /; x =!= 0, Missing[], {1}, Heads -> False] &) /@
+    DeleteCases[RowReduce[a], {0..}];
+  rows = pivotPositions[Transpose[coefficientMatrix]];
+  columns = pivotPositions[coefficientMatrix];
+  If[columns =!= {}, inverse = Inverse[coefficientMatrix[[rows, columns]]]];
+  (* Samples fix candidate constants; every original direction is proved below. *)
+  entry[entries_] := entry[entries] = Module[{values, sampledValues, solution},
+    values = formal[Together[entries/regulator]];
+    sampledValues = Flatten[Table[fieldVector[values[[i]], point],
+      {point, points}, {i, Length[variables]}]];
+    solution = ConstantArray[0, Length[alphabet]];
+    If[columns =!= {}, solution[[columns]] = inverse.sampledValues[[rows]]];
+    If[Cases[solution, _Symbol, Infinity] =!= {} ||
+        !And @@ MapThread[TrueQ[numerator[Together[#1 - solution.#2]] === 0] &,
+        {values, logarithmicDerivatives}], Throw[$Failed, DLogResidues]];
+    solution
+  ];
+  entryResidues = Table[entry[matrices[[All, row, column]]],
+    {row, Length[First[matrices]]}, {column, Length[First[matrices]]}];
+  Table[entryResidues[[All, All, i]], {i, Length[alphabet]}]
+], DLogResidues];
+
+AlgebraicPrimitive[components_List, variables_List] := Catch[Module[
+  {parts, classes, radicalPart, terms, prefactor, rational, den, factors, fd,
+   degree, monomials, coefficients, ansatz, equations, solutions, solution,
+   t, totalDegree, result = 0},
+  radicalPart[term_] := Times @@ Cases[term,
+    Power[b_, p_Rational] :> Factor[b]^Mod[p, 1], {0, Infinity}];
+  terms[expr_] := With[{x = Expand[expr]}, If[Head[x] === Plus, List @@ x, {x}]];
+  parts = (GroupBy[terms[#], radicalPart, Total] & /@ components);
+  classes = Union @@ (Keys /@ parts);
+  totalDegree[poly_] := Exponent[poly /. Thread[variables -> t variables], t];
+  Do[
+    rational = Together[Lookup[#, root, 0]/root] & /@ parts;
+    If[!FreeQ[rational, Power[_, _Rational]], Throw[$Failed, AlgebraicPrimitive]];
+    den = PolynomialLCM @@ (Denominator /@ rational);
+    factors = Rest[FactorList[den]];
+    prefactor = root/Times @@ (#[[1]]^Max[0, #[[2]] - 1] & /@ factors);
+    fd = Together[D[prefactor, #]/prefactor] & /@ variables;
+    rational = Together[root rational/prefactor];
+    degree = Max[0, Max[(totalDegree[Numerator[#]] -
+      totalDegree[Denominator[#]] + 1) & /@ DeleteCases[rational, 0]]];
+    monomials = DeleteDuplicates[Times @@@ Tuples[Prepend[variables, 1], degree]];
+    coefficients = Array[Unique["primitive$"] &, Length[monomials]];
+    ansatz = coefficients.monomials;
+    equations = Union @@ Table[Last /@ CoefficientRules[Numerator[Together[
+      D[ansatz, variables[[i]]] + fd[[i]] ansatz - rational[[i]]]], variables],
+      {i, Length[variables]}];
+    solutions = Solve[Thread[equations == 0], coefficients];
+    If[solutions === {}, Throw[$Failed, AlgebraicPrimitive]];
+    solution = ansatz /. First[solutions] /. Thread[coefficients -> 0];
+    result += prefactor solution,
+    {root, classes}];
+  Together[result]
+], AlgebraicPrimitive];
+
+DLogConnectionQ[matrices_List, variables_List, regulator_Symbol, alphabet_List] :=
+  DLogResidues[matrices, variables, regulator, alphabet] =!= $Failed;
 
 repairFailure[field_String, message_String] :=
   Failure["INVALID_STRUCTURED_REPAIR_INPUT", <|"Field" -> field, "Message" -> message|>];

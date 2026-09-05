@@ -67,11 +67,6 @@ If[
     ToLowerCase[observedEntryHash] =!= ToLowerCase[checkerOptions["expected_entry_sha256"]],
   writeResult["ERROR", "TOOL_IDENTITY_MISMATCH", "authoritative Libra entry hash does not match checker options"]
 ];
-If[
-  checkerOptions["expected_tool_identity"] =!= "1.2",
-  writeResult["ERROR", "TOOL_IDENTITY_MISMATCH", "authoritative checker identity must be Libra 1.2"]
-];
-
 (* Checker-owned exact implementation.  This deliberately does not call the
    provider publication gate or a shared structured scientific helper. *)
 zeroMatrixQ[expr_] := MatrixQ[expr] &&

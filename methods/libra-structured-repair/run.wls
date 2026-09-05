@@ -131,9 +131,6 @@ libraSymbolAvailableQ[name_String] := NameQ["Libra`" <> name] || NameQ["Global`"
 If[!And @@ (libraSymbolAvailableQ /@ requiredSymbols),
   writeFailure["ERROR", "TOOL_ERROR", "Libra 缺少必需的公共 API 符号"]
 ];
-If[!ValueQ[Libra`$LibraVersion] || Libra`$LibraVersion =!= "1.2",
-  writeFailure["ERROR", "TOOL_IDENTITY_MISMATCH", "结构化修复要求 Libra 1.2"]
-];
 Libra`$LibraUseFermat = False;
 
 variable = First[request["variables"]];

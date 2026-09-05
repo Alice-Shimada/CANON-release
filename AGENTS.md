@@ -6,11 +6,11 @@
 2. 用户只与主 Agent 交互；不得要求用户执行内部 CLI。
 3. 所有状态操作必须通过项目提供的 `statemng` MCP tools 完成。
 4. `statemng_task_accept` 和 `statemng_task_unblock` 只允许主 Agent 调用，subagent 不得调用。
-5. 主 Agent 派发持续研究任务时必须使用 Codex 项目专用的 `persistent_research_worker` custom agent，不得改用未限制 tools 的内置 worker；该 custom agent 的配置必须禁止 `statemng_task_accept` 和 `statemng_task_unblock`。
+5. 主 Agent 派发持续研究任务时必须使用 Codex 项目专用的 `persistent_research_worker` custom agent，不得改用未限制 tools 的内置 worker；宿主侧配置必须将其限制为六项 worker tools。受 Codex role-MCP 回归影响而无法物理过滤时，只有 launcher runtime guard 已经由主 Agent 的 `init/resume` 绑定且 worker 在 `task_show` 中验证为受限角色后才可继续。
 6. `statemng` tools 不可用时，停止研究并报告接入错误；不得绕过状态管理继续研究。
 7. 不得使用已经删除的 `workflow.py`。
 8. Codex 初版只允许在 Local 会话中执行持续研究；Worktree 会话必须停止持续研究并报告接入错误，不得操作另一 checkout 的状态目录。
-9. Codex 主 Agent 在首次状态调用前必须自行运行 `state-management/adapters/codex/install_launcher.py --check`。校验失败时，由主 Agent 重新安装入口并停止当前持续研究，待全新 Local 会话加载 MCP；不得继续使用可能指向其他 checkout 的 tools，也不得要求用户执行安装命令。
+9. Codex 主 Agent 在首次状态调用前必须自行运行 `state-management/adapters/codex/install_launcher.py --check`。校验失败时，由主 Agent 重新安装入口并停止当前持续研究，待全新 Local 会话加载 MCP；不得继续使用可能指向其他 checkout 的 tools，也不得要求用户执行安装命令。校验通过后，主 Agent 必须在创建任何 worker 前先成功调用 `init` 或 `resume`，原子绑定当前总体任务的 coordinator。
 
 ## 四、整体架构
 

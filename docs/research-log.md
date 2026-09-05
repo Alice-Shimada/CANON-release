@@ -7,7 +7,7 @@
 1. 先审计当前 dirty worktree、旧会话交接结论和现有测试，明确哪些能力可执行、仅有 scaffold、或因外部环境而 blocked；不得恢复已删除的 `workflow.py`，也不得建立第二套状态机。
 2. INITIAL、Libra、CANONICA 的 method-card 和机器可读接口必须保持以下边界：INITIAL 只为指定且已归一化的 candidate 提供 UT 证据或显式候选变换；Libra 处理可定位、可分阶段的结构缺陷；CANONICA 寻找未知的整体有理 canonical transformation。三者不得构成固定 fallback 链。
 3. `Inconclusive`、程序/环境失败、候选被数学拒绝必须是不同结果；后端失败不得自动触发 candidate replacement，也不得被解释成数学上不存在解。
-4. 后端只能产出 candidate transformation/system；最终成功必须经过独立 verifier，至少核对约定一致性、可逆性、精确 gauge identity、epsilon factorization、除去 epsilon 后无残余 epsilon 依赖、预期 pole/dlog 结构，以及多变量时的 flatness。
+4. 后端只能产出 candidate transformation/system；最终成功必须经过独立 verifier，至少核对约定一致性、可逆性、精确 gauge identity、epsilon factorization、除去 epsilon 后无残余 epsilon 依赖、预期 pole/dlog 结构，以及多变量时在一个确定性精确有理点上的 flatness。
 5. 外部 package 调用只采用已查证的 primary-source API。缺少 package、版本或可复现实例时，只交付明确标记的 contract/scaffold/blocked capability，不伪造成功路径。
 6. 至少完成一个经审计确认的最高收益缺口，并用代表性正负例自动验收；结果记录命令、输入、预期/容限、实际摘要、判定和产物路径。对会改变后续路线或核心结论的完成节点，由独立 agent 按本标准复核；实质问题整改后复验。
 7. Git 只在关键节点固化核心 source-of-truth；排除无关改动、大文件和可复现生成物。除非交付确有需要，本阶段不生成新的 TeX。
@@ -59,7 +59,7 @@
 - Focused 命令：`python3 -m unittest -v` 运行 prepared-basis 五分支、INITIAL non-control、
   malformed/contradictory、Libra multivariable scope、CANONICA non-flat 和两项 exhaustion
   测试；全部通过。新测试暴露并修正了 `FlatConnectionQ` 原有的多变量 pair iterator，
-  fixture 对 flat/non-flat 两方向分别精确返回 `True/False`。
+  fixture 对 flat/non-flat 两方向在一个确定性精确有理点上分别返回 `True/False`。
 - Libra 真实命令：以 `WolframKernel -noinit -noprompt -script methods/libra/run.wls`
   调用登记入口 `/Users/balth/Works/hep-tools/tools/libra/Source/Libra.m`（1.2，入口 SHA-256
   `b3574e7f560951516a289a8141aafbaf23f0f5ae563e29d0fa077b17ba4d3eb4`），caller-owned
@@ -117,7 +117,7 @@
   canonical `1×1` prefix 加 Libra Tutorial #1 `2×2` tail-internal defect。两个源 cross
   blocks 必须为零、两个 transformation cross mixings 禁止；defect kind 必须精确为
   `current-current`/`epsilon-factorization`，failure test 为 `REGULATOR_INDEPENDENT_TERM`，且
-  `full_entry = prefix_dimension + {row,column}`。preflight 还精确复查 prefix flatness、epsilon
+  `full_entry = prefix_dimension + {row,column}`。preflight 还复查 prefix 在一个确定性精确有理点上的 flatness、epsilon
   factorization、除 regulator 后无残余依赖和声明 dlog alphabet；联合伪造其他 kind 与 `1/x`
   noncanonical prefix 均在 package resolution 前稳定拒绝。
 - 权限边界：provider 只做 shape/domain/invertibility/frozen-prefix publication gate。Checker
@@ -184,3 +184,17 @@
 - 未解决的 G4：CANONICA recursion 与 Libra legacy Automatic search 的工具忠实成本界限
   仍缺少 primary-source 依据；本里程碑未增加维数 cap、wall-clock surrogate、call-count
   surrogate，也未改变任何默认搜索策略。
+
+## 2026-09-05：massless planar pentabox 全部 sectors 完成
+
+- 从 19-sector / 20-master prefix 继续，完成 46/46 sectors、61/61 masters；五变量
+  `FINAL_CHECK` 返回 `PASS/ALL_PASS`，24 个 active letters，保留 Gram 根式。
+- 通用修改包括 epsilon-zero 多项式 core 候选、两维 epsilon-singular completion、
+  affine-epsilon 原函数 tail 修补、完整 prefix 的 epsilon 归一化，以及代数商域共享
+  residue 求解。Fermat 作为显式最终 gauge 验算选项；五组全变量 gauge 恒等式另经
+  Mathematica 独立证明为零。没有新增拓扑/sector 专用公式。
+- 软件测试为 14/14、11/11、4/4、3/3。平坦性仍按现有确定性精确有理点门检查，
+  不额外声称积分边界的 UT 性质或任意 MPL family 上的搜索完备性。
+- 报告、完整 basis/DE 与哈希记录：
+  [REPORT.md](/home/liuyuanche/Program/CANON_develop/runs/2l5p-complete-20260905-grs_ynfi/REPORT.md)。
+  本次按用户授权在独立测试目录运行，没有操作 `.state-management`。

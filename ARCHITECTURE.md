@@ -31,8 +31,10 @@ wolframscript -file <script.wls> <input.json> <output_dir>
 flowchart TD
     P["PREPARE"] --> D["DISCOVER"]
     D --> BCD["BUILD_CUT_DE"]
+    BCD --> RC["ROUTE_CORE_CANDIDATES"]
     BCD --> SC["SEARCH_CORE"]
-    SC --> CC["CHECK_CORE"]
+    RC --> CC["CHECK_CORE"]
+    SC --> CC
     CC -- "PASS" --> BFD["BUILD_FULL_DE"]
     CC -- "FAIL" --> SC
     SC -- "FAIL" --> SC
@@ -90,7 +92,7 @@ READY -> RUNNING -> DONE
 - `.wl` 表达式解析；
 - IBP、DE、leading singularity、Gram/Baikov、ansatz 和规范变换计算；
 - UT 或 canonical 判定；
-- DlogBasis、Gram-Baikov 或 MethodCard 的科学选择；
+- DlogBasis-refine 或 MethodCard 的科学选择；
 - Mathematica kernel、notebook 或 session 状态。
 
 ## 文件协议
@@ -122,7 +124,6 @@ CANON_neu/
 ├── mma/
 ├── methods/
 │   ├── dlogbasis/
-│   ├── gram-baikov/
 │   └── method-card-template/
 └── tests/
 ```
@@ -137,23 +138,26 @@ run、workspace 与 artifact 仍由根目录 `AGENTS.md` 和 `README.md` 所规�
 
 ```text
 collaborator preparation
-  -> prepared family + Kira project/jobs
-  -> derivative choice (zero-growth first, affine fallback)
-  -> Kira reduction/export
-  -> ordered masters + fully reduced rules
-  -> DEBuilder
-  -> matrices + curvature validity
+  -> ordered masters + declared propagator slots + derivative operators
+  -> raw-master derivative targets -> Kira reduction/export
+  -> DEBuilder -> ordered DE (reused for every sector)
+  -> CANONICA/Libra core transformation
+     or optional DlogBasis-refine candidates -> IBP -> reduced row-basis selection
+  -> full-prefix embedding -> off-diagonal solve + epsilon normalization
+  -> canonical check -> cumulative commit -> next sector -> final shared residues
 ```
 
-- `mma/PrepareFamily.wls` 是可整体替换的 one-loop demo，不是生产准备层；
+- `mma/PrepareFamily.wls` 从 trusted typed family-spec 直接绑定生产 family/Kira 输入；
 - `mma/lib/BaikovDerivative.wl` 提供有界 exact zero-growth 搜索与 affine fallback；
+- `mma/lib/CandidateIBPBridge.wl` 把当前 `j[family,inds]` 候选及完整 Baikov measure
+  cofactor 公式变成带 sector/numerator metadata 的精确 targets；
 - `mma/ReduceIBP.wls` 只运行请求中指定的两个 Kira job，交付 masters 与 rules；
 - `mma/lib/DEBuilder.wl` 只消费内存数学对象，交付 matrices 与 validity。
 
-enhanced-Baikov cofactor 到 reducer targets 的转换仍属于合作者准备接口，不能把
-cofactor search PASS 冒充为完整 reduction/DE 交付。DE 使用 column-vector convention
-`D[I,x] == A_x.I`；二变量曲率做全局精确检查，多变量只声明记录下来的 exact-rational
-bivariate slices，不把 slice PASS 外推为全局 flatness。
+`canon-neu/candidate-ibp-bridge/v1` 只证明所列 targets 对 frozen masters 的有界 IBP
+闭合；不能把 cofactor search 或 reduction PASS 冒充为 UT/canonical 交付。DE 使用 column-vector convention
+`D[I,x] == A_x.I`；曲率只在一个确定性精确有理点上检查，不把该点 PASS 外推为全局
+flatness。
 
 发布代码不保存用户名、home path、固定 Kira 位置、live-run 日志、数据库、rules 或
 矩阵结果。冻结 fixture 与离线测试属于可复用输入契约；真实 Kira pentabox 始终是显式

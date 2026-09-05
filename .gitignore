@@ -2,4 +2,5 @@ __pycache__/
 *.pyc
 runs/
 .state-management/
+/.worklogs/
 .DS_Store

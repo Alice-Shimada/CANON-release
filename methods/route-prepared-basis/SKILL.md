@@ -14,18 +14,15 @@
 
 ## 决策及其优先级
 
-1. 对角与非对角质量均为典范，且没有剩余问题：
-   `VERIFY_CANONICAL_DE`。
-2. 已选候选可疑或存在局部缺陷，且仍有任何已声明的替代项；即使平台期为真也如此：
-   `REFINE_SECTOR_UT_CANDIDATES`。
-3. 只有候选池完全耗尽、剩余替代项为零、并且所有已声明候选都已尝试后，局部缺陷才进入：
-   `REPAIR_WITH_LIBRA`。
-4. 候选选择完成后的全局有理缺陷：
-   `FIND_RATIONAL_CANONICAL_WITH_CANONICA`。
-5. 其他所有有效状态：`DIAGNOSE_OR_CHANGE_VARIABLES`。
+1. 已经呈 canonical form：`VERIFY_CANONICAL_DE`。
+2. 已选候选可疑且仍有替代项：`REFINE_SECTOR_UT_CANDIDATES`。
+3. core 已 canonical 且缺陷位于 lower-to-current coupling：`SOLVE_TAIL`。
+4. 预期存在有理变换：`FIND_RATIONAL_CANONICAL_WITH_CANONICA`。
+5. 其余：`DIAGNOSE_OR_CHANGE_VARIABLES`。
 
-`ut_evidence_references` 是追溯数据。改变 INITIAL 或其他 UT 证据参考不能选择后端、
-改变决策或终止路线。
+后两条求解路线不要求候选池耗尽。`ut_evidence_references` 只记录来源，
+不控制路线。通用 tail 使用 `mma/SolveTail.wls`；旧 Libra 直和切片只保留为
+单独的有界方法，不是通用流程的 tail backend。
 
 ## 输出边界
 

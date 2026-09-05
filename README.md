@@ -53,7 +53,7 @@ $HOME/.codex/statemng/CANON/mcp
 
 该 launcher 是机器本地文件，不属于仓库，也不保存研究状态。仓库中没有用户个人目录的硬编码；其他用户机器上的接入 Agent 执行安装器后，会得到适合该机器的 launcher。
 
-如果 `--check` 失败，Agent 应重新安装 launcher，并停止当前会话中的持续研究，等待全新 Local 会话加载 MCP。不得继续使用可能指向其他 checkout 的 tools。
+如果 `--check` 失败，Agent 应重新安装 launcher，并停止当前会话中的持续研究，等待全新 Local 会话加载 MCP。不得继续使用可能指向其他 checkout 的 tools。安装程序同时准备当前 checkout 专用的机器本地授权目录；它不保存研究结果，也不会写入 Git。
 
 ## MCP 自检
 
@@ -94,55 +94,66 @@ $HOME/.codex/statemng/CANON/mcp
 
 ## 科学接口
 
-准备、IBP 和 DE 是三个独立边界。生产准备程序由合作者提供；仓库中的
-`PrepareFamily.wls` 只是 one-loop demo。科学脚本不接收 task/run envelope，Agent
-只需在状态机分配的 workspace 中运行它们并登记结果文件。
+科学输入是 trusted family specification、Kira project/jobs、有序 masters 和逐变量导数算符。
+`propagator_slots` 声明实际传播子在完整指标列表中的位置，`regulator` 与 `dimension_rule`
+显式给出。流程不限制圈数、传播子个数、ISP 位置、sector rank 或运动学变量个数；仍以
+给定 masters 和 IBP 约化为输入，不额外证明 master 完备性或识别函数类别。
 
-IBP 的最小调用是：
+主 Agent 在现有 `statemng` 任务中按以下顺序调用无状态科学接口：
+
+1. `PrepareFamily.wls` 绑定输入；`DiscoverSectors.wls` 从 masters 生成 sector mask、rank
+   和 resident order，不需要文献 sector manifest。
+2. 用 `MasterDerivativeTargets[masters, preparedDerivatives]` 生成原始 DE 所需 targets，
+   交给 `ReduceIBP.wls`。`BuildSectorCutDE.wls` 从 `ibp_reduction` 构造一次完整
+   `ordered_master_de`；后续 sector 用 `SliceSectorCutDE.wls` 复用它。
+3. 对每个 sector，直接选择 CANONICA 的多变量有理 DE 方法或 Libra 的单变量方法；
+   也可用 DlogBasis-refine 提出积分候选，经 `ReduceCandidateIBP.wls` 约化，再由
+   `RouteCoreCandidates.wls` 选择独立行基及单行替换。原始 DE 路线不以 LS 候选成功为前提。
+4. `CheckSectorCore.wls` 通过后，`BuildFullSectorDE.wls` 将同一候选行表示嵌入完整 prefix。
+   `SolveTail.wls` 使用 CANONICA 的公开 `TransformOffDiagonalBlock` 和
+   `TransformDlogToEpsForm` 求新的非零 subsector 修正与 epsilon 归一化。
+5. `CheckCanonical.wls` 重算完整 gauge；`CommitSector.wls` 累计完整变换，包括求解所需的
+   lower-prefix 归一化。`NextSector.wls` 从 manifest 与 trace 计算下一项。
+6. 全部 sector 完成后，`CheckFullSystem.wls` 从原始 ordered DE 和累计变换重算全局 gauge，
+   联立所有方向的常数留数。只有 `ALL_PASS` 输出 `canonical_basis` 与 `canonical_de`。
+
+`BUILD_FULL_DE` 的 `declared_alphabet` 可为 `null`，表示从联络的 pole factors 生成字母候选；
+也可提供含精确代数表达式的 `letters`。根式以 Wolfram 原生表达式表示，例如
+`x + Sqrt[1+x^2]`；求导、化简和 shared-residue solve 使用同一表达式，不要求先有理化。
+这支持声明代数候选的传递与判定，不承诺自动发现所有代数字母。CANONICA 搜索仍有其有理
+变换的算法范围；超出某次搜索空间只表示尚未找到，不表示不存在 canonical basis。
+
+科学脚本继续使用：
 
 ```text
+wolframscript -file mma/PrepareFamily.wls INPUT.json OUTPUT_DIR
 wolframscript -file mma/ReduceIBP.wls REQUEST.json RESULT.wl
 ```
 
-请求给出 Kira executable、已准备 project、两个 job、topology、targets、fresh
-output 和 argv options。结果只含 Kira 原序 masters 与完全回代 rules；没有版本
-探测、hash、provenance、sector manifest 或状态副作用。
+候选 IBP 桥与内存 DE API 的完整调用见 `INTERFACES.md`。所有运行输出放在调用方 workspace。
+程序信任所声明的科学输入与工具入口；不增加版本白名单、重复检查或自动重试。
 
-DE 只消费内存中的数学对象：
-
-```wl
-Get[FileNameJoin[{repoRoot, "mma", "lib", "DEBuilder.wl"}]];
-result = BuildDifferentialEquations[family, masters, rules];
-```
-
-成功只返回 `matrices` 和 `validity`。master 先替换为单位向量，rule 右端只向量化
-一次，然后逐行拼装。完整契约见 `INTERFACES.md`。
-
-快速 DE 测试只需要 Wolfram：
+针对当前科学接口的测试：
 
 ```text
+wolframscript -file tests/RunPrepareDiscoverUnitTests.wls PENTABOX_RESOURCE_DIRECTORY
 wolframscript -file tests/RunDEBuilderUnitTests.wls
+wolframscript -file tests/RunSectorCutDEUnitTests.wls
+wolframscript -file tests/RunCandidateIBPBridgeUnitTests.wls
+wolframscript -file tests/RunCoreCandidateRouteUnitTests.wls
+wolframscript -file tests/RunFullSectorTailUnitTests.wls CANONICA_ENTRY
+wolframscript -file tests/RunCanonicalCommitUnitTests.wls
+wolframscript -file tests/RunFullSystemUnitTests.wls
 ```
 
-IBP 与导数选择的离线测试为：
+真实积分链路使用显式提供的 DlogBasis、FiniteFlow、Kira 和正常安装的 Fermat：
 
 ```text
-wolframscript -file tests/RunKiraIBPUnitTests.wls
-wolframscript -file tests/RunBaikovDerivativeUnitTests.wls
-wolframscript -file tests/RunPentaboxFixtureUnitTests.wls
+wolframscript -file tests/RunEndToEndWorkflowLiveTest.wls DLOGBASIS_ENTRY FINITEFLOW_ENTRY KIRA_EXECUTABLE FRESH_OUTPUT
 ```
 
-其中 IBP 使用临时 fake reducer，不需要 Kira，也不写入仓库。
-
-两圈五点无质量 pentabox 的 Kira 约化仍是 opt-in live test：
-
-```text
-wolframscript -file tests/RunPentaboxIBPLiveTest.wls KIRA_EXECUTABLE FRESH_OUTPUT
-```
-
-该脚本固定传入 `--parallel=20`。普通测试不启动真实 Kira。发布分支不保存任何
-live run 的日志、数据库、rules 或矩阵；需要科学验收时，应在 fresh、被忽略的
-workspace 中运行，并用完整导数 targets 检查五个运动学方向的 DE 全链路。
+两变量 tail 测试覆盖非零 coupling 和 lower epsilon 归一化；最终检查测试覆盖显式代数字母。
+真实一圈回归与这些有限测试均不构成任意 MPL family 的完备性证明，也不单独证明 UT。
 
 ## 维护与故障处理
 

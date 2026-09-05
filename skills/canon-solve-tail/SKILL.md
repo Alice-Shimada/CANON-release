@@ -1,28 +1,28 @@
 ---
 name: canon-solve-tail
-description: "Solve the current-sector lower-tail transformation against the accepted prefix. Use when an agent is assigned the SOLVE_TAIL workflow step."
+description: Solve the current sector's nonzero off-diagonal coupling and epsilon normalization.
 ---
 
-<!--
-Placeholder skill: keep the ansatz and solver empty for now.
+# Solve the current tail
 
-Responsibility:
-- Read the SOLVE_TAIL task packet.
-- Run mma/SolveTail.wls.
-- Return the proposed sector transformation or a bounded failure.
+Run `mma/SolveTail.wls` with `full_sector_de`, `core_transform`, and
+`method_options.package_entry` identifying CANONICA. Already canonical
+completions need no package call. For an affine epsilon tail, the script first
+extracts a common regulator factor and integrates the epsilon-zero block in all
+variables, allowing algebraic primitives (arXiv:2206.04609, Eq. 78).
+Otherwise the script calls the public
+`TransformOffDiagonalBlock` and `TransformDlogToEpsForm` on all directions,
+then composes their transformation with the selected core completion.
+The off-diagonal solve uses the current sector's dependency closure; epsilon
+normalization uses the entire prefix to preserve incoming couplings outside it.
 
-Input payload:
-- full_sector_de
-- core_transform
-- accepted_prefix, or null for the first sector
-- tail_options
+This solves new subsector corrections; no predeclared completion pool or dotted
+replay is required. Epsilon normalization may also change the accepted lower
+basis, so retain the complete returned prefix transformation. The previous
+artifact is immutable; COMMIT_SECTOR publishes the new cumulative map.
 
-Output:
-- PASS/TAIL_READY with artifact sector_transform
-- FAIL/TAIL_UNSOLVED
-
-Boundary:
-- The agent and Mathematica own ansatz selection.
-- This historical scientific scaffold declares no state transition; current research
-  state is governed only by `statemng` under root `AGENTS.md` and `README.md`.
--->
+`declared_alphabet -> null` at BUILD_FULL_DE requests pole-factor alphabet
+inference. Explicit algebraic letters can instead be supplied as ordinary exact
+Wolfram expressions. The resulting alphabet is carried by `sector_transform`.
+`PASS/TAIL_READY` goes to CHECK_CANONICAL; an unsuccessful backend solve returns
+`INCONCLUSIVE/TAIL_UNSOLVED` without a canonical claim.

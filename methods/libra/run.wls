@@ -225,9 +225,6 @@ symbolsAvailable = And @@ (libraSymbolAvailableQ /@ requiredSymbols);
 If[!symbolsAvailable,
   writeFailure["ERROR", "TOOL_ERROR", "Libra 缺少本卡所需的公共符号"]
 ];
-If[!ValueQ[Libra`$LibraVersion] || Libra`$LibraVersion =!= "1.2",
-  writeFailure["ERROR", "TOOL_IDENTITY_MISMATCH", "Libra 版本不兼容；本卡要求 1.2"]
-];
 Libra`$LibraUseFermat = False;
 
 variable = First[cut["variables"]];
@@ -333,6 +330,7 @@ candidateArtifact = <|
   "basis_id" -> cut["basis_id"],
   "coefficient_domain" -> "exact-rational-functions",
   "basis" -> cut["basis"],
+  "source_basis" -> cut["basis"],
   "variables" -> {variable},
   "regulator" -> regulator,
   "convention" -> "old_basis = transformation . new_basis",
@@ -346,9 +344,16 @@ candidateArtifact = <|
     "wolfram_version" -> $Version,
     "system_id" -> $SystemID
   |>,
+  "candidate_group_pool" -> <|
+    "declared" -> 1, "eligible" -> 1, "remaining" -> 0,
+    "unconsumed_candidates" -> 0, "pool_exhausted" -> True|>,
   "candidates" -> {
     <|
       "candidate_id" -> "libra-single-variable:1",
+      "member_candidate_ids" -> Table["libra-single-variable:row:" <> ToString[i],
+        {i, Length[cut["basis"]]}],
+      "full_new_basis_rows" -> Map[Together, Inverse[transformation], {2}],
+      "construction_rejection" -> None,
       "transformation" -> transformation,
       "transformed_matrices" -> {transformed},
       "provider_evidence" -> <|

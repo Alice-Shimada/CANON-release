@@ -1,32 +1,56 @@
 #!/usr/bin/env wolframscript
 
-(* Demo only. The production preparation step belongs to the collaborator. *)
+$HistoryLength = 0;
 
-scriptDirectory = DirectoryName[$InputFileName];
-source = FileNameJoin[{
-  DirectoryName[scriptDirectory], "tests", "fixtures", "kira-one-loop-box"
-}];
-arguments = Rest[$ScriptCommandLine];
+repoRoot = DirectoryName[DirectoryName[ExpandFileName[$InputFileName]]];
+Get[FileNameJoin[{repoRoot, "mma", "lib", "MethodCardCore.wl"}]];
 
-If[Length[arguments] =!= 1,
-  Print["Usage: wolframscript -file mma/PrepareFamily.wls OUTPUT_DIR"];
-  Exit[2]
-];
-
-output = ExpandFileName[First[arguments]];
-If[
-  $VersionNumber < 14 || FileType[source] =!= Directory || FileExistsQ[output],
-  Print[InputForm @ Failure[
-    "PREPARE_DEMO_FAILED",
-    <|"MessageTemplate" -> "The demo requires Wolfram 14+, its bundled fixture, and a fresh output directory."|>
-  ]];
-  Exit[1]
-];
-
-CopyDirectory[source, output];
-result = <|
-  "project" -> output,
-  "family" -> FileNameJoin[{output, "prepared-derivatives-v2.wl"}]
+{inputPath, outputDir} = ExpandFileName /@ CanonMethodCard`ScriptArguments[];
+task = CanonMethodCard`ReadTask[inputPath, "PREPARE"];
+spec = CanonMethodCard`LoadArtifact[task, inputPath, "family_spec"];
+project = ExpandFileName[spec["kira", "project"]];
+source[path_String] := <|
+  "path" -> ExpandFileName[path],
+  "sha256" -> FileHash[path, "SHA256", "HexString"]
 |>;
-Print[InputForm[result]];
-Exit[0];
+kiraSource[path_String] := source[FileNameJoin[{project, path}]];
+
+prepared = <|
+  "schema" -> "canon-neu/prepared-family/v1",
+  "family_ref" -> spec["family_ref"],
+  "basis_ref" -> spec["basis_ref"],
+  "topology" -> spec["topology"],
+  "parameters" -> spec["parameters"],
+  "variables" -> spec["variables"],
+  "regulator" -> spec["regulator"],
+  "dimension_rule" -> spec["dimension_rule"],
+  "index_order" -> spec["index_order"],
+  "propagator_slots" -> spec["propagator_slots"],
+  "sector_convention" -> spec["sector_convention"],
+  "kira" -> <|
+    "project" -> project,
+    "jobs" -> spec["kira", "jobs"],
+    "targets" -> spec["kira", "targets"],
+    "sources" -> <|
+      "integral_families" -> kiraSource[spec["kira", "integral_families"]],
+      "kinematics" -> kiraSource[spec["kira", "kinematics"]],
+      "jobs" -> (kiraSource /@ spec["kira", "jobs"]),
+      "targets" -> kiraSource[spec["kira", "targets"]]
+    |>
+  |>,
+  "family_data" -> source[spec["family_data"]],
+  "prepared_derivatives" -> source[spec["prepared_derivatives"]],
+  "ordered_masters" -> source[spec["ordered_masters"]]
+|>;
+
+artifactPath = CanonMethodCard`WriteWLArtifact[
+  prepared, outputDir, "prepared-family.wl"
+];
+CanonMethodCard`WriteResult[
+  task, outputDir, "PASS", "OK",
+  <|"prepared_family" -> <|
+    "type" -> "mathematica-expression",
+    "path" -> FileNameTake[artifactPath]
+  |>|>,
+  <|"family_ref" -> prepared["family_ref"], "basis_ref" -> prepared["basis_ref"]|>
+];

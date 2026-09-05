@@ -1,26 +1,24 @@
 ---
 name: canon-discover-sectors
-description: "Report the sector metadata and master basis for CANON_neu. Use when an agent is assigned the DISCOVER workflow step."
+description: "Materialize exact sector metadata and the frozen ordered master basis from one prepared-family artifact."
 ---
 
-<!--
-Placeholder skill: keep the scientific procedure empty for now.
+# Discover sectors and masters
 
-Responsibility:
-- Read the DISCOVER task packet and its script input.
-- Run mma/DiscoverSectors.wls.
-- Report sector ids and propagator counts without sorting them.
+In the assigned run workspace, invoke:
 
-Input payload:
-- prepared_family
+```text
+wolframscript -file mma/DiscoverSectors.wls INPUT.json FRESH_OUTPUT_DIR
+```
 
-PASS output:
-- code: SECTORS_READY
-- artifacts: sector_manifest, master_basis
-- summary.sectors: [{"id": integer, "propagator_count": integer}, ...]
+`payload.prepared_family` is the only scientific input. The script orders sectors
+by ascending `(propagator_count, id)` and stably orders masters by that rank,
+preserving the original Kira position within each sector. Derive each mask from
+the declared `propagator_slots` and actual master indices. Bits use the full
+integral-index order, with ISP slots zero; `a1` is the least significant bit.
+The manifest includes `sector_bits` and `master_count`, with no literature
+manifest or fixed propagator count.
 
-Boundary:
-- Python, not this skill, sorts sectors.
-- This historical scientific scaffold declares no state transition; current research
-  state is governed only by `statemng` under root `AGENTS.md` and `README.md`.
--->
+Success writes `sector-manifest.wl`, `master-basis.wl`, and `result.json` with
+code `SECTORS_READY`. The script does not run master discovery or modify research
+state; register retained output only through `statemng`.

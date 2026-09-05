@@ -23,16 +23,19 @@ DE 变换之前；它不再复用 `SEARCH_CORE`。`SEARCH_CORE` 保持为 Libra/
 筛选器和验证器必须在一条路线内组合使用，或者只返回诊断证据。
 
 首批启用的变换提供者是 `canonica` 和 `libra`。它们的 2x2 固定样例只证明提供者/检查器
-协议闭合，不表示它们是默认的物理候选路线。计划中的默认路线是：使用 DLogBasis 或其他
-积分生成器提出候选，在冻结的低扇区前缀上检查，并替换导致不良非对角块的候选。重型
-变换提供者只保留为有界诊断/修复兜底。`dlogbasis` 与暂定分类的 `gram-baikov` 都是约化前
-`PROPOSE_INTEGRAL_CANDIDATES` 仅接口卡；没有实现任何 CANON 科学适配器，也没有选择
-Gram-Baikov 主要 API。DLogBasis 的三个相关公共 API
-`IntegrandAnsatz`、`LeadingSingularities` 和 `GenerateDlogbasis` 提出 `G[...]` 积分或
-dlog 组合，不产生有序主基 DE 变换。受版本控制的软件包中只有
-`LeadingSingularitiesPortable.tar.gz` 是自包含的；`LS_modified.zip` 不是。
-`IntegrandAnsatz` 用法把可选参数描述为分子幂次数，而受版本控制的实现以 `dim_:4` 在幂计数
-公式中使用它；在适配器设计前此歧义必须解决，不能把维数、分子/幂计数与候选预算静默合并。
+协议闭合，不表示它们是默认的物理候选路线。积分生成由 `dlogbasis` 卡负责：运行器从
+`prepared_family` 读取 ``DlogBasis`` family 与 sector manifest，调用
+``DlogBasis`DlogBasisSearch``，并把返回的 `CandidateCombinations`、有限仿射覆盖状态和
+完整 package evidence 封装为
+`canon-neu/integral-candidates/v1`。候选仅是有界 maximal-cut constant-leading-singularity
+候选；不声称 global dlog、IBP independence、UT、epsilon form 或 canonical basis。
+package 未返回候选时，本卡 fail closed 为 `INCONCLUSIVE/METHOD_EXHAUSTED`，且不写
+`integral_candidates`。
+
+DlogBasis-refine 的每个 module-lift 方向是一个候选；方法卡按 manifest 中当前 sector 的
+`BasisIndices` 数目组成预算内 groups。groups 经过 IBP
+后由 `mma/RouteCoreCandidates.wls` 按 resident current-sector columns 构造 `R` 和
+`T=Inverse[R]`。该 adapter 只返回 provisional pool，仍由 `CheckSectorCore.wls` 独立验收。
 
 `initial` 是独立的证据提供者，不是变换搜索或修复提供者。它仅覆盖 INITIAL 2.1 已登记的
 官方 26×26 无质量平面三圈四点梯图候选，固定官方基/顺序、第一项 UT 种子、
@@ -155,13 +158,11 @@ v1 形状为：
 或有理预期，以及局部/全局分类与缺陷数据相矛盾等状态。失败是确定性的
 `ERROR/INVALID_PREPARED_BASIS`，并报告稳定的字段/原因。
 
-成功写出 `canon-neu/route-decision/v1`，结果为 `PROVISIONAL/ROUTE_DECISION`。决策优先级
-固定为：已经呈典范形式 → `VERIFY_CANONICAL_DE`；可疑候选或局部缺陷且还有任何已声明替代项
-（即使平台期为真）→ `REFINE_SECTOR_UT_CANDIDATES`；局部缺陷只有在完整候选池耗尽、
-替代项为零且所有已声明候选都已尝试后 → `REPAIR_WITH_LIBRA`；候选选择已完成后的全局
-有理缺陷 → `FIND_RATIONAL_CANONICAL_WITH_CANONICA`；其余 →
-`DIAGNOSE_OR_CHANGE_VARIABLES`。`ut_evidence_references` 只用于追溯；改变 INITIAL 证据本身
-不能选择后端、改变决策或终止路线。
+成功写出 `canon-neu/route-decision/v1`。决策依次为：已 canonical →
+`VERIFY_CANONICAL_DE`；可疑候选且有替代项 → `REFINE_SECTOR_UT_CANDIDATES`；
+canonical core 的 lower-to-current 缺陷 → `SOLVE_TAIL`；预期存在有理变换 →
+`FIND_RATIONAL_CANONICAL_WITH_CANONICA`；其余 → `DIAGNOSE_OR_CHANGE_VARIABLES`。
+求解不以 candidate pool 耗尽为前提；UT evidence 仅记录来源。
 
 ## Libra 冻结前缀结构化修复
 
@@ -181,7 +182,8 @@ v1 不宣称一般局部/完整前缀修复：唯一支持的结构是一个已�
 `full_entry = prefix_dimension + {row,column}`。系数参数固定为 `parameters -> {}`，矩阵、
 字母表和候选变换中出现 `x`、正则化参数之外的 `z` 等未声明符号会在失败时封闭拒绝。
 
-当前提供者只运行登记或调用方注入的 Libra 1.2，并固定 Fermatica 为 `false`；阶段为
+当前提供者只运行登记或调用方注入的 Libra，记录实际加载版本，并固定 Fermatica 为
+`false`；阶段为
 `NewDSystem` → `Fuchsify` → `Transform` → `FactorOut` → `Transform` →
 `OverallTransformation` → `EFormQ`。它没有提供者回退，也不调用其他方法卡。多变量或
 全局/非局部问题为 `INCONCLUSIVE/OUT_OF_SCOPE`，无效/非平坦系统为
@@ -201,16 +203,15 @@ dlog 字母表、目标缺陷消除，以及所有声明的已接受块不退化
 `PASS/VERIFIED_STRUCTURED_REPAIR`；任何提供者 `PASS` 字段都会作为伪造状态被
 `FAIL/STRUCTURED_REPAIR_REJECTED` 拒绝，提供者证据不具有验收权限。
 
-## 目标路线策略（尚未接线）
+## 当前核心路线与后续目标
 
-当前可执行检查器只验证或筛选显式候选产物，不承担扇区调度。已经删除的旧
+当前可执行 route/check 只组装并检验 current-sector core，不承担扇区调度。已经删除的旧
 `workflow.py` 曾把 `CHECK_CANONICAL/TAIL_FAIL` 直接路由到 `SOLVE_TAIL`；该控制流不再是
-当前能力。下面是未来在现行状态管理/智能体编排层应实现的科学控制流，
-不能把它描述成已有能力。
+当前能力。DlogBasis-refine reduced groups 到独立 `CHECK_CORE` 的 decision loop 已接线；
+`BUILD_FULL_DE/SOLVE_TAIL` 已接通完整 reduced rows 与现有 full-prefix tail screen。
 
-独立的 `full-prefix-tail-screen` 卡已经实现了其中“对预构造的精确单变量产物进行有界候选
-筛选”的部分；`libra-structured-repair` 已实现显式符合条件的局部缺陷的提供者/检查器纵向
-切片。两者仍未接入协调器，也不负责生成物理候选特定的完整 DE，所以端到端路线仍未闭合。
+现有 `route-prepared-basis` 保持唯一 repair eligibility 决策：未穷尽的 pool 继续 refinement；
+只有全部 declared IDs 已尝试且 pool 精确耗尽时才可能选择 `REPAIR_WITH_LIBRA`。
 
 对每个当前扇区：
 
@@ -272,7 +273,9 @@ CANONICA 运行器有意先解析并加载软件包，再读取和验证 `sector
 ```
 
 方程约定为 `D[basis, variable[[i]]] == matrices[[i]].basis`。矩阵必须是方阵，维数必须与
-声明的基一致，并严格遵循声明的变量顺序。
+声明的基一致，并严格遵循声明的变量顺序。BUILD_CUT_DE 生成的
+`sector_boundaries` 是矩阵行号区间 `{{1,n}}`；`proper_subsectors` 单独列出
+cut quotient 丢弃的 strict proper subsectors。
 
 ### `sector_basis`
 
@@ -290,6 +293,12 @@ CANONICA 运行器有意先解析并加载软件包，再读取和验证 `sector
 
 ### `core_candidates`
 
+`epsilon-zero/run.wls` 提供一个通用的有界 DE 候选方法：从 `A(0)` 的 trace 和
+可选 `declared_alphabet` 生成代数前因子，解齐次多项式水平行；两维欠秩时尝试
+由 DE 本身确定的 epsilon-singular completion。它只输出 provisional candidates，
+仍走同一个 core、tail 和完整 canonical 检查。具体输入见
+[`epsilon-zero/SKILL.md`](epsilon-zero/SKILL.md)。
+
 ```wl
 <|
   "schema" -> "canon-neu/core-candidates/v1",
@@ -302,9 +311,16 @@ CANONICA 运行器有意先解析并加载软件包，再读取和验证 `sector
   "regulator" -> eps,
   "convention" -> "old_basis = transformation . new_basis",
   "method" -> <|"id" -> "...", "tool" -> "..."|>,
+  "candidate_group_pool" -> <|
+    "declared" -> n, "eligible" -> m, "remaining" -> n-m,
+    "unconsumed_candidates" -> k, "pool_exhausted" -> True | False
+  |>,
   "candidates" -> {
     <|
       "candidate_id" -> "provider-stable-candidate-id",
+      "member_candidate_ids" -> {"integral-candidate-id", ...},
+      "new_basis_rows" -> R,
+      "construction_rejection" -> None | "singular_reduced_basis",
       "transformation" -> T,
       "transformed_matrices" -> {Bx, ...},
       "provider_evidence" -> <|...|>
@@ -318,6 +334,14 @@ CANONICA 运行器有意先解析并加载软件包，再读取和验证 `sector
 ```wl
 Bi == Inverse[T].(Ai.T - D[T, variable])
 ```
+
+所有 production provider 都携带 `source_basis`、`full_new_basis_rows` 与
+`member_candidate_ids`；直接 DE provider 的 source 可以仅为当前 sector，full builder
+按列映射嵌入完整 raw basis。对约化积分组，
+`new_basis = R.old_basis`，所以 `T = Inverse[R]`。`R` 的列严格使用
+`sector_basis["basis"]` resident 顺序；lower-sector coefficients 不混入 core quotient，
+但以每组 `full_new_basis_rows` 相对顶层 raw `source_basis` 的顺序显式携带到
+`BUILD_FULL_DE`。候选 IBP 后只保留独立行基及独立单行替换；不预先枚举全部子集。
 
 提供者自报的证据不能作为接受证据。
 
@@ -349,7 +373,11 @@ T 与 B，以及登记的 INITIAL/FiniteFlow 身份、入口和输入文件哈�
   "prefix_id" -> "stable-prefix-id",
   "family_id" -> "stable-family-id",
   "coefficient_domain" -> "exact-rational-functions",
+  "source_basis" -> {rawL1, ...},
   "basis" -> {l1, ...},
+  "convention" ->
+    "old_source_basis = transformation . accepted_basis",
+  "transformation" -> Tlower,
   "variables" -> {x},
   "regulator" -> eps,
   "alphabet" -> {x, 1 - x, ...},
@@ -357,7 +385,9 @@ T 与 B，以及登记的 INITIAL/FiniteFlow 身份、入口和输入文件哈�
 |>
 ```
 
-使用前，本卡会独立复查精确性、平坦性、ε 因子分解和声明的 dlog 字母表。
+`source_basis` 与 `transformation` 是构造 raw off-diagonal block 所需的最小信息；
+`basis`、`matrices` 与 `alphabet` 仍描述冻结的 canonical lower prefix。使用前，本卡会
+独立复查精确性、平坦性、ε 因子分解和声明的 dlog 字母表。
 
 ### `full_prefix_candidates`
 
@@ -392,6 +422,8 @@ T 与 B，以及登记的 INITIAL/FiniteFlow 身份、入口和输入文件哈�
 基顺序固定为低扇区前缀在前、当前扇区在后。`Tfull` 必须保持低扇区前缀不变，低扇区到
 当前扇区的右上块必须为零，当前扇区内部块必须复现独立验收的核心变换。左下块是声明的
 候选特定低扇区补全。卡会重新计算每个完整变换后的矩阵，不信任提供者的声明结果。
+`BUILD_FULL_DE` 的 `full_sector_de` descriptor 直接指向这一 schema；其中 alphabet 可由
+显式 `declared_alphabet` 提供，也可先为空，再由 SOLVE_TAIL 提取 pole factors。
 
 完整前缀候选池必须为核心候选池中每个 `candidate_id` 恰好提供一项；部分候选池是输入
 错误，不能被报告成“池已耗尽”。候选按顺序检查，首项通过后立即短路，因此后续
@@ -404,24 +436,38 @@ T 与 B，以及登记的 INITIAL/FiniteFlow 身份、入口和输入文件哈�
 - `CANDIDATE_POOL_EXHAUSTED`：每个核心候选都有补全且全部失败；可以启用单独的有界修复
   卡，但本卡不会自行调用。
 
+上面的单变量 screen 是独立的诊断方法；当前 `SOLVE_TAIL` 不调用它。
+通用 tail 路线先抽取只依赖 epsilon 的公共归一化。若非对角块为 `a+b epsilon`，
+按 [arXiv:2206.04609, Eq. (78)](https://arxiv.org/html/2206.04609v2#S3.SS2)
+求 `a` 的代数原函数，构造三角修补。原函数的多项式／极点 ansatz 在全部变量方向
+联立求解。后续使用 CANONICA 公开 off-diagonal 与 epsilon-normalization 算法，
+允许完整 prefix 的归一化更新，并统一交由 CHECK_CANONICAL 接受。
+非对角求解可限制在当前 sector 的依赖闭包；epsilon 归一化作用于完整 prefix，
+以保留闭包外指向这些低 sector 的耦合。`BUILD_FULL_DE` 复用已接受的低 sector
+矩阵，`FINAL_CHECK` 从原始 DE 独立重算整族变换。
+不再强制先耗尽候选、测试 dots 或重放 prefix。
+
 ## 独立验收
 
-`mma/CheckSectorCore.wls` 选择第一个同时满足下列条件的候选：
+`mma/CheckSectorCore.wls` 按声明顺序选择第一个同时满足下列条件的候选：
 
-1. 产物模式、基顺序、变量和正则化参数完全一致；
-2. 任务扇区、稳定族 ID 和稳定基 ID 完全一致；
-3. 所有系数都属于有限的精确有理函数域；拒绝机器实数、不定式、无穷大、代数根和无法
-   分类的表达式；
-4. `T` 是声明维数的可逆方阵，且其行列式经精确有理化简后非零；
-5. 精确规范残差逐项为零；
-6. 变换后的联络是平坦的；
-7. 每个变换后矩阵都正比于声明的正则化参数，且除以正则化参数后与其无关。
+1. reduction 后的候选组可逆；
+2. 精确规范残差逐项为零；
+3. 变换后的联络平坦；
+4. 每个矩阵正比于声明的正则化参数，且除后与其无关。
 
-非平坦的输入割联络是上游 `INVALID_CUT_DE` 错误，会阻塞工作流；它不是候选失败，不能
-回到 `SEARCH_CORE`。
+每次 rejection 保留 candidate ID 与精确 signature；首个 PASS 后立即停止。只有所有
+eligible groups 已尝试且上游 pool 精确耗尽时，summary 才给出 `repair_eligible -> True`；
+预算停止不得进入 repair，checker 本身也从不调用 repair/provider。
 
 这只是当前扇区的**核心 ε 形式**门。完整 dlog/字母表结论仍需要在完整前缀（包括非对角
 低扇区耦合）上执行 `CHECK_CANONICAL` 和 `FINAL_CHECK`。
+
+大型整族检查可显式设置 `method_options.gauge_backend -> "fermat"`，用
+`method_options.package_entry` 指定 Fermatica，并通过 `FERMATPATH` 指定 Fermat。
+它在代数商域上精确检验 `A_i T - D_i T - T B_i == 0`；结合已有的 T 可逆性检查，
+这与直接计算 gauge 变换等价。默认仍使用 Wolfram 计算。两种后端都使用同一个
+多变量共享常数 residue 门；工具来源和实际版本/hash 写入 `canonical_de`。
 
 ## 执行边界
 

@@ -16,6 +16,9 @@ BASE_DESIGN = ROOT / "docs" / "state-management" / "跨通用 Agent 的持续研
 INSTALLER = ROOT / "state-management" / "adapters" / "codex" / "install_launcher.py"
 LAUNCHER_ARGUMENTS = ["-c", 'exec "$HOME/.codex/statemng/CANON/mcp"']
 
+sys.path.insert(0, str(ROOT / "state-management"))
+from codex_thread_guard import WORKER_TOOLS  # noqa: E402
+
 
 def architecture_section(text: str) -> str:
     start = text.index("## 四、整体架构")
@@ -70,7 +73,7 @@ class CodexAdapterTests(unittest.TestCase):
             self.assertEqual(server["default_tools_approval_mode"], "writes")
         self.assertEqual(
             main_server,
-            {key: value for key, value in worker_server.items() if key != "disabled_tools"},
+            {key: value for key, value in worker_server.items() if key != "enabled_tools"},
         )
 
     def test_worker_has_native_tool_restrictions(self) -> None:
@@ -86,9 +89,21 @@ class CodexAdapterTests(unittest.TestCase):
         self.assertIn("statemng tools are unavailable", worker["developer_instructions"])
         self.assertIn("required_skills", worker["developer_instructions"])
         self.assertIn("before starting research", worker["developer_instructions"])
+        self.assertIn("runtime guard", worker["developer_instructions"])
         self.assertEqual(
-            set(worker["mcp_servers"]["statemng"]["disabled_tools"]),
-            {"statemng_task_accept", "statemng_task_unblock"},
+            worker["mcp_servers"]["statemng"]["enabled_tools"],
+            [
+                "statemng_task_claim",
+                "statemng_task_show",
+                "statemng_artifact_add",
+                "statemng_task_submit",
+                "statemng_task_block",
+                "statemng_task_fail",
+            ],
+        )
+        self.assertEqual(
+            set(worker["mcp_servers"]["statemng"]["enabled_tools"]),
+            WORKER_TOOLS,
         )
 
     def test_installed_launcher_works_from_desktop_root_cwd(self) -> None:
@@ -101,7 +116,8 @@ class CodexAdapterTests(unittest.TestCase):
             '{"jsonrpc":"2.0","method":"notifications/initialized"}\n'
             '{"jsonrpc":"2.0","id":2,"method":"tools/list"}\n'
             '{"jsonrpc":"2.0","id":3,"method":"tools/call",'
-            '"params":{"name":"statemng_project_list","arguments":{}}}\n'
+            '"params":{"name":"statemng_project_list","arguments":{},'
+            '"_meta":{"threadId":"00000000-0000-4000-8000-000000000001"}}}\n'
         )
         with tempfile.TemporaryDirectory() as temporary_home:
             environment = os.environ.copy()
@@ -120,6 +136,15 @@ class CodexAdapterTests(unittest.TestCase):
             self.assertTrue(installed_payload["ok"], installed_payload)
             launcher = Path(installed_payload["launcher"])
             self.assertTrue(launcher.stat().st_mode & stat.S_IXUSR)
+            launcher_text = launcher.read_text(encoding="utf-8")
+            self.assertIn("STATEMNG_CODEX_THREAD_GUARD=1", launcher_text)
+            authority_directories = list(
+                (Path(temporary_home) / ".codex" / "statemng" / "CANON" / "authorization").iterdir()
+            )
+            self.assertEqual(len(authority_directories), 1)
+            self.assertEqual(
+                stat.S_IMODE(authority_directories[0].stat().st_mode), 0o700
+            )
 
             checked = subprocess.run(
                 [sys.executable, str(INSTALLER), "--check"],

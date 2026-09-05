@@ -9,6 +9,8 @@ import sys
 from pathlib import Path
 from typing import Any, Callable
 
+from codex_thread_guard import CodexThreadGuard, GuardError
+
 
 SERVER_DIRECTORY = Path(__file__).resolve().parent
 PROJECT_ROOT = SERVER_DIRECTORY.parent
@@ -296,35 +298,63 @@ def validate_arguments(item: dict[str, Any], arguments: Any) -> dict[str, Any]:
     return arguments
 
 
-def call_tool(name: str, arguments: Any) -> dict[str, Any]:
+def call_tool(name: str, arguments: Any, meta: Any = None) -> dict[str, Any]:
     item = TOOL_BY_NAME.get(name)
     if item is None:
         raise ValueError(f"unknown tool: {name}")
     checked = validate_arguments(item, arguments)
     try:
-        completed = subprocess.run(
-            [sys.executable, str(CLI), *item["_command"](checked)],
-            cwd=PROJECT_ROOT,
-            stdin=subprocess.DEVNULL,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            check=False,
-            timeout=60,
+        guard = CodexThreadGuard.from_environment(PROJECT_ROOT)
+        context = (
+            guard.authorize(name, checked, meta)
+            if guard is not None
+            else _unrestricted_authorization()
         )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        payload = {"ok": False, "error": f"cannot execute statemng: {exc}"}
-        return tool_result(payload, is_error=True)
-    try:
-        payload = json.loads(completed.stdout)
-        if not isinstance(payload, dict):
-            raise ValueError("CLI returned a non-object JSON value")
-    except (json.JSONDecodeError, ValueError) as exc:
-        detail = completed.stderr.strip() or completed.stdout.strip() or str(exc)
-        payload = {"ok": False, "error": f"statemng returned invalid output: {detail}"}
-    return tool_result(
-        payload, is_error=completed.returncode != 0 or payload.get("ok") is not True
-    )
+        with context as authorization:
+            try:
+                completed = subprocess.run(
+                    [sys.executable, str(CLI), *item["_command"](checked)],
+                    cwd=PROJECT_ROOT,
+                    stdin=subprocess.DEVNULL,
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    check=False,
+                    timeout=60,
+                )
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                payload = {"ok": False, "error": f"cannot execute statemng: {exc}"}
+                return tool_result(payload, is_error=True)
+            try:
+                payload = json.loads(completed.stdout)
+                if not isinstance(payload, dict):
+                    raise ValueError("CLI returned a non-object JSON value")
+            except (json.JSONDecodeError, ValueError) as exc:
+                detail = completed.stderr.strip() or completed.stdout.strip() or str(exc)
+                payload = {
+                    "ok": False,
+                    "error": f"statemng returned invalid output: {detail}",
+                }
+            succeeded = completed.returncode == 0 and payload.get("ok") is True
+            if authorization is not None:
+                authorization.complete(succeeded)
+                if succeeded and name == "statemng_task_show":
+                    payload["codex_authorization"] = authorization.metadata()
+            return tool_result(payload, is_error=not succeeded)
+    except GuardError as exc:
+        return tool_result(exc.payload(), is_error=True)
+
+
+class _UnrestrictedAuthorization:
+    def __enter__(self) -> None:
+        return None
+
+    def __exit__(self, _type: Any, _value: Any, _traceback: Any) -> None:
+        return None
+
+
+def _unrestricted_authorization() -> _UnrestrictedAuthorization:
+    return _UnrestrictedAuthorization()
 
 
 def tool_result(payload: dict[str, Any], *, is_error: bool) -> dict[str, Any]:
@@ -371,7 +401,7 @@ def handle(message: Any) -> dict[str, Any] | None:
                 "protocolVersion": protocol_version,
                 "capabilities": {"tools": {"listChanged": False}},
                 "serverInfo": {"name": "statemng", "version": "1.0.0"},
-                "instructions": "Use task_name on every task-scoped call. accept and unblock are main-Agent decisions.",
+                "instructions": "Use task_name on every task-scoped call. In Codex guard mode, init/resume binds the main coordinator and task_show reports caller authorization.",
             },
         )
     if method == "ping":
@@ -383,7 +413,14 @@ def handle(message: Any) -> dict[str, Any] | None:
         if not isinstance(params, dict) or not isinstance(params.get("name"), str):
             return error(request_id, -32602, "Invalid tools/call parameters")
         try:
-            return success(request_id, call_tool(params["name"], params.get("arguments", {})))
+            return success(
+                request_id,
+                call_tool(
+                    params["name"],
+                    params.get("arguments", {}),
+                    params.get("_meta"),
+                ),
+            )
         except ValueError as exc:
             return error(request_id, -32602, str(exc))
     return error(request_id, -32601, "Method not found")
