@@ -19,6 +19,10 @@ normalization of earlier sectors. Keep earlier artifacts intact, append the
 sector and candidate traces in resident order, and derive a stable
 SHA-256 prefix ID from the complete accepted expression.
 
+Register this new cumulative prefix and this step's other new outputs separately.
+Reference the existing ordered DE, reduction rules, and prior artifact records;
+do not embed their files or archives in the new handoff.
+
 After a commit, `mma/NextSector.wls` reads only `sector_manifest` and the
 nullable accepted prefix.  It drops `Length[sector_trace]` entries from the
 resident manifest and publishes the remaining and next sector.  Calling this

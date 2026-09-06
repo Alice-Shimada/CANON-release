@@ -92,6 +92,11 @@ $HOME/.codex/statemng/CANON/mcp
 
 `.state-management/` 已加入 `.gitignore`。其中的状态、run workspace 和 artifact 均保留在当前项目本地，不随 Git 提交。
 
+worker 在自己的 workspace 写入新结果，直接只读复用 `task_show` 提供的依赖文件。
+多文件结果分别登记，以一个入口产物或简短索引提交；每个 sector 不打包历史依赖。
+主审复用现有独立科学 checker 的结果，不默认重跑整个流程。具体交接规则见
+`AGENTS.md` 的 4.1 节。
+
 ## 科学接口
 
 科学输入是 trusted family specification、Kira project/jobs、有序 masters 和逐变量导数算符。

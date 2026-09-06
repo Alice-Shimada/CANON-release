@@ -17,3 +17,7 @@ current-current gauge, deterministic exact-rational-point flatness, epsilon, or 
 current block passes but a full-prefix condition fails, the code is
 `TAIL_FAIL`.  A pass writes `canon-neu/canonical-sector-de/v1` from the
 independently computed matrices.
+
+This is the independent mathematical check of each new prefix. Main-Agent review
+uses its inputs and result; it does not require a second clean run of candidate
+generation, the IBP bridge, or the sector pipeline with unchanged inputs and code.

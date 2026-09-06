@@ -112,7 +112,9 @@ TOOLS = [
     ),
     tool(
         "statemng_task_show",
-        "Return the exact context and workspace for the current run.",
+        "Return the current run context, writable workspace, and all registered files "
+        "from each accepted dependency run. Read needed files in place at "
+        "project_root/stored_path; do not copy dependency workspaces.",
         object_schema(
             {"task_name": STRING, "task_id": STRING, "run_id": STRING},
             ("task_name", "task_id", "run_id"),
@@ -125,7 +127,8 @@ TOOLS = [
     ),
     tool(
         "statemng_artifact_add",
-        "Register an immutable artifact produced inside the current run.",
+        "Register one new or changed output file from the current run. Call once per "
+        "deliverable; reference existing dependency artifacts instead of bundling them.",
         object_schema(
             {"task_name": STRING, "task_id": STRING, "run_id": STRING, "path": STRING},
             ("task_name", "task_id", "run_id", "path"),
@@ -137,7 +140,8 @@ TOOLS = [
     ),
     tool(
         "statemng_task_submit",
-        "Submit a run summary and one registered artifact for review.",
+        "Submit a run summary and one registered entry artifact for review. The entry "
+        "may index other separately registered files; a combined archive is not required.",
         object_schema(
             {
                 "task_name": STRING,

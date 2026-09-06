@@ -749,6 +749,10 @@ def command_task_show(args: argparse.Namespace) -> dict[str, Any]:
         for field in ("summary", "artifact_id"):
             if field in dependency:
                 result[field] = dependency[field]
+        if dependency.get("status") == "completed":
+            accepted_run = get_run(task_root, dependency["accepted_run_id"])
+            result["accepted_run_id"] = accepted_run["run_id"]
+            result["artifacts"] = accepted_run.get("artifacts", [])
         dependency_results.append(result)
     result = {
         "ok": True,
@@ -758,6 +762,7 @@ def command_task_show(args: argparse.Namespace) -> dict[str, Any]:
         "background": task.get("background"),
         "acceptance_criteria": task.get("acceptance_criteria"),
         "dependencies": dependency_results,
+        "project_root": str(task_root.parent.parent),
         "workspace": str((task_root / "runs" / args.run_id / "workspace").resolve()),
     }
     if "required_skills" in task:

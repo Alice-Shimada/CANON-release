@@ -591,6 +591,15 @@ class CodexThreadGuardEndToEndTests(unittest.TestCase):
                 "path": str(result_file),
             },
         )["artifact_id"]
+        shared_file = workspace / "shared-rules.wl"
+        shared_file.write_text("shared exact rules\n", encoding="utf-8")
+        shared_artifact = self.call_ok(
+            worker, self.WORKER, "statemng_artifact_add",
+            {
+                "task_name": "study", "task_id": task_id, "run_id": run_id,
+                "path": str(shared_file),
+            },
+        )["artifact_id"]
         self.call_ok(
             worker,
             self.WORKER,
@@ -621,6 +630,38 @@ class CodexThreadGuardEndToEndTests(unittest.TestCase):
             {"task_name": "study", "task_id": task_id, "run_id": run_id},
         )
         self.assertEqual(accepted["status"], "completed")
+        consumer = self.call_ok(
+            main, self.MAIN, "statemng_task_create",
+            {
+                "task_name": "study", "title": "Use registered inputs",
+                "description_file": str(self.project / "Derive-result.json"),
+                "depends_on": task_id,
+            },
+        )["task_id"]
+        consumer_run = self.call_ok(
+            worker, self.WORKER, "statemng_task_claim",
+            {"task_name": "study", "task_id": consumer},
+        )["run_id"]
+        handoff = self.call_ok(
+            worker, self.WORKER, "statemng_task_show",
+            {"task_name": "study", "task_id": consumer, "run_id": consumer_run},
+        )
+        self.assertEqual(handoff["codex_authorization"]["caller_role"], "worker")
+        self.assertEqual(len(handoff["codex_authorization"]["allowed_tools"]), 6)
+        records = handoff["dependencies"][0]["artifacts"]
+        self.assertEqual({r["artifact_id"] for r in records}, {artifact_id, shared_artifact})
+        record = next(r for r in records if r["artifact_id"] == shared_artifact)
+        self.assertEqual(
+            (Path(handoff["project_root"]) / record["stored_path"]).read_text(),
+            shared_file.read_text(),
+        )
+        self.assertEqual(list(Path(handoff["workspace"]).iterdir()), [])
+        denied = worker.call(
+            "statemng_artifact_show",
+            {"task_name": "study", "artifact_id": shared_artifact}, self.WORKER,
+        )
+        self.assertTrue(denied["isError"])
+        self.assertEqual(self.payload(denied)["error"], "CODEX_CALLER_NOT_AUTHORIZED")
         main.close()
         self.clients.remove(main)
         restarted = self.client()

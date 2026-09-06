@@ -37,12 +37,12 @@ flowchart TD
     READY --> SPAWN["主 Agent 通过 Adapter 创建原生 subagent<br/>传入总体任务名和 task ID"]
     SPAWN --> CLAIM["subagent: task claim<br/>原子写入 running 并取得 run_id"]
     CLAIM --> SHOW["subagent: task show<br/>读取目标、依赖结果、验收标准与 workspace"]
-    SHOW --> RESEARCH["subagent 在 workspace 中研究、计算和验证"]
+    SHOW --> RESEARCH["subagent 只读使用依赖<br/>在 workspace 中计算和写出新结果"]
 
-    RESEARCH -->|"形成可交付结果"| ART["artifact add<br/>复制正式产物并记录哈希"]
+    RESEARCH -->|"形成可交付结果"| ART["artifact add<br/>登记本步新产物并记录哈希"]
     ART --> SUBMIT["task submit<br/>保存 summary 与 artifact ID，状态变为 submitted"]
     SUBMIT --> REVIEW["主 Agent 审查结果"]
-    REVIEW -->|"需要独立验证"| VERIFY["创建验证 subagent<br/>读取 artifact 并提交验证结果"]
+    REVIEW -->|"存在具体验证缺口"| VERIFY["创建验证 subagent<br/>读取 artifact 并提交验证结果"]
     VERIFY --> REVIEW
     REVIEW -->|"接受"| ACCEPT["task accept<br/>原子写入 completed 与 accepted_run_id"]
     REVIEW -->|"不接受"| FAIL["task fail"]
@@ -123,7 +123,16 @@ flowchart TD
 - `.locks/`：CLI 使用的任务级锁文件，不保存研究状态；
 - `views/PROJECT_STATE.md`：由 JSON 生成的当前状态摘要。
 
-每个 `[TASK_NAME]` 目录都是完整、自包含的状态单元，可以独立复制、归档或恢复。`.state-management/` 下不设置跨总体任务共享的可变状态。
+每个 `[TASK_NAME]` 目录都是完整、自包含的状态单元，可以独立复制、归档或恢复。自包含的单位是总体任务目录，不是每个 run 或 sector；后续产物通过引用复用此前的正式产物。`.state-management/` 下不设置跨总体任务共享的可变状态。
+
+产物交接与验收遵循以下规则：
+
+- workspace 限制的是写入位置。worker 直接只读使用任务提供的依赖文件；`task_show` 的 `dependencies[].artifacts` 给出已接受 run 的登记记录，路径为 `project_root / stored_path`。若工具确实需要可写输入，只复制本步需要改动的文件。
+- 主 Agent 在 `depends_on` 中直接列明共享输入的生产任务和当前需要的最新结果任务。例如逐 sector 任务依赖原始 DE、pooled rules 的生产任务及最新 accepted prefix，不通过嵌套历史包传递这些输入。
+- 每个新产物文件分别 `artifact add`，`task_submit` 选择一个入口产物；多文件交付的入口可为简短的文件索引。只登记本步新建或改变的结果；已有 DE、rules、源码、工具和历史 artifacts 保留原引用及已登记的 hash，不重新复制、打包或全量扫描依赖树。
+- 新 accepted prefix 仍须保存完整累计变换、basis 和矩阵，包括 lower-sector 归一化；节省存储不改变科学接口。禁止把旧 prefix 的整份产物包、run workspace 或依赖包嵌入新产物。已有压缩依赖只按需提取所需成员；完整归档只用于明确的交付或迁移需求。
+- 对新的候选及 prefix 运行现有必要科学 gates。主审核对本次输入、checker 结果与验收标准；`CHECK_CORE`、`CHECK_CANONICAL`、`FINAL_CHECK` 的独立验算已经属于科学验证。没有具体失败、输入或实现变化、或用户要求时，不增加第二套 clean replay、重复 candidate bridge、重复 IBP 或整族重算。
+- 验收标准满足后即提交、审查和接受。额外验证任务必须指出尚未解决的具体问题；不得仅为 provenance、包装或形式完整性延迟推进。
 
 ### 4.2、主 Agent 与 subagent 的协作闭环
 
@@ -133,8 +142,8 @@ flowchart TD
 
 1. 主 Agent 确定总体任务名；无法唯一确定时，列出已有名称并请用户确认。总体任务不存在时使用总体目标文件初始化，已经存在时直接恢复；随后创建当前确有必要的任务。
 1. 主 Agent 查询 `ready` 任务，创建原生 subagent，并传入总体任务名和内部任务 ID。
-1. subagent 依次执行 `claim` 和 `show`，在独立 workspace 中研究；重要结果通过 `artifact add` 保存，然后执行 `submit`，或用 `block`、`fail` 说明无法完成。
-1. 主 Agent 读取 summary 和 artifact；必要时另行验证。验证 subagent 只提交验证结果，不接受原任务。
+1. subagent 依次执行 `claim` 和 `show`，直接只读使用依赖文件，在独立 workspace 写出新结果；新产物通过 `artifact add` 保存，然后执行 `submit`，或用 `block`、`fail` 说明无法完成。
+1. 主 Agent 读取 summary、checker 结果和 artifact；仅对尚未解决的具体验证问题另行验证。验证 subagent 只提交验证结果，不接受原任务。
 1. 主 Agent 确认结果满足当前任务的验收标准后执行 `accept`。只有进入 `completed` 的任务才能满足后续任务的依赖。
 1. 任务进入 `blocked` 后，主 Agent 等待并确认阻塞条件已经解除，再执行 `unblock` 将任务恢复为 `ready`，随后重新派发；subagent 不得解除阻塞。
 1. 主 Agent 根据已接受的结果决定继续原计划、创建新的后续任务或停止当前路线。

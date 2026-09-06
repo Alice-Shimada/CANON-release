@@ -366,6 +366,18 @@ class TaskLifecycleTests(StateManagementTestCase):
             (self.task_root / "runs" / claim["run_id"] / "workspace").resolve(),
         )
 
+        shared_inputs = {}
+        for filename in ("ordered-de.wl", "pooled-rules.wl"):
+            source = Path(shown["workspace"]) / filename
+            source.write_text(f"Shared {filename}\n", encoding="utf-8")
+            code, registered = self.invoke(
+                "artifact", "add", "--task-name", "family-a",
+                "--task", first["task_id"], "--run-id", claim["run_id"],
+                "--path", str(source),
+            )
+            self.assertEqual(code, 0, registered)
+            shared_inputs[registered["artifact_id"]] = source.read_text()
+
         artifact_id = self.submit_result(first["task_id"], claim["run_id"])
         code, accepted = self.invoke(
             "task",
@@ -404,6 +416,60 @@ class TaskLifecycleTests(StateManagementTestCase):
         self.assertEqual(code, 0, shown)
         self.assertEqual(shown["dependencies"][0]["artifact_id"], artifact_id)
         self.assertIn("Verified result", shown["dependencies"][0]["summary"])
+        dependency = shown["dependencies"][0]
+        self.assertEqual(dependency["accepted_run_id"], claim["run_id"])
+        self.assertEqual(Path(shown["project_root"]), self.project.resolve())
+        self.assertEqual(
+            {record["artifact_id"] for record in dependency["artifacts"]},
+            set(shared_inputs) | {artifact_id},
+        )
+        for record in dependency["artifacts"]:
+            path = Path(shown["project_root"]) / record["stored_path"]
+            self.assertEqual(path.parent, self.task_root / "artifacts")
+            if record["artifact_id"] in shared_inputs:
+                self.assertEqual(path.read_text(), shared_inputs[record["artifact_id"]])
+        self.assertEqual(list(Path(shown["workspace"]).iterdir()), [])
+        self.assertEqual(len(list((self.task_root / "artifacts").iterdir())), 3)
+
+    def test_handoff_includes_only_the_accepted_run_files(self) -> None:
+        task = self.create_task("Produce input")
+        abandoned = self.claim(task["task_id"])
+        abandoned_artifact = self.submit_result(
+            task["task_id"], abandoned["run_id"], "Superseded result"
+        )
+        reason = self.task_root / "runs" / abandoned["run_id"] / "workspace" / "reason.md"
+        reason.write_text("Correct the result.\n", encoding="utf-8")
+        code, failed = self.invoke(
+            "task", "fail", task["task_id"], "--task-name", "family-a",
+            "--run-id", abandoned["run_id"], "--reason-file", str(reason),
+            "--retryable", "true",
+        )
+        self.assertEqual(code, 0, failed)
+        accepted = self.claim(task["task_id"])
+        accepted_artifact = self.submit_result(
+            task["task_id"], accepted["run_id"], "Corrected result"
+        )
+        code, result = self.invoke(
+            "task", "accept", task["task_id"], "--task-name", "family-a",
+            "--run-id", accepted["run_id"],
+        )
+        self.assertEqual(code, 0, result)
+        consumer = self.create_task(
+            "Consume input", depends_on=task["task_id"], description_file="consumer.json"
+        )
+        claim = self.claim(consumer["task_id"])
+        code, shown = self.invoke(
+            "task", "show", consumer["task_id"], "--task-name", "family-a",
+            "--run-id", claim["run_id"],
+        )
+        self.assertEqual(code, 0, shown)
+        dependency = shown["dependencies"][0]
+        self.assertEqual(dependency["accepted_run_id"], accepted["run_id"])
+        self.assertEqual(
+            [record["artifact_id"] for record in dependency["artifacts"]],
+            [accepted_artifact],
+        )
+        self.assertNotEqual(accepted_artifact, abandoned_artifact)
 
     def test_artifact_add_and_submit_are_idempotent_for_the_same_result(self) -> None:
         task = self.create_task()
