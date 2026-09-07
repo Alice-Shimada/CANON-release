@@ -17,6 +17,12 @@ Preserve Kira's master order. In the task's positive scientific check, compare
 every requested target with the master/rule left sides and require every rule
 right-hand side to contain only those ordered masters.
 
+Request `project`, `output` and executable paths containing a separator are
+resolved relative to the request JSON. A bare executable name is found on PATH;
+`jobs` are relative to the copied Kira project. Pass the thread budget in
+`options`, and configure Fermat through `FERMATPATH`. Source installation
+instructions are in `external/README.md`.
+
 The request must pass argv items, never a shell command string. The script does
 not choose a reducer, probe versions, build DEs, or mutate research state. If the
 result is a deliverable, the Agent registers `RESULT.wl` through the state

@@ -19,6 +19,11 @@ preserves those identities and writes their paths and SHA-256 values to
 `prepared-family.wl`; downstream code must not infer the regulator from a
 symbol name.
 
+Relative artifact paths are resolved from the input JSON directory; resource
+paths inside the family spec are resolved from the spec directory. Kira config,
+jobs and targets are relative to the declared Kira project. Use the current
+checkout root for script locations and pass installed tool paths explicitly.
+
 The caller supplies every scientific source path and owns the fresh output
 directory. The script does not copy the project, run Kira, or update research
 state; register retained output only through `statemng`.

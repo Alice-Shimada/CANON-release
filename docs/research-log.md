@@ -1,5 +1,8 @@
 # CANON research log
 
+分发说明：下列历史命令中的机器路径已用配置变量表示；日期、哈希、版本与验算结果
+保留原始记录，不能视为当前分发版本的重新验证。变量定义见 `external/README.md`。
+
 本日志只记录会改变研究路线或核心结论的节点；常规命令输出留在测试记录中，不在此重复。
 
 ## 本阶段验收标准
@@ -61,14 +64,14 @@
   测试；全部通过。新测试暴露并修正了 `FlatConnectionQ` 原有的多变量 pair iterator，
   fixture 对 flat/non-flat 两方向在一个确定性精确有理点上分别返回 `True/False`。
 - Libra 真实命令：以 `WolframKernel -noinit -noprompt -script methods/libra/run.wls`
-  调用登记入口 `/Users/balth/Works/hep-tools/tools/libra/Source/Libra.m`（1.2，入口 SHA-256
+  调用登记入口 `$CANON_TEST_LIBRA_ENTRY`（1.2，入口 SHA-256
   `b3574e7f560951516a289a8141aafbaf23f0f5ae563e29d0fa077b17ba4d3eb4`），caller-owned
   目录为 `validation-runs/libra-provider`。实际 provider summary 是
   `PROVISIONAL/CANDIDATE_TRANSFORMATION`、`provider_check_eps_form=true`、一个 candidate；
   `mma/CheckSectorCore.wls` 在 `validation-runs/libra-checker` 返回 `PASS/CORE_PASS`，
   `invertible/exact_gauge/flat_connection/epsilon_factorized` 全为 `true`。
 - CANONICA 真实命令：同样以 fresh kernel 调用登记入口
-  `/Users/balth/Works/hep-tools/tools/canonica/src/CANONICA.m`（1.0.3，入口 SHA-256
+  `$CANON_TEST_CANONICA_ENTRY`（1.0.3，入口 SHA-256
   `0bf334159265f17814fb21bf8f1248637e66622bc4a8a3768085f7416df9d200`），caller-owned
   目录为 `validation-runs/canonica-provider`。实际 provider summary 与 Libra 同为
   `PROVISIONAL/CANDIDATE_TRANSFORMATION`、provider epsilon check true、一个 candidate；
@@ -126,9 +129,9 @@
   hash 后仍完成 `PASS/VERIFIED_STRUCTURED_REPAIR` 且 marker 不存在，证明 provider code 未执行。
   A-011/A-013 的 shared verdict、伪造 provenance、mapping、未声明 `z`、other-kind 和
   noncanonical-prefix counterexamples 均已覆盖。
-- Focused 命令：`PYTHONDONTWRITEBYTECODE=1 CANON_WOLFRAM_KERNEL=/Applications/Mathematica.app/Contents/MacOS/WolframKernel python3 -m unittest -v tests.test_method_cards.MethodCardIntegrationTest.test_structured_repair_contract_rejects_route_pool_and_prefix_contradictions tests.test_method_cards.MethodCardIntegrationTest.test_structured_repair_preflight_enforces_mapping_direct_sum_and_parameters tests.test_method_cards.MethodCardIntegrationTest.test_structured_repair_preflight_requires_exact_defect_and_canonical_prefix tests.test_method_cards.MethodCardIntegrationTest.test_structured_repair_scope_invalid_system_and_method_exhaustion tests.test_method_cards.MethodCardIntegrationTest.test_structured_repair_checker_positive_and_adversarial_rejections tests.test_method_cards.MethodCardIntegrationTest.test_structured_repair_checker_hashes_package_without_executing_it`；实际
+- Focused 命令：`PYTHONDONTWRITEBYTECODE=1 CANON_WOLFRAM_KERNEL="$CANON_WOLFRAM_KERNEL" python3 -m unittest -v tests.test_method_cards.MethodCardIntegrationTest.test_structured_repair_contract_rejects_route_pool_and_prefix_contradictions tests.test_method_cards.MethodCardIntegrationTest.test_structured_repair_preflight_enforces_mapping_direct_sum_and_parameters tests.test_method_cards.MethodCardIntegrationTest.test_structured_repair_preflight_requires_exact_defect_and_canonical_prefix tests.test_method_cards.MethodCardIntegrationTest.test_structured_repair_scope_invalid_system_and_method_exhaustion tests.test_method_cards.MethodCardIntegrationTest.test_structured_repair_checker_positive_and_adversarial_rejections tests.test_method_cards.MethodCardIntegrationTest.test_structured_repair_checker_hashes_package_without_executing_it`；实际
   `Ran 6 tests in 109.802s — OK`，无数值容限。
-- 唯一当前源码完整 suite 命令：`PYTHONDONTWRITEBYTECODE=1 HEP_TOOLS_ROOT=/Users/balth/Works/hep-tools HEP_TOOLS_MACHINE_ID=macos-arm64 HEP_TOOLS_MACHINE_STATE=/Users/balth/Works/hep-tools/tools/macos-arm64.md CANON_WOLFRAM_KERNEL=/Applications/Mathematica.app/Contents/MacOS/WolframKernel CANON_TEST_LIBRA_ENTRY=/Users/balth/Works/hep-tools/tools/libra/Source/Libra.m CANON_TEST_CANONICA_ENTRY=/Users/balth/Works/hep-tools/tools/canonica/src/CANONICA.m CANON_TEST_INITIAL_HEP_TOOLS_ROOT= CANON_TEST_STRUCTURED_OUTPUT_ROOT=/Users/balth/Works/hep-tools/tools-dev/CANON/.state-management/canon-method-card-development/runs/R-014/workspace/full-suite-structured-R014 python3 -m unittest discover -s tests -p 'test_*.py' -v`；实际
+- 该历史源码快照的完整 suite 命令：`PYTHONDONTWRITEBYTECODE=1 CANON_WOLFRAM_KERNEL="$CANON_WOLFRAM_KERNEL" CANON_TEST_LIBRA_ENTRY="$CANON_TEST_LIBRA_ENTRY" CANON_TEST_CANONICA_ENTRY="$CANON_TEST_CANONICA_ENTRY" CANON_TEST_INITIAL_CONFIG= CANON_TEST_STRUCTURED_OUTPUT_ROOT="$CANON_TEST_STRUCTURED_OUTPUT_ROOT" python3 -m unittest discover -s tests -p 'test_*.py' -v`；实际
   `Ran 40 tests in 274.397s`：37 通过、1 个 real INITIAL 条件跳过，另两个 kernel 在写结果前
   因 `OMP Error #178: Can't open SHM` 退出。只复跑这两个非真实 provider test methods 后
   `Ran 2 tests in 39.716s — OK`；没有重启完整 suite。
@@ -196,5 +199,5 @@
 - 软件测试为 14/14、11/11、4/4、3/3。平坦性仍按现有确定性精确有理点门检查，
   不额外声称积分边界的 UT 性质或任意 MPL family 上的搜索完备性。
 - 报告、完整 basis/DE 与哈希记录：
-  [REPORT.md](/home/liuyuanche/Program/CANON_develop/runs/2l5p-complete-20260905-grs_ynfi/REPORT.md)。
+  本地运行目录 `runs/2l5p-complete-20260905-grs_ynfi/REPORT.md`（研究产物不随源码分发）。
   本次按用户授权在独立测试目录运行，没有操作 `.state-management`。

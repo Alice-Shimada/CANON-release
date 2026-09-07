@@ -5,5 +5,5 @@
   "topology": "box",
   "targets": "myintegrals",
   "output": "fresh-kira-output",
-  "options": ["--parallel=20"]
+  "options": ["--parallel=1"]
 }

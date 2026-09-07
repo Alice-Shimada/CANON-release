@@ -3,8 +3,8 @@
 repoRoot = DirectoryName[DirectoryName[$InputFileName]];
 adapter = FileNameJoin[{repoRoot, "mma", "ReduceIBP.wls"}];
 temporaryDirectory = CreateDirectory[];
-project = CreateDirectory[FileNameJoin[{temporaryDirectory, "project"}]];
-output = FileNameJoin[{temporaryDirectory, "output"}];
+project = CreateDirectory[FileNameJoin[{temporaryDirectory, "project with spaces"}]];
+output = FileNameJoin[{temporaryDirectory, "output with spaces"}];
 backend = FileNameJoin[{temporaryDirectory, "FakeKira.wls"}];
 requestPath = FileNameJoin[{temporaryDirectory, "request.json"}];
 resultPath = FileNameJoin[{temporaryDirectory, "result.wl"}];
@@ -19,9 +19,9 @@ Export[FileNameJoin[{project, "reduce.yaml"}], "jobs: []\n", "Text"];
 Export[FileNameJoin[{project, "export.yaml"}], "jobs: []\n", "Text"];
 Export[FileNameJoin[{project, "targets"}], "box[2,1,1,1]\n", "Text"];
 Export[requestPath, <|
-  "executable" -> "wolframscript", "project" -> project,
+  "executable" -> "wolframscript", "project" -> FileNameTake[project],
   "jobs" -> {"reduce.yaml", "export.yaml"}, "topology" -> "box",
-  "targets" -> "targets", "output" -> output,
+  "targets" -> "targets", "output" -> FileNameTake[output],
   "options" -> {"-file", backend}
 |>, "RawJSON"];
 

@@ -11,6 +11,15 @@ In Codex, run persistent research only in a Local session. If the current sessio
 
 Follow the complete `## 四、整体架构` protocol in the applicable root `AGENTS.md` or `CLAUDE.md`.
 
+Resolve scripts and `external/` from the current checkout. Read `external/README.md`
+for installation and path semantics; pass installed tool entries, executable paths
+and thread budgets in the task context. Do not assume a personal installation tree,
+platform, or core count. Use DlogBasis-refine for candidate proposals and record the
+declared package revision plus actual file hash; an outer CANON Git HEAD is not a
+dependency revision. External directories hold source for user installation, not
+ready-built dependencies. Distribution preparation does not compile packages or copy
+foundation libraries, machine launchers, or research outputs.
+
 ## Main Agent
 
 1. In Codex, before the first state call, internally run `state-management/adapters/codex/install_launcher.py --check`. If it fails, reinstall the launcher, stop the current research, and require a new Local session; never use tools that may target another checkout or ask the user to run the installer. The main Agent must successfully call `init` or `resume` before creating any worker so the runtime guard can bind the coordinator.

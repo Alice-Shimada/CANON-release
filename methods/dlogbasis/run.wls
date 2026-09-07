@@ -17,9 +17,7 @@ methodOptions = payload["method_options"];
 package = CanonMethodCard`ResolveMethodPackage[task, inputPath, "DlogBasis`"];
 entry = package["entry"];
 entryHash = FileHash[entry, "SHA256", "HexString"];
-packageRevision = StringTrim @ RunProcess[
-  {"git", "-C", DirectoryName[entry], "rev-parse", "HEAD"}, "StandardOutput"
-];
+packageRevision = Lookup[methodOptions, "package_revision", Null];
 Get[entry];
 
 (* Sector bits follow the full propagator/ISP index order. *)
@@ -63,15 +61,20 @@ If[powerDefinition["max_dots_per_propagator"] < powerDefinition["max_added_dots"
 ];
 
 methodId = "dlogbasis-refine-search";
+singularExecutable = Lookup[methodOptions, "singular_executable", "Singular"];
+If[StringContainsQ[singularExecutable, {"/", "\\"}],
+  singularExecutable = CanonMethodCard`ResolveInputPath[inputPath, singularExecutable]
+];
 result = DlogBasis`DlogBasisSearch[
   family, sector,
   "LoopSpecifications" -> loopSpecifications,
   "NumeratorDegreeBound" -> powerDefinition["numerator_degree"],
   "DotDegreeBound" -> powerDefinition["max_added_dots"],
   "NumeratorPositions" -> Lookup[methodOptions, "numerator_positions", Automatic],
-  "FiniteFlowPackageFile" -> methodOptions["finite_flow_package_file"],
+  "FiniteFlowPackageFile" -> CanonMethodCard`ResolveInputPath[
+    inputPath, methodOptions["finite_flow_package_file"]],
   "ResidualBackend" -> Lookup[methodOptions, "residual_backend", "Current"],
-  "SingularExecutable" -> Lookup[methodOptions, "singular_executable", "Singular"]
+  "SingularExecutable" -> singularExecutable
 ];
 If[FailureQ[result],
   CanonMethodCard`WriteProviderResult[

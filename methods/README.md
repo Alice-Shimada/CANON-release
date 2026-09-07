@@ -24,7 +24,7 @@ DE 变换之前；它不再复用 `SEARCH_CORE`。`SEARCH_CORE` 保持为 Libra/
 
 首批启用的变换提供者是 `canonica` 和 `libra`。它们的 2x2 固定样例只证明提供者/检查器
 协议闭合，不表示它们是默认的物理候选路线。积分生成由 `dlogbasis` 卡负责：运行器从
-`prepared_family` 读取 ``DlogBasis`` family 与 sector manifest，调用
+`prepared_family` 读取 ``DlogBasis`` family，从请求 sector ID 展开当前 sector mask，调用
 ``DlogBasis`DlogBasisSearch``，并把返回的 `CandidateCombinations`、有限仿射覆盖状态和
 完整 package evidence 封装为
 `canon-neu/integral-candidates/v1`。候选仅是有界 maximal-cut constant-leading-singularity
@@ -32,10 +32,10 @@ DE 变换之前；它不再复用 `SEARCH_CORE`。`SEARCH_CORE` 保持为 Libra/
 package 未返回候选时，本卡 fail closed 为 `INCONCLUSIVE/METHOD_EXHAUSTED`，且不写
 `integral_candidates`。
 
-DlogBasis-refine 的每个 module-lift 方向是一个候选；方法卡按 manifest 中当前 sector 的
-`BasisIndices` 数目组成预算内 groups。groups 经过 IBP
-后由 `mma/RouteCoreCandidates.wls` 按 resident current-sector columns 构造 `R` 和
-`T=Inverse[R]`。该 adapter 只返回 provisional pool，仍由 `CheckSectorCore.wls` 独立验收。
+DlogBasis-refine 的每个 module-lift 方向是一个候选；方法卡按预算截取候选方向。
+IBP 后由 `mma/RouteCoreCandidates.wls` 按当前 sector 的实际 master rank 选择独立行基
+及单行替换，再构造 `R` 和 `T=Inverse[R]`。该 adapter 只返回 provisional pool，
+仍由 `CheckSectorCore.wls` 独立验收。
 
 `initial` 是独立的证据提供者，不是变换搜索或修复提供者。它仅覆盖 INITIAL 2.1 已登记的
 官方 26×26 无质量平面三圈四点梯图候选，固定官方基/顺序、第一项 UT 种子、
@@ -354,7 +354,8 @@ T 与 B，以及登记的 INITIAL/FiniteFlow 身份、入口和输入文件哈�
 布尔值都没有通过权限。
 
 `CheckUTEvidence.wls` 要求独立检查器任务声明原提供者任务 ID 和同一固定范围，随后从显式
-`checker_options.hep_tools_root` 重新读取登记的官方 A、基与参考。检查器以失败封闭方式核对
+`checker_options.package_entry`、`finite_flow_package_file` 和 `reference_directory`
+重新读取登记的工具入口及官方 A、基与参考；相对路径以检查器输入 JSON 所在目录为准。检查器以失败封闭方式核对
 任务/族/候选/基/顺序/归一化/参考、工具入口及哈希、官方基顺序和种子、`T` 与参考的严格
 相等、可逆性、精确规范恒等式、`B/eps` 无残余 `eps`，以及单变量 `{x,1+x}` 常数留数 dlog
 张成空间。只有这些独立检查全为真时才写 `canon-neu/verified-ut-evidence/v1` 并返回

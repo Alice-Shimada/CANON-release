@@ -1,0 +1,4 @@
+interface:
+  display_name: "DlogBasis-refine"
+  short_description: "Generate regulated LBL-Baikov constant-LS candidates"
+  default_prompt: "Use $dlogbasis-refine to generate and interpret bounded constant-LS candidates for this integral family and sector."

@@ -9,15 +9,15 @@
   "payload": {
     "sector_basis": {
       "type": "mathematica-expression",
-      "path": "/absolute/path/sector-basis.wl"
+      "path": "sector-basis.wl"
     },
     "sector_cut_de": {
       "type": "mathematica-expression",
-      "path": "/absolute/path/sector-cut-de.wl"
+      "path": "sector-cut-de.wl"
     },
     "core_candidates": {
       "type": "mathematica-expression",
-      "path": "/absolute/path/core-candidates.wl"
+      "path": "core-candidates.wl"
     }
   }
 }

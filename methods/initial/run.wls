@@ -68,64 +68,50 @@ options = Lookup[task["payload"], "method_options", <||>];
 If[!AssociationQ[options],
   writeOutcome["ERROR", "TOOL_CONFIGURATION", "method_options 必须是对象"]
 ];
-hepToolsRoot = Lookup[options, "hep_tools_root", Missing["hep_tools_root"]];
+componentPaths = Lookup[options, {
+  "package_entry", "finite_flow_package_file", "finite_flow_library", "reference_directory"
+}, Missing["path"]];
 initialIdentity = Lookup[options, "initial_identity", Missing["initial_identity"]];
 finiteFlowIdentity = Lookup[options, "finiteflow_identity", Missing["finiteflow_identity"]];
 If[
-  !StringQ[hepToolsRoot] || !StringStartsQ[hepToolsRoot, $PathnameSeparator],
-  writeOutcome["ERROR", "TOOL_CONFIGURATION", "method_options.hep_tools_root 必须是绝对路径"]
+  !AllTrue[componentPaths, StringQ[#] && # =!= "" &],
+  writeOutcome["ERROR", "TOOL_CONFIGURATION", "必须指定 INITIAL、FiniteFlow 入口、原生库与参考数据目录"]
 ];
 If[initialIdentity =!= expectedInitialIdentity || finiteFlowIdentity =!= expectedFiniteFlowIdentity,
   writeOutcome["ERROR", "TOOL_IDENTITY_MISMATCH", "声明的 INITIAL 或 FiniteFlow 身份与登记身份不一致"]
 ];
-If[$VersionNumber =!= 14. || $SystemID =!= "MacOSX-ARM64" ||
-   !MemberQ[$CommandLine, "-noinit"] || !MemberQ[$CommandLine, "-script"],
-  writeOutcome["ERROR", "TOOL_CONFIGURATION", "需要使用带 -noinit -script 的 Mathematica 14 ARM64"]
+If[!MemberQ[$CommandLine, "-noinit"] || !MemberQ[$CommandLine, "-script"],
+  writeOutcome["ERROR", "TOOL_CONFIGURATION", "需要使用带 -noinit -script 的 WolframKernel"]
 ];
 
-normalized[path_String] := StringReplace[ExpandFileName[path], RegularExpression["/+$"] -> ""];
 insideQ[path_String, root_String] := path === root || StringStartsQ[path, root <> $PathnameSeparator];
 realPath[path_String] := Lookup[
   Quiet @ Check[Association[FileInformation[path]], <||>], "AbsoluteFileName", $Failed
 ];
-hepToolsRoot = normalized[hepToolsRoot];
-initialStableRoot = FileNameJoin[{hepToolsRoot, "tools", "initial"}];
-expectedInitialRoot = FileNameJoin[{hepToolsRoot, "tools", "initial-2.1-63d8f81"}];
-finiteFlowRoot = FileNameJoin[{hepToolsRoot, "tools", "finiteflow-install"}];
-initialEntry = FileNameJoin[{initialStableRoot, "INITIAL.m"}];
-finiteFlowEntry = FileNameJoin[{finiteFlowRoot, "mathlink", "FiniteFlow.m"}];
-finiteFlowLibrary = FileNameJoin[{finiteFlowRoot, "fflowmlink.dylib"}];
-finiteFlowCoreLibrary = FileNameJoin[{finiteFlowRoot, "lib", "libfflow.dylib"}];
-
-If[
-  FileType[hepToolsRoot] =!= Directory || realPath[initialStableRoot] =!= expectedInitialRoot,
-  writeOutcome["ERROR", "TOOL_CONFIGURATION", "HEP 工具根目录或 INITIAL 稳定入口目标与登记布局不一致"]
-];
-requiredComponents = {initialEntry, finiteFlowEntry, finiteFlowLibrary, finiteFlowCoreLibrary};
+{initialEntry, finiteFlowEntry, finiteFlowLibrary, exampleRoot} =
+  CanonMethodCard`ResolveInputPath[inputPath, #] & /@ componentPaths;
+finiteFlowLibraryDirectory = DirectoryName[finiteFlowLibrary];
+requiredComponents = {initialEntry, finiteFlowEntry, finiteFlowLibrary};
 If[Or @@ (FileType[#] =!= File & /@ requiredComponents),
   writeOutcome["ERROR", "TOOL_COMPONENT_MISSING", "缺少已登记的 INITIAL 或 FiniteFlow 组件"]
 ];
 If[
   FileExistsQ[outputDir] || FileType[DirectoryName[outputDir]] =!= Directory ||
-  insideQ[outputDir, hepToolsRoot],
-  writeOutcome["ERROR", "TOOL_CONFIGURATION", "输出目录必须是 HEP 工具根目录外由调用方拥有的新目录"]
+  AnyTrue[DirectoryName /@ requiredComponents, insideQ[outputDir, #] &],
+  writeOutcome["ERROR", "TOOL_CONFIGURATION", "输出目录必须是工具安装目录外由调用方拥有的新目录"]
 ];
 
-$LibraryPath = Prepend[DeleteCases[$LibraryPath, finiteFlowRoot], finiteFlowRoot];
-If[realPath[Quiet @ Check[FindLibrary["fflowmlink"], $Failed]] =!= finiteFlowLibrary,
-  writeOutcome["ERROR", "TOOL_COMPONENT_MISMATCH", "FiniteFlow 库未解析到登记的前缀"]
-];
+$LibraryPath = Prepend[DeleteCases[$LibraryPath, finiteFlowLibraryDirectory], finiteFlowLibraryDirectory];
 If[Check[Get[finiteFlowEntry], $Failed] === $Failed,
   writeOutcome["ERROR", "TOOL_LOAD_FAILED", "FiniteFlow 加载失败"]
 ];
-If[realPath[FiniteFlow`Private`fflowlib] =!= finiteFlowLibrary,
+If[realPath[FiniteFlow`Private`fflowlib] =!= realPath[finiteFlowLibrary],
   writeOutcome["ERROR", "TOOL_COMPONENT_MISMATCH", "FiniteFlow 加载了非预期库"]
 ];
 If[Check[Get[initialEntry], $Failed] === $Failed,
   writeOutcome["ERROR", "TOOL_LOAD_FAILED", "INITIAL 加载失败"]
 ];
 
-exampleRoot = FileNameJoin[{initialStableRoot, "examples", "massless_3L4P"}];
 amatrixPath = FileNameJoin[{exampleRoot, "AMatrix_ladder.m"}];
 basisPath = FileNameJoin[{exampleRoot, "initial_basis_ladder.m"}];
 referencePath = FileNameJoin[{exampleRoot, "TMatrix_ladder_to_UT.m"}];
@@ -139,7 +125,10 @@ referenceTransformation = Get[referencePath];
 utSeed = G[2, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, -1, 0, 0, 0, 0}];
 ansatzFunctions = {1/x, 1/(1 + x)};
 takeRow = 1;
-nThreads = 4;
+nThreads = Lookup[options, "threads", 1];
+If[!IntegerQ[nThreads] || nThreads < 1,
+  writeOutcome["ERROR", "TOOL_CONFIGURATION", "threads 必须是正整数"]
+];
 If[
   Dimensions[amatrix] =!= {26, 26} || Length[initialBasis] =!= 26 ||
   First[initialBasis] =!= utSeed || Dimensions[referenceTransformation] =!= {26, 26},

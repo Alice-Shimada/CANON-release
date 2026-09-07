@@ -1,0 +1,33 @@
+; (c) Roman Lee 2019
+; This is a template for calculating LeadingQModTerm
+; It depends on ModTools.lib.fer file
+
+; parameters:
+; <vars> --- declaration of variables
+; <r>,<c> --- matrix size
+; <M> --- column-wise original matrix
+; <poly> --- polynomial to mod over
+
+; ============== Variables ==============
+
+<<vars>>
+
+; ============== Arrays ==============
+
+Array m[<<r>>,<<c>>];
+[m] := [(
+<<M>>
+)];
+
+poly:=<<poly>>;
+
+; ============== Program ==============
+
+for i = 1,<<r>> do
+  for j = 1,<<c>> do
+    m[i,j] := LQMTerm(m[i,j],poly);
+  od
+od;
+
+; ============== Clean up ==============
+; @(poly);

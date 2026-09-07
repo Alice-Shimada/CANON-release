@@ -18,9 +18,8 @@
     "maximum" -> 2, "consumed" -> 2, "unit" -> "PROVIDER_CANDIDATE"
   |>,
   "pool_exhausted" -> True,
-  "candidate_group_pool" -> <|
-    "declared" -> 1, "eligible" -> 1, "remaining" -> 0,
-    "unconsumed_candidates" -> 0, "pool_exhausted" -> True
+  "candidate_pool" -> <|
+    "available" -> 2, "remaining" -> 0, "pool_exhausted" -> True
   |>,
   "candidate_unit" -> "INDIVIDUAL_G_INTEGRAL",
   "normalization_policy" -> <|
@@ -42,14 +41,6 @@
       "normalization" -> <|
         "convention" -> "explicit-rational-prefactor", "factor" -> 1
       |>
-    |>
-  },
-  "candidate_groups" -> {
-    <|
-      "candidate_id" -> "fixture-integral-group-1",
-      "member_candidate_ids" -> {
-        "fixture-integral-candidate-a", "fixture-integral-candidate-b"
-      }
     |>
   },
   "method_evidence" -> <|

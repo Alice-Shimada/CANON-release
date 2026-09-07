@@ -13,12 +13,17 @@ sector mask 从请求中的 sector ID 按完整传播子/ISP 指标顺序展开�
 
 在 `method_options` 中提供：
 
-- `package_entry`：`DlogBasis-refine/DlogBasis.wl`；
+- `package_entry`：分发包中的 `external/DlogBasis-refine/DlogBasis.wl`，或调用方安装的入口；
 - `finite_flow_package_file`：`FiniteFlow.m`；
 - `loop_order`：按 `Family["LoopMomenta"]` 的一基位置排列，例如 `{2,1}`；
 - `loop_dimensions`：与该顺序逐项对应的整数 `D0_i`，实际计算维数为
   `D0_i-2 epsilon`；
-- 可选 `numerator_positions`、`residual_backend` 和 `singular_executable`。
+- 可选 `package_revision`（调用方声明的源码版本）、`numerator_positions`、
+  `residual_backend` 和 `singular_executable`（默认从 PATH 找 `Singular`）。
+
+入口和 FiniteFlow 文件的相对路径以输入 JSON 所在目录为准。源码版本可从
+`external/sources.json` 读取；未声明时记录 `null`，不从外层 CANON 仓库推断版本。
+只使用 DlogBasis-refine；已废弃的 LS 压缩包不属于本卡依赖。
 
 分子总次数与新增 dot 总次数分别取自
 `numerator_or_power_counting_policy.definition.numerator_degree` 和
@@ -34,5 +39,5 @@ sector mask 从请求中的 sector ID 按完整传播子/ISP 指标顺序展开�
 
 保留 `ScientificStatus`、有限仿射覆盖和四个 certification flag。即使有候选，
 `ConstantLeadingSingularityCertifiedQ`、`UniformTranscendentalityCertifiedQ` 与
-`CanonicalBasisCertifiedQ` 通常仍为 `False`；工具 provenance 同时记录 package Git
-revision 与 loader SHA-256。不得把 provisional 输出提升为 UT 结论。
+`CanonicalBasisCertifiedQ` 通常仍为 `False`；工具 provenance 同时记录声明的 package
+revision 与实际 loader SHA-256。不得把 provisional 输出提升为 UT 结论。

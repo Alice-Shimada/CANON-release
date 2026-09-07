@@ -2,15 +2,16 @@
 
 repoRoot = DirectoryName[DirectoryName[$InputFileName]];
 arguments = Rest[$ScriptCommandLine];
-If[Length[arguments] =!= 2,
-  Print["Usage: wolframscript -file tests/RunPentaboxIBPLiveTest.wls KIRA_EXECUTABLE FRESH_OUTPUT"];
+If[!MemberQ[{2, 3}, Length[arguments]],
+  Print["Usage: wolframscript -file tests/RunPentaboxIBPLiveTest.wls KIRA_EXECUTABLE FRESH_OUTPUT [THREADS]"];
   Exit[2]
 ];
 
 fixture = FileNameJoin[{
   repoRoot, "tests", "fixtures", "kira-massless-two-loop-five-point-pentabox"
 }];
-output = ExpandFileName[Last[arguments]];
+output = ExpandFileName[arguments[[2]]];
+threads = If[Length[arguments] === 3, ToExpression[arguments[[3]]], 1];
 requestPath = output <> ".request.json";
 resultPath = output <> ".result.wl";
 request = <|
@@ -20,7 +21,7 @@ request = <|
   "topology" -> "pentabox5",
   "targets" -> "targets",
   "output" -> output,
-  "options" -> {"--parallel=20"}
+  "options" -> {"--parallel=" <> ToString[threads]}
 |>;
 Export[requestPath, request, "RawJSON"];
 process = RunProcess[{

@@ -103,6 +103,8 @@ wolframscript -file <script.wls> <input.json> <output_dir>
 非空输出为 `PROVISIONAL/INTEGRAL_CANDIDATES`；没有候选为
 `INCONCLUSIVE/METHOD_EXHAUSTED`。`method_options` 保留显式 `loop_order`、`loop_dimensions`、
 `package_entry`、`finite_flow_package_file`，以及已有 numerator/backend 选项。
+包与 FiniteFlow 文件的相对路径以输入 JSON 所在目录为准；可选 `package_revision`
+记录调用方声明的源码版本，未提供时为 `null`。实际入口始终记录 SHA-256。
 
 `ROUTE_CORE_CANDIDATES` 在 IBP 之后按当前 sector 的实际 master rank 选择独立行基与单行替换，
 输出 `PROVISIONAL/CORE_CANDIDATES_ROUTED`。它不枚举全部大小为 rank 的子集。
@@ -198,7 +200,9 @@ delegation。当前唯一状态权限与交接协议由根目录 `AGENTS.md` 和
 `family_ref`、`basis_ref`、`topology`、`parameters`、`variables`、`regulator`、
 `dimension_rule`、`index_order`、`propagator_slots`、`sector_convention`、`kira`、
 `family_data`、`prepared_derivatives` 和 `ordered_masters`。Kira 字段与现有 project/jobs
-保持一致；`family_data`、导数与 masters 是源文件路径。`propagator_slots` 使用完整指标中的
+保持一致；`family_data`、导数与 masters 是源文件路径。spec 内的相对资源路径（包括
+`kira.project`）以 spec 所在目录为基准，Kira jobs/config/targets 相对于该 project。
+`propagator_slots` 使用完整指标中的
 一基位置。新的通用接口不读取 `sector_source` 或文献 basis indices。
 
 `DiscoverSectors.wls` 从有序 master list 计算完整指标顺序的 `sector_bits`，ISP 位为零；
@@ -316,7 +320,11 @@ wolframscript -file mma/ReduceIBP.wls REQUEST.json RESULT.wl
 | `topology` | Kira topology / Wolfram integral head 名 |
 | `targets` | project-relative target list |
 | `output` | 尚不存在的 Kira 工作目录 |
-| `options` | 逐项传给 Kira 的 argv，例如 `--parallel=20` |
+| `options` | 逐项传给 Kira 的 argv，例如 `--parallel=1`；线程数由调用方按资源预算指定 |
+
+`project`、`output` 和带路径分隔符的 `executable` 相对于请求 JSON 所在目录解析；
+仅给命令名的 `executable` 从 PATH 查找。`jobs`、`targets` 相对于 Kira project。
+候选 IBP 桥使用同一规则；命令行的结果文件路径仍相对于调用方工作目录。
 
 示例见 `interfaces/ibp-request.example.json`。适配器信任合作者准备的 project 与 Kira
 输出，复制 project、依次运行两个 argv job，并直接读取有序 `masters.final` 与导出

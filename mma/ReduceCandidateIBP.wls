@@ -1,6 +1,7 @@
 #!/usr/bin/env wolframscript
 
 repoRoot = DirectoryName[DirectoryName[$InputFileName]];
+Get[FileNameJoin[{repoRoot, "mma", "lib", "MethodCardCore.wl"}]];
 Get[FileNameJoin[{repoRoot, "mma", "lib", "BaikovDerivative.wl"}]];
 Get[FileNameJoin[{repoRoot, "mma", "lib", "CandidateIBPBridge.wl"}]];
 
@@ -9,8 +10,14 @@ arguments = Rest[$ScriptCommandLine];
   {$Context = "CANON`DEData`", $ContextPath = {"System`"}},
   Get /@ Take[arguments, 4]
 ];
-request = Import[arguments[[5]], "RawJSON"];
-resultPath = arguments[[6]];
+requestPath = ExpandFileName[arguments[[5]]];
+request = Import[requestPath, "RawJSON"];
+request["project"] = CanonMethodCard`ResolveInputPath[requestPath, request["project"]];
+request["output"] = CanonMethodCard`ResolveInputPath[requestPath, request["output"]];
+If[StringContainsQ[request["executable"], {"/", "\\"}],
+  request["executable"] = CanonMethodCard`ResolveInputPath[requestPath, request["executable"]]
+];
+resultPath = ExpandFileName[arguments[[6]]];
 
 compiled = CANON`CandidateIBPBridge`CompileCandidateIBPTargets[
   candidates, preparedFamily, masterBasis, preparedDerivatives

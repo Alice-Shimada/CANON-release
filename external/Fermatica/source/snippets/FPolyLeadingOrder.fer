@@ -1,0 +1,44 @@
+; (c) Roman Lee 2019
+; This is a template for calculating LeadingQModOrder
+; It depends on ModTools.lib.fer file
+
+; parameters:
+; <vars> --- declaration of variables
+; <r>,<c> --- matrix size
+; <M> --- column-wise original matrix
+; <poly> --- polynomial to mod over
+
+; ============== Variables ==============
+
+<<vars>>
+
+; ============== Arrays ==============
+
+Array m[<<r>>,<<c>>];
+[m] := [(
+<<M>>
+)];
+
+poly:=<<poly>>;
+
+k:=infty;
+
+; ============== Program ==============
+
+for i = 1,<<r>> do
+  for j = 1,<<c>> do
+    k1 := LQMOrder(m[i,j],poly);
+    if Numb(k1) then
+      if Numb(k) then
+        if k>k1 then
+          k := k1;
+        fi;
+      else
+        k := k1;
+      fi;
+    fi;
+  od
+od;
+
+; ============== Clean up ==============
+ @([m]);

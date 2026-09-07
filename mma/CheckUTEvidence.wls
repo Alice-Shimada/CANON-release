@@ -122,35 +122,24 @@ If[
 ];
 
 checkerOptions = Lookup[task["payload"], "checker_options", <||>];
-hepToolsRoot = Lookup[checkerOptions, "hep_tools_root", Missing["hep_tools_root"]];
-If[!AssociationQ[checkerOptions] || !StringQ[hepToolsRoot] ||
-   !StringStartsQ[hepToolsRoot, $PathnameSeparator],
-  writeOutcome["ERROR", "TOOL_CONFIGURATION", "checker_options.hep_tools_root must be an absolute path"]
+If[!AssociationQ[checkerOptions],
+  writeOutcome["ERROR", "TOOL_CONFIGURATION", "checker_options must be an object"]
 ];
-normalized[path_String] := StringReplace[ExpandFileName[path], RegularExpression["/+$"] -> ""];
-realPath[path_String] := Lookup[
-  Quiet @ Check[Association[FileInformation[path]], <||>], "AbsoluteFileName", $Failed
+componentPaths = Lookup[checkerOptions, {
+  "package_entry", "finite_flow_package_file", "reference_directory"
+}, Missing["path"]];
+If[!AllTrue[componentPaths, StringQ[#] && # =!= "" &],
+  writeOutcome["ERROR", "TOOL_CONFIGURATION", "declare INITIAL/FiniteFlow entries and the reference directory"]
 ];
-hepToolsRoot = normalized[hepToolsRoot];
-initialStableRoot = FileNameJoin[{hepToolsRoot, "tools", "initial"}];
-expectedInitialRoot = FileNameJoin[{hepToolsRoot, "tools", "initial-2.1-63d8f81"}];
-finiteFlowRoot = FileNameJoin[{hepToolsRoot, "tools", "finiteflow-install"}];
-initialEntry = FileNameJoin[{initialStableRoot, "INITIAL.m"}];
-finiteFlowEntry = FileNameJoin[{finiteFlowRoot, "mathlink", "FiniteFlow.m"}];
-finiteFlowLibrary = FileNameJoin[{finiteFlowRoot, "fflowmlink.dylib"}];
-finiteFlowCoreLibrary = FileNameJoin[{finiteFlowRoot, "lib", "libfflow.dylib"}];
-exampleRoot = FileNameJoin[{initialStableRoot, "examples", "massless_3L4P"}];
+{initialEntry, finiteFlowEntry, exampleRoot} =
+  CanonMethodCard`ResolveInputPath[inputPath, #] & /@ componentPaths;
 amatrixPath = FileNameJoin[{exampleRoot, "AMatrix_ladder.m"}];
 basisPath = FileNameJoin[{exampleRoot, "initial_basis_ladder.m"}];
 referencePath = FileNameJoin[{exampleRoot, "TMatrix_ladder_to_UT.m"}];
 requiredComponents = {
-  initialEntry, finiteFlowEntry, finiteFlowLibrary, finiteFlowCoreLibrary,
+  initialEntry, finiteFlowEntry,
   amatrixPath, basisPath, referencePath
 };
-If[
-  FileType[hepToolsRoot] =!= Directory || realPath[initialStableRoot] =!= expectedInitialRoot,
-  writeOutcome["ERROR", "TOOL_CONFIGURATION", "HEP tools root or INITIAL stable target does not match the registered layout"]
-];
 If[Or @@ (FileType[#] =!= File & /@ requiredComponents),
   writeOutcome["ERROR", "TOOL_COMPONENT_MISSING", "a registered tool or official reference component is missing"]
 ];

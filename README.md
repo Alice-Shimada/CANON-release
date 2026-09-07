@@ -13,6 +13,32 @@
 
 OpenCode、Claude Code 和 Hermes 的接入尚未实现。Windows 原生环境也尚未适配。
 
+## 分发与科学依赖
+
+外部程序的源码逐个放在仓库根目录下的 `external/` 中，供用户自行编译、安装：
+DlogBasis-refine、CANONICA、Libra、Fermatica、INITIAL、FiniteFlow、Kira、Singular。
+原始仓库、提交号和安装入口见 [external/README.md](external/README.md) 与
+[external/sources.json](external/sources.json)。基础库由用户自行安装；Fermat 源码的
+获取限制单独记录在 [external/Fermat/README.md](external/Fermat/README.md)。
+
+当前候选工具是 `external/DlogBasis-refine/DlogBasis.wl` 的
+`DlogBasis` 上下文与 `DlogBasisSearch`；旧 LS 压缩包已移除。
+
+安装位置由调用方通过 `method_options.package_entry`、
+`method_options.finite_flow_package_file`、`method_options.singular_executable`
+及 Kira request 的 `executable` 传入；Fermat 使用 `FERMATPATH`。Wolfram 的普通
+包搜索和原生库搜索分别使用 `$Path`、`$LibraryPath`。命令行工具可从 PATH 查找；
+Python 测试允许 `CANON_WOLFRAM_KERNEL` 指定 kernel。并行数由请求参数指定。
+
+JSON 的相对文件路径以声明它的 JSON 所在目录为准，family spec 内的资源路径以
+spec 文件所在目录为准。JSON 不做环境变量或 `~` 展开；调用方可从环境或全局配置
+取得路径，再传入请求。输出目录命令行参数仍相对于当前工作目录解析。
+INITIAL 的组件配置与真实 provider 测试变量详见
+[外部依赖配置](external/README.md#initial-独立组件配置)。
+
+迁移源码后，用户安装所需程序并重新配置路径；Agent 重新安装当前 checkout 的
+statemng launcher。已存在研究产物中的当次绝对路径不会自动重写。
+
 ## 首次准备
 
 ### 用户操作
@@ -51,7 +77,7 @@ state-management/adapters/codex/install_launcher.py --check
 $HOME/.codex/statemng/CANON/mcp
 ```
 
-该 launcher 是机器本地文件，不属于仓库，也不保存研究状态。仓库中没有用户个人目录的硬编码；其他用户机器上的接入 Agent 执行安装器后，会得到适合该机器的 launcher。
+该 launcher 是机器本地文件，不属于仓库，也不保存研究状态。CANON 接入配置不包含个人安装路径；其他用户机器上的接入 Agent 执行安装器后，会得到适合该机器的 launcher。
 
 如果 `--check` 失败，Agent 应重新安装 launcher，并停止当前会话中的持续研究，等待全新 Local 会话加载 MCP。不得继续使用可能指向其他 checkout 的 tools。安装程序同时准备当前 checkout 专用的机器本地授权目录；它不保存研究结果，也不会写入 Git。
 
@@ -151,7 +177,7 @@ wolframscript -file tests/RunCanonicalCommitUnitTests.wls
 wolframscript -file tests/RunFullSystemUnitTests.wls
 ```
 
-真实积分链路使用显式提供的 DlogBasis、FiniteFlow、Kira 和正常安装的 Fermat：
+真实积分链路使用显式提供的 DlogBasis-refine、FiniteFlow、Kira 和正常安装的 Fermat：
 
 ```text
 wolframscript -file tests/RunEndToEndWorkflowLiveTest.wls DLOGBASIS_ENTRY FINITEFLOW_ENTRY KIRA_EXECUTABLE FRESH_OUTPUT

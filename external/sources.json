@@ -1,0 +1,104 @@
+{
+  "packages": [
+    {
+      "name": "DlogBasis-refine",
+      "directory": "external/DlogBasis-refine",
+      "repository": "https://github.com/pascalwasser/DlogBasis.git",
+      "commit": "ef16756e306003ec585a9e3bbe9995af7936197b",
+      "files": 25,
+      "bytes": 293667,
+      "source": "CANON-maintained DlogBasis-refine variant; origin identifies its historical upstream, not a published location of this commit",
+      "distribution_edits": [
+        {
+          "path": "skills/dlogbasis-refine/SKILL.md",
+          "reason": "resolve the package from caller configuration or current distribution; document revision input",
+          "sha256": "f95e45f7e09eb8c5aa7fc1254ec93247123da411c86e463969325ac2108696b1"
+        },
+        {
+          "path": "Studies/ScanMassless2L5PSectors.wls",
+          "reason": "read DLOGBASIS_REVISION and hash the entry instead of attributing the outer repository HEAD",
+          "sha256": "7086f30152d390472d8edb75376561c572ea336613f729fca6f571393e1368c3"
+        }
+      ],
+      "tree": "cfa0a8b57fa6482dd72c0fbca24316f65f0bcd1b"
+    },
+    {
+      "name": "CANONICA",
+      "directory": "external/CANONICA",
+      "repository": "https://github.com/christophmeyer/CANONICA.git",
+      "commit": "c753f6dabd59cad84cf12e15b449416a0f0e44e9",
+      "files": 61,
+      "bytes": 5624649,
+      "source": "original committed repository tree; upstream examples and assets retained; no local compilation, installed outputs, nested Git metadata or fetched foundation libraries",
+      "tree": "3cb61d9b75e01806ce94f7ae0e80a15fdd799639"
+    },
+    {
+      "name": "Libra",
+      "directory": "external/Libra",
+      "repository": "https://github.com/rnlg/Libra.git",
+      "commit": "c3c3d48dcd8483f57b2f9643698a881fa56d3d85",
+      "files": 12,
+      "bytes": 1173287,
+      "source": "original committed repository tree; upstream examples and assets retained; no local compilation, installed outputs, nested Git metadata or fetched foundation libraries",
+      "tree": "c0bb49671c74d16badfb6df37f182a75307e9495"
+    },
+    {
+      "name": "Fermatica",
+      "directory": "external/Fermatica",
+      "repository": "https://github.com/rnlg/Fermatica.git",
+      "commit": "9d624919281bf48f76527cafdd6e1b3f03906866",
+      "files": 17,
+      "bytes": 105382,
+      "source": "original committed repository tree; upstream examples and assets retained; no local compilation, installed outputs, nested Git metadata or fetched foundation libraries",
+      "tree": "824c60806f8fc2d608c77ab5d5993b86b98f8f71"
+    },
+    {
+      "name": "INITIAL",
+      "directory": "external/INITIAL",
+      "repository": "https://github.com/UT-team/INITIAL.git",
+      "commit": "63d8f813ac415f82f7ef945ee7e3f78a242fae49",
+      "files": 36,
+      "bytes": 6775660,
+      "source": "original committed repository tree; upstream examples and assets retained; no local compilation, installed outputs, nested Git metadata or fetched foundation libraries",
+      "tree": "bada50c4a7d80dc8ee90e0a24080a6b32b43b24c"
+    },
+    {
+      "name": "FiniteFlow",
+      "directory": "external/FiniteFlow",
+      "repository": "https://github.com/peraro/finiteflow.git",
+      "commit": "278344c169010b74e791af8c5604c8cb9cd8df11",
+      "files": 110,
+      "bytes": 1352152,
+      "source": "original committed repository tree; upstream examples and assets retained; no local compilation, installed outputs, nested Git metadata or fetched foundation libraries",
+      "tree": "57827df485ab50cdc139e79e4b4680b9b0f34fa8"
+    },
+    {
+      "name": "Kira",
+      "directory": "external/Kira",
+      "repository": "https://gitlab.com/kira-pyred/kira.git",
+      "commit": "5760f42f8decd7eb5474c780db75b5e5e7b450a0",
+      "files": 281,
+      "bytes": 16896175,
+      "source": "original committed repository tree; upstream examples and assets retained; no local compilation, installed outputs, nested Git metadata or fetched foundation libraries",
+      "tree": "34333c0b35e556f71a762118de5ffaf0b195c63f"
+    },
+    {
+      "name": "Singular",
+      "directory": "external/Singular",
+      "repository": "https://github.com/Singular/Singular.git",
+      "commit": "a15b7fe3ec918262cec68ec40637e9f1c2a4b6cf",
+      "ref": "Release-4-2-1p2",
+      "files": 10605,
+      "bytes": 88123900,
+      "source": "original committed repository tree; upstream examples and assets retained; no local compilation, installed outputs, nested Git metadata or fetched foundation libraries",
+      "tree": "9853b0e68f62979b9f6f0a847d2de50138302f36"
+    }
+  ],
+  "not_bundled": [
+    {
+      "name": "Fermat",
+      "reason": "official current GPL source is supplied on request by the author; source not obtained",
+      "instructions": "external/Fermat/README.md"
+    }
+  ]
+}

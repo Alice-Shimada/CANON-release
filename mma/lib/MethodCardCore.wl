@@ -5,6 +5,7 @@ SectorBits::usage = "SectorBits[integral, propagatorSlots] returns the full inde
 ReadTask::usage = "ReadTask[path, step] reads and validates a script input envelope.";
 ScriptArguments::usage = "ScriptArguments[] returns arguments following the active WL script.";
 LoadArtifact::usage = "LoadArtifact[task, inputPath, name] reads one WL Association artifact.";
+ResolveInputPath::usage = "ResolveInputPath[inputFile, path] resolves a path relative to the file that declares it.";
 ResolveMethodPackage::usage = "ResolveMethodPackage[task, inputPath, context] resolves a workflow-declared package entry or the standard Wolfram package path.";
 WriteWLArtifact::usage = "WriteWLArtifact[expr, outputDir, fileName] writes a new WL artifact.";
 WriteResult::usage = "WriteResult[task, outputDir, status, code, artifacts, summary] writes result.json.";
@@ -67,10 +68,7 @@ ReadTask[path_String, expectedStep_String] := Module[{task},
 artifactPath[inputPath_String, descriptor_Association] := Module[{raw},
   raw = Lookup[descriptor, "path", Missing["path"]];
   If[!StringQ[raw], Return[$Failed]];
-  If[StringStartsQ[raw, $PathnameSeparator],
-    ExpandFileName[raw],
-    ExpandFileName[FileNameJoin[{DirectoryName[ExpandFileName[inputPath]], raw}]]
-  ]
+  ResolveInputPath[inputPath, raw]
 ];
 
 absolutePathQ[path_String] := If[
@@ -78,6 +76,10 @@ absolutePathQ[path_String] := If[
   StringMatchQ[path, LetterCharacter ~~ ":" ~~ ("/" | "\\") ~~ ___] ||
     StringStartsQ[path, "\\\\"] || StringStartsQ[path, "//"],
   StringStartsQ[path, $PathnameSeparator]
+];
+
+ResolveInputPath[inputPath_String, path_String] := ExpandFileName[
+  If[absolutePathQ[path], path, FileNameJoin[{DirectoryName[ExpandFileName[inputPath]], path}]]
 ];
 
 ResolveMethodPackage[task_Association, inputPath_String, context_String] := Module[
@@ -92,11 +94,7 @@ ResolveMethodPackage[task_Association, inputPath_String, context_String] := Modu
       path = Quiet @ Check[FindFile[context], $Failed];
       source = "wolfram-package-path",
     StringQ[requested] && requested =!= "",
-      path = If[
-        absolutePathQ[requested],
-        ExpandFileName[requested],
-        ExpandFileName[FileNameJoin[{DirectoryName[ExpandFileName[inputPath]], requested}]]
-      ];
+      path = ResolveInputPath[inputPath, requested];
       source = "method_options.package_entry",
     True,
       Return[failure["INVALID_METHOD_OPTIONS", "package_entry must be a non-empty path string"]]

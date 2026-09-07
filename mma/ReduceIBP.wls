@@ -1,7 +1,15 @@
 #!/usr/bin/env wolframscript
 
+repoRoot = DirectoryName[DirectoryName[ExpandFileName[$InputFileName]]];
+Get[FileNameJoin[{repoRoot, "mma", "lib", "MethodCardCore.wl"}]];
 arguments = Rest[$ScriptCommandLine];
-request = Import[First[arguments], "RawJSON"];
+requestPath = ExpandFileName[First[arguments]];
+request = Import[requestPath, "RawJSON"];
+request["project"] = CanonMethodCard`ResolveInputPath[requestPath, request["project"]];
+request["output"] = CanonMethodCard`ResolveInputPath[requestPath, request["output"]];
+If[StringContainsQ[request["executable"], {"/", "\\"}],
+  request["executable"] = CanonMethodCard`ResolveInputPath[requestPath, request["executable"]]
+];
 CopyDirectory[request["project"], request["output"]];
 
 Do[

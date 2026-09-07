@@ -12,6 +12,18 @@
 8. Codex 初版只允许在 Local 会话中执行持续研究；Worktree 会话必须停止持续研究并报告接入错误，不得操作另一 checkout 的状态目录。
 9. Codex 主 Agent 在首次状态调用前必须自行运行 `state-management/adapters/codex/install_launcher.py --check`。校验失败时，由主 Agent 重新安装入口并停止当前持续研究，待全新 Local 会话加载 MCP；不得继续使用可能指向其他 checkout 的 tools，也不得要求用户执行安装命令。校验通过后，主 Agent 必须在创建任何 worker 前先成功调用 `init` 或 `resume`，原子绑定当前总体任务的 coordinator。
 
+## 分发与路径配置
+
+按当前 checkout 定位仓库脚本与 `external/` 源码；工具安装路径、可执行文件、线程数
+从任务参数、环境或 Wolfram 全局配置取得，不写入个人目录或机器平台常量。
+具体字段与安装说明见 `README.md` 和 `external/README.md`。DlogBasis 候选只使用
+`external/DlogBasis-refine` 或调用方声明的同名安装；包版本来自显式声明与源码清单，
+不把外层 CANON Git HEAD 当作包版本。
+
+外部程序源码逐包存放，保留来源提交和许可证，供用户自行编译、安装。分发准备不编译
+依赖，不复制本机二进制、基础库、研究运行输出或机器本地 launcher。任务描述应明确
+所需入口、资源预算和输入路径基准，worker 直接使用提供的安装配置。
+
 ## 四、整体架构
 
 初版只有一个本地 CLI 和按总体任务分隔的状态目录。主 Agent 与原生 subagent 通过 CLI 读写明确指定的总体任务；subagent 的创建和研究过程仍由宿主 Agent 负责，不进入状态管理程序。完整工作流如下：

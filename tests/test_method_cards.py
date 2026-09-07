@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -14,10 +15,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = ROOT / "tests" / "fixtures" / "method_cards"
-DEFAULT_KERNEL = Path(
-    "/Applications/Mathematica.app/Contents/MacOS/WolframKernel"
-)
-KERNEL = Path(os.environ.get("CANON_WOLFRAM_KERNEL", DEFAULT_KERNEL))
+KERNEL = Path(
+    os.environ.get("CANON_WOLFRAM_KERNEL") or shutil.which("WolframKernel") or "WolframKernel"
+).expanduser().resolve()
 KERNEL_LAUNCHER = ROOT / "tests" / "wolfram_kernel_launcher.py"
 
 
@@ -28,16 +28,17 @@ def optional_entry(name: str) -> Path | None:
 
 CANONICA_ENTRY = optional_entry("CANON_TEST_CANONICA_ENTRY")
 LIBRA_ENTRY = optional_entry("CANON_TEST_LIBRA_ENTRY")
-INITIAL_HEP_TOOLS_ROOT = optional_entry("CANON_TEST_INITIAL_HEP_TOOLS_ROOT")
+INITIAL_TEST_CONFIG = optional_entry("CANON_TEST_INITIAL_CONFIG")
+INITIAL_COMPONENT_KEYS = (
+    "package_entry", "finite_flow_package_file", "finite_flow_library", "reference_directory"
+)
 STRUCTURED_OUTPUT_ROOT = optional_entry("CANON_TEST_STRUCTURED_OUTPUT_ROOT")
 DLOGBASIS_REFINE_ENTRY = optional_entry("CANON_TEST_DLOGBASIS_REFINE_ENTRY")
 FINITEFLOW_ENTRY = optional_entry("CANON_TEST_FINITEFLOW_ENTRY")
-REGISTERED_LIBRA_ENTRY = Path(
-    "/Users/balth/Works/hep-tools/tools/libra/Source/Libra.m"
-)
-REGISTERED_LIBRA_SHA256 = (
-    "b3574e7f560951516a289a8141aafbaf23f0f5ae563e29d0fa077b17ba4d3eb4"
-)
+FIXTURE_LIBRA_ENTRY = FIXTURES / "structured-repair-tool.m"
+FIXTURE_LIBRA_SHA256 = hashlib.sha256(FIXTURE_LIBRA_ENTRY.read_bytes()).hexdigest()
+FIXTURE_ENTRY_EXPRESSION = 'Environment["CANON_TEST_FIXTURE_LIBRA_ENTRY"]'
+FIXTURE_HASH_EXPRESSION = f'FileHash[{FIXTURE_ENTRY_EXPRESSION}, "SHA256", "HexString"]'
 
 
 @unittest.skipUnless(
@@ -61,6 +62,7 @@ class MethodCardIntegrationTest(unittest.TestCase):
         timeout: int = 60,
     ) -> dict:
         environment = os.environ.copy()
+        environment["CANON_TEST_FIXTURE_LIBRA_ENTRY"] = str(FIXTURE_LIBRA_ENTRY)
         environment["OMP_NUM_THREADS"] = "1"
         environment["MKL_NUM_THREADS"] = "1"
         environment["NUMEXPR_NUM_THREADS"] = "1"
@@ -451,8 +453,8 @@ EndPackage[];
         prepared_basis: Path | None = None,
         route_decision: Path | None = None,
         repair_request: Path | None = None,
-        checker_entry: Path = REGISTERED_LIBRA_ENTRY,
-        checker_sha256: str = REGISTERED_LIBRA_SHA256,
+        checker_entry: Path = FIXTURE_LIBRA_ENTRY,
+        checker_sha256: str = FIXTURE_LIBRA_SHA256,
     ) -> Path:
         expected_tool_identity = self.libra_tool_identity(repair_candidate)
         value = {
@@ -515,7 +517,7 @@ EndPackage[];
         self,
         task_id: str,
         *,
-        hep_tools_root: Path | None = None,
+        components: dict | None = None,
         candidate_updates: dict | None = None,
         identity_updates: dict | None = None,
     ) -> Path:
@@ -526,15 +528,15 @@ EndPackage[];
         if candidate_updates:
             value["payload"]["candidate"].update(candidate_updates)
         options = {}
-        if hep_tools_root is not None:
+        if components is not None:
             options = {
-                "hep_tools_root": str(hep_tools_root),
                 "initial_identity": (
                     "INITIAL 2.1; 63d8f813ac415f82f7ef945ee7e3f78a242fae49"
                 ),
                 "finiteflow_identity": (
                     "FiniteFlow; 278344c169010b74e791af8c5604c8cb9cd8df11"
                 ),
+                **components,
             }
         if identity_updates:
             options.update(identity_updates)
@@ -548,7 +550,7 @@ EndPackage[];
         task_id: str,
         provider_task_id: str,
         evidence_path: Path,
-        hep_tools_root: Path,
+        components: dict,
     ) -> Path:
         value = {
             "schema": "canon-neu/script-input/v1",
@@ -561,7 +563,7 @@ EndPackage[];
                     "type": "mathematica-expression",
                     "path": str(evidence_path),
                 },
-                "checker_options": {"hep_tools_root": str(hep_tools_root)},
+                "checker_options": components,
             },
         }
         path = self.run_root / f"{task_id}.json"
@@ -1708,11 +1710,11 @@ Quit[If[derived === automatic, 0, 1]];
             "forged-libra-provenance": (
                 (
                     (
-                        '"entry" -> "/Users/balth/Works/hep-tools/tools/libra/Source/Libra.m"',
+                        f'"entry" -> {FIXTURE_ENTRY_EXPRESSION}',
                         '"entry" -> "/nonexistent/forged-Libra.m"',
                     ),
                     (
-                        '"b3574e7f560951516a289a8141aafbaf23f0f5ae563e29d0fa077b17ba4d3eb4"',
+                        FIXTURE_HASH_EXPRESSION,
                         '"0000000000000000000000000000000000000000000000000000000000000000"',
                     ),
                     (
@@ -1757,11 +1759,11 @@ Quit[If[derived === automatic, 0, 1]];
             "structured-sentinel-provenance",
             (
                 (
-                    '"entry" -> "/Users/balth/Works/hep-tools/tools/libra/Source/Libra.m"',
+                    f'"entry" -> {FIXTURE_ENTRY_EXPRESSION}',
                     f'"entry" -> "{sentinel}"',
                 ),
                 (
-                    f'"{REGISTERED_LIBRA_SHA256}"',
+                    FIXTURE_HASH_EXPRESSION,
                     f'"{sentinel_sha256}"',
                 ),
             ),
@@ -1784,18 +1786,74 @@ Quit[If[derived === automatic, 0, 1]];
         self.assertTrue(result["summary"]["authenticated_libra_provenance"])
         self.assertFalse(marker.exists(), "checker executed the hashed provider package")
 
+    def test_initial_components_work_in_an_arbitrary_installation_layout(self) -> None:
+        initial = self.run_root / "solver files" / "entry.wl"
+        finite_flow = self.run_root / "algebra files" / "binding.wl"
+        native = self.run_root / "native files" / "declared-library.bin"
+        reference = self.run_root / "reference data"
+        marker = self.run_root / "selected-threads.wl"
+        for directory in (initial.parent, finite_flow.parent, native.parent, reference):
+            directory.mkdir()
+        native.write_bytes(b"fixture for the declared native-library path")
+        finite_flow.write_text(
+            'BeginPackage["FiniteFlow`"]; Begin["`Private`"];\n'
+            f'fflowlib = {json.dumps(str(native))};\nEnd[]; EndPackage[];\n',
+            encoding="utf-8",
+        )
+        initial.write_text(
+            'Options[TCalc] = {"NThreads" -> 1, "TakeRow" -> 1, "Silent" -> True};\n'
+            'TCalc[a_, f_, v_, e_, OptionsPattern[]] := '
+            f'(Put[OptionValue["NThreads"], {json.dumps(str(marker))}]; IdentityMatrix[26]);\n'
+            'basisChange[a_, t_, v_, opts___] := a;\n',
+            encoding="utf-8",
+        )
+        (reference / "AMatrix_ladder.m").write_text(
+            "DiagonalMatrix[Join[{eps/x}, ConstantArray[0, 25]]]\n", encoding="utf-8"
+        )
+        (reference / "initial_basis_ladder.m").write_text(
+            "Join[{G[2,{1,1,1,1,1,1,1,1,1,1,-1,0,0,0,0}]}, Array[b,25]]\n",
+            encoding="utf-8",
+        )
+        (reference / "TMatrix_ladder_to_UT.m").write_text(
+            "IdentityMatrix[26]\n", encoding="utf-8"
+        )
+        components = dict(zip(
+            INITIAL_COMPONENT_KEYS,
+            (str(path.relative_to(self.run_root)) for path in (initial, finite_flow, native, reference)),
+        ))
+        components["threads"] = 3
+        provider_id = "T-INITIAL-PORTABLE-FIXTURE"
+        provider_output = self.run_root / "portable-provider"
+        provider = self.run_wls(
+            ROOT / "methods" / "initial" / "run.wls",
+            self.initial_provider_input(provider_id, components=components),
+            provider_output,
+        )
+        self.assertEqual(provider["code"], "EVIDENCE_AWAITING_VERIFICATION")
+        self.assertEqual(marker.read_text().strip(), "3")
+        evidence = provider_output / provider["artifacts"]["ut_evidence"]["path"]
+        checker = self.run_wls(
+            ROOT / "mma" / "CheckUTEvidence.wls",
+            self.initial_checker_input("T-CHECK-PORTABLE-FIXTURE", provider_id, evidence, components),
+            self.run_root / "portable-checker",
+        )
+        self.assertEqual(checker["code"], "VERIFIED_EVIDENCE")
+
     @unittest.skipUnless(
-        INITIAL_HEP_TOOLS_ROOT is not None and INITIAL_HEP_TOOLS_ROOT.is_dir(),
-        "set CANON_TEST_INITIAL_HEP_TOOLS_ROOT to run the real INITIAL ladder test",
+        INITIAL_TEST_CONFIG is not None and INITIAL_TEST_CONFIG.is_file(),
+        "set CANON_TEST_INITIAL_CONFIG to run the real INITIAL ladder test",
     )
     def test_initial_official_ladder_provider_and_independent_checker(self) -> None:
-        assert INITIAL_HEP_TOOLS_ROOT is not None
+        assert INITIAL_TEST_CONFIG is not None
+        components = json.loads(INITIAL_TEST_CONFIG.read_text(encoding="utf-8"))
+        for key in INITIAL_COMPONENT_KEYS:
+            components[key] = str((INITIAL_TEST_CONFIG.parent / components[key]).resolve())
         provider_task_id = "T-INITIAL-OFFICIAL-PROVIDER"
         provider_output = self.run_root / "initial-official-provider"
         provider_result = self.run_wls(
             ROOT / "methods" / "initial" / "run.wls",
             self.initial_provider_input(
-                provider_task_id, hep_tools_root=INITIAL_HEP_TOOLS_ROOT
+                provider_task_id, components=components
             ),
             provider_output,
             timeout=600,
@@ -1816,7 +1874,7 @@ Quit[If[derived === automatic, 0, 1]];
                 "T-INITIAL-OFFICIAL-CHECKER",
                 provider_task_id,
                 evidence_path,
-                INITIAL_HEP_TOOLS_ROOT,
+                components,
             ),
             checker_output,
             timeout=240,
@@ -1926,7 +1984,6 @@ Quit[If[derived === automatic, 0, 1]];
             runner,
         )
         self.assertIn('prepared["family_data", "path"]', runner)
-        self.assertIn('prepared["sector_source", "path"]', runner)
         self.assertIn('methodOptions["loop_order"]', runner)
         self.assertIn('methodOptions["loop_dimensions"]', runner)
         for forbidden in (
@@ -2027,7 +2084,8 @@ Quit[If[derived === automatic, 0, 1]];
                 },
                 "method_options": {
                     "package_entry": str(package_entry),
-                    "finite_flow_package_file": str(FINITEFLOW_ENTRY),
+                    "package_revision": os.environ.get("CANON_TEST_DLOGBASIS_REVISION"),
+                    "finite_flow_package_file": os.path.relpath(FINITEFLOW_ENTRY, self.run_root),
                     "loop_order": [1, 2],
                     "loop_dimensions": [4, 4],
                     "numerator_positions": [],
@@ -2065,12 +2123,7 @@ Quit[If[derived === automatic, 0, 1]];
         )
         self.assertEqual(
             result["summary"]["package_revision"],
-            subprocess.run(
-                ["git", "-C", str(package_root), "rev-parse", "HEAD"],
-                check=True,
-                text=True,
-                capture_output=True,
-            ).stdout.strip(),
+            os.environ.get("CANON_TEST_DLOGBASIS_REVISION"),
         )
         artifact_path = output / result["artifacts"]["integral_candidates"]["path"]
         self.assertTrue(artifact_path.is_file())
@@ -2299,13 +2352,12 @@ If[
         self.assertIn("governed only by `statemng`", legacy_skills)
 
     def test_initial_missing_registered_components_is_tool_error(self) -> None:
-        fake_root = self.run_root / "empty-hep-tools"
-        fake_root.mkdir()
         output = self.run_root / "initial-missing-components"
         result = self.run_wls(
             ROOT / "methods" / "initial" / "run.wls",
             self.initial_provider_input(
-                "T-INITIAL-MISSING-COMPONENTS", hep_tools_root=fake_root
+                "T-INITIAL-MISSING-COMPONENTS",
+                components={key: str(self.run_root / key) for key in INITIAL_COMPONENT_KEYS},
             ),
             output,
             expected_returncode=1,
@@ -2319,7 +2371,7 @@ If[
             ROOT / "methods" / "initial" / "run.wls",
             self.initial_provider_input(
                 "T-INITIAL-WRONG-IDENTITY",
-                hep_tools_root=self.run_root,
+                components=dict.fromkeys(INITIAL_COMPONENT_KEYS, str(self.run_root / "unused")),
                 identity_updates={"initial_identity": "INITIAL unknown"},
             ),
             output,
@@ -2373,7 +2425,7 @@ If[
                         f"T-INITIAL-CHECK-{name.upper()}",
                         "T-FIXTURE-INITIAL-EVIDENCE",
                         artifact,
-                        self.run_root / "not-used",
+                        {},
                     ),
                     output,
                 )
@@ -2390,7 +2442,7 @@ If[
                 "T-INITIAL-CHECK-FORGED",
                 "T-FIXTURE-INITIAL-EVIDENCE",
                 FIXTURES / "forged-initial-ut-evidence.wl",
-                self.run_root / "not-used",
+                {},
             ),
             output,
         )

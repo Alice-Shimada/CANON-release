@@ -8,11 +8,12 @@ Get[FileNameJoin[{repoRoot, "mma", "lib", "MethodCardCore.wl"}]];
 {inputPath, outputDir} = ExpandFileName /@ CanonMethodCard`ScriptArguments[];
 task = CanonMethodCard`ReadTask[inputPath, "PREPARE"];
 spec = CanonMethodCard`LoadArtifact[task, inputPath, "family_spec"];
-project = ExpandFileName[spec["kira", "project"]];
-source[path_String] := <|
-  "path" -> ExpandFileName[path],
-  "sha256" -> FileHash[path, "SHA256", "HexString"]
-|>;
+specPath = CanonMethodCard`ResolveInputPath[inputPath, task["payload", "family_spec", "path"]];
+project = CanonMethodCard`ResolveInputPath[specPath, spec["kira", "project"]];
+source[path_String] := With[{resolved = CanonMethodCard`ResolveInputPath[specPath, path]}, <|
+  "path" -> resolved,
+  "sha256" -> FileHash[resolved, "SHA256", "HexString"]
+|>];
 kiraSource[path_String] := source[FileNameJoin[{project, path}]];
 
 prepared = <|

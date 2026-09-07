@@ -8,6 +8,10 @@ fixture = FileNameJoin[{
 }];
 resource = ExpandFileName[Last[$ScriptCommandLine]];
 temporary = CreateDirectory[];
+inputDirectory = CreateDirectory[FileNameJoin[{temporary, "input files"}]];
+localFixture = FileNameJoin[{inputDirectory, "kira project"}];
+CopyDirectory[fixture, localFixture];
+CopyFile[FileNameJoin[{resource, "family.wl"}], FileNameJoin[{inputDirectory, "family.wl"}]];
 variables = Get[FileNameJoin[{fixture, "prepared-derivatives-v2.wl"}]]["variables"];
 dimension = Symbol["CANON`DEData`d"];
 regulator = Symbol["CANON`DEData`eps"];
@@ -23,24 +27,24 @@ spec = <|
   "index_order" -> {"D1", "D2", "D3", "D4", "D5", "D6", "D7", "D8", "N9", "N10", "N11"},
   "sector_convention" -> "Sector = Sum[Boole[a_i > 0] 2^(i-1), {i,1,8}]",
   "kira" -> <|
-    "project" -> fixture,
+    "project" -> "kira project",
     "integral_families" -> "config/integralfamilies.yaml",
     "kinematics" -> "config/kinematics.yaml",
     "jobs" -> {"jobs.yaml", "export-math.yaml"},
     "targets" -> "targets"
   |>,
-  "family_data" -> FileNameJoin[{resource, "family.wl"}],
-  "prepared_derivatives" -> FileNameJoin[{fixture, "prepared-derivatives-v2.wl"}],
-  "ordered_masters" -> FileNameJoin[{fixture, "preferred-masters"}],
+  "family_data" -> "family.wl",
+  "prepared_derivatives" -> "kira project/prepared-derivatives-v2.wl",
+  "ordered_masters" -> "kira project/preferred-masters",
   "propagator_slots" -> Range[8]
 |>;
-specPath = FileNameJoin[{temporary, "family-spec.wl"}];
+specPath = FileNameJoin[{inputDirectory, "family-spec.wl"}];
 prepareInput = FileNameJoin[{temporary, "prepare.json"}];
 Put[spec, specPath];
 Export[prepareInput, <|
   "schema" -> "canon-neu/script-input/v1", "task_id" -> "PREPARE-TEST",
   "step" -> "PREPARE", "sector" -> Null,
-  "payload" -> <|"family_spec" -> <|"type" -> "mathematica-expression", "path" -> specPath|>|>
+  "payload" -> <|"family_spec" -> <|"type" -> "mathematica-expression", "path" -> "input files/family-spec.wl"|>|>
 |>, "RawJSON"];
 
 runs = Table[
@@ -77,7 +81,7 @@ sectorManifest = Get[runs[[1, "sectors"]]];
 masterBasis = Get[runs[[1, "masters"]]];
 sectors = sectorManifest["sectors"];
 sourceMasters = Block[{$Context = "CANON`DEData`", $ContextPath = {"System`"}},
-  ToExpression["{" <> StringRiffle[Import[spec["ordered_masters"], "Lines"], ","] <> "}", InputForm]
+  ToExpression["{" <> StringRiffle[Import[prepared["ordered_masters", "path"], "Lines"], ","] <> "}", InputForm]
 ];
 masterKey[master_] := With[{bits = Boole[# > 0] & /@ Take[List @@ master, 8]},
   {Total[bits], Total[bits 2^Range[0, 7]]}];
@@ -95,7 +99,8 @@ tests = {VerificationTest[
     prepared["index_order"] === spec["index_order"] && prepared["variables"] === variables &&
     prepared["regulator"] === regulator &&
     prepared["dimension_rule"] === (dimension -> 4 - 2 regulator) &&
-    prepared["ordered_masters", "sha256"] === FileHash[spec["ordered_masters"], "SHA256", "HexString"] &&
+    prepared["kira", "project"] === localFixture &&
+    prepared["ordered_masters", "sha256"] === FileHash[FileNameJoin[{localFixture, "preferred-masters"}], "SHA256", "HexString"] &&
     prepared["propagator_slots"] === Range[8] &&
     Length[sectors] === 46 && DuplicateFreeQ[Lookup[sectors, "id"]] &&
     ({#["propagator_count"], #["id"]} & /@ sectors) ===

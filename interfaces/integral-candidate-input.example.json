@@ -18,7 +18,7 @@
     },
     "prepared_family": {
       "type": "mathematica-expression",
-      "path": "/absolute/path/prepared-family.wl"
+      "path": "prepared-family.wl"
     },
     "dimension_policy": {
       "spacetime_dimension": 4,
@@ -44,8 +44,8 @@
       }
     },
     "method_options": {
-      "package_entry": "/absolute/path/DlogBasis-refine/DlogBasis.wl",
-      "finite_flow_package_file": "/absolute/path/FiniteFlow.m",
+      "package_entry": "../external/DlogBasis-refine/DlogBasis.wl",
+      "finite_flow_package_file": "../external/FiniteFlow/mathlink/FiniteFlow.m",
       "loop_order": [1],
       "loop_dimensions": [4]
     }

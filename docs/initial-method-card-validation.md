@@ -37,11 +37,13 @@ pre-existing Libra/CANONICA/full-prefix cases passed.
 
 ## Real registered integration and checker qualification
 
-The one and only real `TCalc` launch used a fresh unittest-owned temporary directory and the
-approved Mathematica 14 ARM64 route:
+The historical real `TCalc` launch used a fresh unittest-owned temporary directory on
+Mathematica 14 ARM64. That platform describes this evidence, not a current runtime requirement.
+The equivalent current command takes the component configuration described in
+[external/README.md](../external/README.md):
 
 ```bash
-CANON_TEST_INITIAL_HEP_TOOLS_ROOT=/Users/balth/Works/hep-tools \
+CANON_TEST_INITIAL_CONFIG="$CANON_TEST_INITIAL_CONFIG" \
 python3 -m unittest -v \
   tests.test_method_cards.MethodCardIntegrationTest.test_initial_official_ladder_provider_and_independent_checker
 ```
@@ -81,5 +83,14 @@ reference validation is far below that bound.
 After independent review artifact `A-004` returned `ACCEPT`, the patch was applied to the shared
 worktree. The five fixture-only INITIAL contract tests passed in 21.413 s. The full command used
 the registered real CANONICA and Libra entries while explicitly leaving
-`CANON_TEST_INITIAL_HEP_TOOLS_ROOT` unset; it ran 23 tests in 58.141 s with 22 passes and the one
+the real INITIAL configuration unset (now `CANON_TEST_INITIAL_CONFIG`); it ran 23 tests in 58.141 s with 22 passes and the one
 expected real INITIAL provider skip. No TCalc was launched during shared-worktree acceptance.
+
+## Distribution update (2026-09-07)
+
+The provider now accepts independent INITIAL/FiniteFlow/reference paths and an optional
+positive thread count (default 1), resolved relative to its input JSON. The checker accepts
+its own entry and reference paths. There is no fixed machine directory or OS/architecture
+check. The fixed official ladder scope, exact tool identities and scientific checks remain
+part of this method card. The relocation regression uses a synthetic 26-dimensional fixture;
+it checks component wiring and exact checker behavior, not real INITIAL performance.

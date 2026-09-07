@@ -1,0 +1,27 @@
+; (c) Roman Lee 2018
+; This is a template for calculating quolymod
+; It depends on ModTools.lib.fer file
+
+; parameters:
+; <vars> --- declaration of variables
+; <r>,<c> --- matrix size
+; <M> --- column-wise original matrix
+; <poly> --- polynomial to mod over
+
+; ============== Variables ==============
+
+<<vars>>
+
+; ============== Arrays ==============
+
+Array m[<<r>>,<<c>>];
+[m] := [(
+<<M>>
+)];
+
+poly:=<<poly>>;
+
+; ============== Program ==============
+    [m] := [<i=1,<<r>>><j=1,<<c>>> QuolyMod(m[i,j],poly)];
+; ============== Clean up ==============
+; @(poly);
