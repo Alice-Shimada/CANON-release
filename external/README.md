@@ -6,14 +6,17 @@
 
 | 程序 | 用途与入口 | 编译、安装说明 |
 | --- | --- | --- |
-| DlogBasis-refine | 有界积分候选；`DlogBasis.wl` | [README](DlogBasis-refine/README.md)，Wolfram 源码直接加载；需要 FiniteFlow，选择 Singular backend 时需要 Singular |
+| DlogBasis-refine | 有界积分候选；`DlogBasis.wl` | [README](DlogBasis-refine/README.md)，Wolfram 源码直接加载；候选搜索需要 FiniteFlow 和 Singular |
 | CANONICA | 有理 DE 与 tail；`src/CANONICA.m` | [README](CANONICA/README)，Wolfram 源码直接加载 |
 | Libra | DE 变换与结构修复；`Source/Libra.m` | [Readme](Libra/Readme.md)、[INSTALL](Libra/INSTALL) |
 | Fermatica | Fermat 的 Wolfram 接口；`source/Fermatica.wl` | [README](Fermatica/README.md)，先安装 Fermat，再设置 `FERMATPATH` |
 | INITIAL | 官方固定梯图证据；`INITIAL.m` | [README](INITIAL/README.md)，先安装 FiniteFlow |
 | FiniteFlow | 有限域计算；`mathlink/FiniteFlow.m` | [README](FiniteFlow/README.md)，用 CMake 编译与本机 Wolfram 匹配的原生库 |
 | Kira | IBP 约化；安装后的 `kira` | [README](Kira/README.rst)、[meson.build](Kira/meson.build)；本快照为 3.1，README 中部分说明仍沿用 2.x |
-| Singular | 可选残余模块 backend；安装后的 `Singular` | [README](Singular/README.md) 中的官方源码安装指南；快照为 `Release-4-2-1p2` |
+| Singular | DlogBasis-refine 候选组合的模块求解；安装后的 `Singular` | [README](Singular/README.md) 中的官方源码安装指南；快照为 `Release-4-2-1p2` |
+
+Singular 是当前 DlogBasis-refine 候选搜索的依赖；即使 `residual_backend` 使用默认
+`Current`，后续模块求解仍需要它。
 
 `DlogBasis-refine` 是 CANON 维护的变体；清单中的 origin 是历史上游，不能据此认为
 该变体提交已经发布到上游。分发时对其 skill 的路径说明及 study 的版本记录方式作了
@@ -40,7 +43,7 @@ gfanlib 等组成部分按原树保留；Kira 原树中的 sqlite3 等内嵌源�
 | `FERMATPATH` | 实际 Fermat 可执行文件，Fermatica/Kira 使用；Wolfram 内也可设 `Fermatica` 上下文的 `$FermatCMD` |
 | `method_options.package_entry` | 当前方法的包主文件；有标准 Wolfram 安装的通用方法也支持 `$Path` |
 | `method_options.finite_flow_package_file` | FiniteFlow 的 `.m` 文件；原生库通过本机 `$LibraryPath` 提供 |
-| `method_options.singular_executable` | DlogBasis Singular backend 的命令或绝对路径，默认 `Singular` |
+| `method_options.singular_executable` | DlogBasis-refine 使用的 Singular 命令或路径，默认 `Singular` |
 | Kira request 的 `executable`、`options` | reducer 命令和显式资源预算，例如 `--parallel=1` |
 
 每个 JSON 中的相对 artifact/包路径以该 JSON 所在目录为基准；family spec 内资源路径

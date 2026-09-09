@@ -10,11 +10,15 @@ description: 对显式满足 REPAIR_WITH_LIBRA 路由的精确单变量 1x1 已�
 耗尽（剩余替代项为零且所有已声明候选均已尝试）证据的
 `canon-neu/libra-structured-repair-input/v1`。平台期只能作为诊断元数据，不能授权修复。
 
-使用 Mathematica 14 ARM64，以 `-noinit -noprompt -script` 运行
+当前 `route-prepared-basis` 不产生 `REPAIR_WITH_LIBRA`；本卡保留为接受显式路线产物的
+独立有界方法。通用 tail 使用 [canon-solve-tail](../../skills/canon-solve-tail/SKILL.md)。
+
+使用与注入 Libra 兼容的 Wolfram 内核，以 `-noinit -noprompt -script` 运行
 `run.wls <input.json> <fresh-output-dir>`。调用方通过
 `method_options.package_entry` 注入只读 Libra 主文件；运行器记录实际加载的版本身份、
 禁用 Fermatica，并仅运行
 `NewDSystem`、`Fuchsify`、`Transform`、`FactorOut`、`OverallTransformation` 与 `EFormQ`。
+已测试环境为 Mathematica 14 ARM64；运行器记录实际 `$Version`/`$SystemID`，不设置平台等值门。
 输出目录必须不存在，且必须由调用方拥有。卡不调用其他求解提供者，也没有回退。
 
 当前 v1 范围严格限于：一个精确有理变量、`parameters -> {}`、一个已接受的典范 `1x1`

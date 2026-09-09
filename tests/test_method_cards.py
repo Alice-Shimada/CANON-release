@@ -577,12 +577,18 @@ EndPackage[];
         expected_transformation_fragment: str,
         *,
         relative_entry: bool,
+        method_options: dict | None = None,
+        dependent_row_hierarchy: Path | None = None,
     ) -> Path:
         provider_output = self.run_root / f"{method}-provider"
         provider_result = self.run_wls(
             ROOT / "methods" / method / "run.wls",
             self.provider_input(
-                method, package_entry, relative_entry=relative_entry
+                method,
+                package_entry,
+                relative_entry=relative_entry,
+                method_options=method_options,
+                dependent_row_hierarchy=dependent_row_hierarchy,
             ),
             provider_output,
         )
@@ -1269,7 +1275,43 @@ Quit[If[derived === automatic, 0, 1]];
             '"transformation" -> {{1, x}, {0, 1}}',
             relative_entry=False,
         )
-        self.assertEqual(self.libra_tool_identity(candidate), "1.23")
+        self.libra_tool_identity(candidate)
+        self.assertIn(
+            hashlib.sha256(LIBRA_ENTRY.read_bytes()).hexdigest(),
+            candidate.read_text(encoding="utf-8"),
+        )
+
+    @unittest.skipUnless(
+        LIBRA_ENTRY is not None and LIBRA_ENTRY.is_file(),
+        "set CANON_TEST_LIBRA_ENTRY to run the real Libra explicit-hierarchy test",
+    )
+    def test_real_libra_explicit_hierarchy_provider_and_independent_checker(self) -> None:
+        assert LIBRA_ENTRY is not None
+        hierarchy = FIXTURES / "libra-dependent-row-hierarchy.wl"
+        candidate = self.assert_provider_closes_exact_core_loop(
+            "libra",
+            LIBRA_ENTRY,
+            '"transformation" -> {{1, x}, {0, 1}}',
+            relative_entry=False,
+            method_options={
+                "package_entry": str(LIBRA_ENTRY),
+                "dependent_row_strategy": "sector-de-closure",
+            },
+            dependent_row_hierarchy=hierarchy,
+        )
+        provider = json.loads(
+            (candidate.parent / "result.json").read_text(encoding="utf-8")
+        )
+        dependent_rows = provider["summary"]["dependent_rows"]
+        self.assertEqual(dependent_rows["dependent_row_strategy"], "sector-de-closure")
+        self.assertEqual(
+            dependent_rows["hierarchy_artifact_sha256"],
+            hashlib.sha256(hierarchy.read_bytes()).hexdigest(),
+        )
+        self.assertFalse(dependent_rows["mapped_sectors"])
+        self.assertLessEqual(
+            dependent_rows["combined_mask_nonzeros"], dependent_rows["max_mask_nonzeros"]
+        )
 
     @unittest.skipUnless(
         LIBRA_ENTRY is not None and LIBRA_ENTRY.is_file(),
@@ -1294,7 +1336,6 @@ Quit[If[derived === automatic, 0, 1]];
         candidate_text = " ".join(candidate.read_text(encoding="utf-8").split())
         provider_identity = self.libra_tool_identity(candidate)
         provider_sha256 = hashlib.sha256(LIBRA_ENTRY.read_bytes()).hexdigest()
-        self.assertEqual(provider_identity, "1.23")
         self.assertIn(
             '"transformation" -> {{1, 0, 0}, {0, 1, x}, {0, 0, 1}}',
             candidate_text,

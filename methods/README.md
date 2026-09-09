@@ -166,6 +166,9 @@ canonical core 的 lower-to-current 缺陷 → `SOLVE_TAIL`；预期存在有理
 
 ## Libra 冻结前缀结构化修复
 
+这是保留的独立有界方法；当前 `route-prepared-basis` 不产生 `REPAIR_WITH_LIBRA`。
+通用 `SOLVE_TAIL` 路线见下文，不使用本卡的冻结前缀直和限制。
+
 `libra-structured-repair` 是与 `methods/libra` 的 `SEARCH_CORE` 不同的提供者。它只读取
 通过校验的预备基、恰为 `REPAIR_WITH_LIBRA` 的路线决策，以及
 `canon-neu/libra-structured-repair-input/v1`。修复输入必须显式绑定预备/族/基/已选候选
@@ -203,24 +206,14 @@ dlog 字母表、目标缺陷消除，以及所有声明的已接受块不退化
 `PASS/VERIFIED_STRUCTURED_REPAIR`；任何提供者 `PASS` 字段都会作为伪造状态被
 `FAIL/STRUCTURED_REPAIR_REJECTED` 拒绝，提供者证据不具有验收权限。
 
-## 当前核心路线与后续目标
+## 当前核心路线与验收边界
 
-当前可执行 route/check 只组装并检验 current-sector core，不承担扇区调度。已经删除的旧
-`workflow.py` 曾把 `CHECK_CANONICAL/TAIL_FAIL` 直接路由到 `SOLVE_TAIL`；该控制流不再是
-当前能力。DlogBasis-refine reduced groups 到独立 `CHECK_CORE` 的 decision loop 已接线；
-`BUILD_FULL_DE/SOLVE_TAIL` 已接通完整 reduced rows 与现有 full-prefix tail screen。
-
-现有 `route-prepared-basis` 保持唯一 repair eligibility 决策：未穷尽的 pool 继续 refinement；
-只有全部 declared IDs 已尝试且 pool 精确耗尽时才可能选择 `REPAIR_WITH_LIBRA`。
-
-对每个当前扇区：
-
-1. 生成可追溯的积分候选，并约化到声明的主基；
-2. 通过精确当前扇区割门；
-3. 不修改已接受的低扇区前缀，将其插入并构造完整前缀微分系统；
-4. 对完整前缀进行精确可积性、ε/dlog 和字母表检查；
-5. 若非对角块失败，记录精确失败特征，并测试下一个积分候选；
-6. 只有有界候选池耗尽后，才调用声明过的尾部修复提供者，并独立复算完整系统。
+DlogBasis-refine reduced groups 通过 `ROUTE_CORE_CANDIDATES` 进入独立 `CHECK_CORE`。
+core 通过后，`BUILD_FULL_DE` 构造完整前缀系统，`SOLVE_TAIL` 提出扇区变换，
+`CHECK_CANONICAL` 独立验算后才由 `COMMIT_SECTOR` 保存 accepted prefix；
+`NEXT_SECTOR` 推进扇区游标，`FINAL_CHECK` 基于原始 DE 独立核验累计变换与整族典范系统。
+通用 tail 的适用范围和 prefix 归一化规则见
+[canon-solve-tail](../skills/canon-solve-tail/SKILL.md)；旧 full-prefix screen 是独立诊断方法。
 
 ε 形式本身不能证明 UT 归一化。与运动学无关的可逆变换（包括依赖 ε 的变换）可以保持
 ε 形式，甚至可能完全不改变联络。因此最终 UT 结论还需要适用的被积函数层 dlog/首奇点
@@ -445,7 +438,7 @@ T 与 B，以及登记的 INITIAL/FiniteFlow 身份、入口和输入文件哈�
 允许完整 prefix 的归一化更新，并统一交由 CHECK_CANONICAL 接受。
 非对角求解可限制在当前 sector 的依赖闭包；epsilon 归一化作用于完整 prefix，
 以保留闭包外指向这些低 sector 的耦合。`BUILD_FULL_DE` 复用已接受的低 sector
-矩阵，`FINAL_CHECK` 从原始 DE 独立重算整族变换。
+矩阵，`FINAL_CHECK` 基于原始 DE 独立核验累计变换与整族典范系统。
 不再强制先耗尽候选、测试 dots 或重放 prefix。
 
 ## 独立验收
