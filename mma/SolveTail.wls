@@ -18,14 +18,16 @@ method = "candidate-completion";
 lowerDimension = fullDE["block_boundaries", "lower_dimension"];
 dimension = Length[transformation];
 
+regulatorFactor[expression_] := Times @@ (#[[1]]^#[[2]] & /@
+  Select[Rest[FactorList[expression]],
+    !FreeQ[First[#], regulator] && FreeQ[First[#], Alternatives @@ variables] &]);
+commonTailScale[entries_] := With[{nonzero = DeleteCases[Flatten[entries], 0]},
+  Together[(PolynomialGCD @@ (regulatorFactor[Numerator[#]] & /@ nonzero))/
+    (PolynomialLCM @@ (regulatorFactor[Denominator[#]] & /@ nonzero))]];
+
 If[!CanonMethodCard`EpsilonFactorizedQ[matrices, regulator],
-  tailEntries = DeleteCases[Flatten[
-    matrices[[All, lowerDimension + 1 ;; dimension, 1 ;; lowerDimension]]], 0];
-  regulatorFactor[expression_] := Times @@ (#[[1]]^#[[2]] & /@
-    Select[Rest[FactorList[expression]],
-      !FreeQ[First[#], regulator] && FreeQ[First[#], Alternatives @@ variables] &]);
-  scale = Together[(PolynomialGCD @@ (regulatorFactor[Numerator[#]] & /@ tailEntries))/
-    (PolynomialLCM @@ (regulatorFactor[Denominator[#]] & /@ tailEntries))];
+  tailEntries = matrices[[All, lowerDimension + 1 ;; dimension, 1 ;; lowerDimension]];
+  scale = commonTailScale[tailEntries];
   normalization = DiagonalMatrix[Join[ConstantArray[1, lowerDimension],
     ConstantArray[scale, dimension - lowerDimension]]];
   transformation = Map[Together, transformation.normalization, {2}];
@@ -49,11 +51,65 @@ If[!CanonMethodCard`EpsilonFactorizedQ[matrices, regulator] &&
   ];
 ];
 
+(* One seed and its first derivatives; the cut is aligned by a small inverse. *)
+firstDerivativeCompletion[] := Module[
+  {current = Range[lowerDimension + 1, dimension], lower = Range[lowerDimension],
+   sourceRoots, align, seed, trial, trialT, trialAlphabet, w, k, pivots, rows,
+   correction, shear, scale, normalization},
+  If[Length[current] < 2, Return[$Failed]];
+  sourceRoots = DeleteDuplicates @ Cases[fullDE["source_matrices"],
+    Power[b_, p_Rational] /; Denominator[p] === 2 :> Factor[b], Infinity];
+  (* Generate in the source's root field; CHECK_CANONICAL checks the source gauge. *)
+  align[value_] := Fold[Function[{expression, base}, With[{b = base},
+    expression /. Power[a_, p_Rational] /;
+      Denominator[p] === 2 && !MemberQ[sourceRoots, Factor[a]] &&
+        Expand[a + b] === 0 :> I^(2 p) b^p]], value, sourceRoots];
+  seed = current[[First @ Ordering[
+    ({Count[#, Except[0]], LeafCount[#]} & /@
+      selected["new_basis_rows"][[current]]), 1]]];
+  trial = align[selected["transformed_matrices"]];
+  trialT = align[selected["full_transformation"]];
+  trialAlphabet = Together /@ align[alphabet];
+  w = Prepend[trial[[All, seed]], UnitVector[dimension, seed]];
+  k = w[[All, current]];
+  pivots = (First @ FirstPosition[#, x_ /; x =!= 0, Missing[], {1}, Heads -> False] &) /@
+    DeleteCases[RowReduce[Transpose[k]], {0..}];
+  If[Length[pivots] =!= Length[current], Return[$Failed]];
+  rows = Map[Together, Inverse[k[[pivots]]].w[[pivots]], {2}];
+  correction = rows[[All, lower]];
+  Do[trial[[v, current, lower]] = Map[Together,
+    trial[[v, current, lower]] + D[correction, variables[[v]]] +
+      correction.trial[[v, lower, lower]] -
+      trial[[v, current, current]].correction, {2}], {v, Length[variables]}];
+  shear = IdentityMatrix[dimension];
+  shear[[current, lower]] = -correction;
+  trialT = Map[Together, trialT.shear, {2}];
+  If[!CanonMethodCard`EpsilonFactorizedQ[trial, regulator],
+    scale = commonTailScale[trial[[All, current, lower]]]/regulator;
+    normalization = DiagonalMatrix[Join[ConstantArray[1, lowerDimension],
+      ConstantArray[scale, Length[current]]]];
+    trialT = Map[Together, trialT.normalization, {2}];
+    trial[[All, current, lower]] =
+      Map[Together, trial[[All, current, lower]]/scale, {3}]
+  ];
+  If[CanonMethodCard`EpsilonFactorizedQ[trial, regulator] &&
+      CanonMethodCard`DLogConnectionQ[trial, variables, regulator, trialAlphabet],
+    {trialT, trial, trialAlphabet}, $Failed]
+];
+
+tailSolved = CanonMethodCard`DLogConnectionQ[matrices, variables, regulator, alphabet];
+If[!tailSolved,
+  completion = firstDerivativeCompletion[];
+  If[completion =!= $Failed,
+    {transformation, matrices, alphabet} = completion;
+    method = "scalar-first-derivative-completion"; tailSolved = True]
+];
+
 unsolved[] := (CanonMethodCard`WriteResult[task, outputDir,
   "INCONCLUSIVE", "TAIL_UNSOLVED", <||>,
   <|"candidate_id" -> core["candidate_id"], "method" -> method|>]; Quit[0]);
 
-If[!CanonMethodCard`DLogConnectionQ[matrices, variables, regulator, alphabet],
+If[!tailSolved,
   method = "canonica-off-diagonal";
   package = CanonMethodCard`ResolveMethodPackage[task, inputPath, "CANONICA`"];
   Get[package["entry"]];

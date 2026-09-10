@@ -77,7 +77,51 @@ incoming=Normal[SparseArray[{{2,1}->1},{3,3}]];
 incomingCase=runCase["incoming-normalization",{(eps incoming+eps^2 n1)/x,0 n1},
  {eps incoming[[1;;2,1;;2]]/x,ConstantArray[0,{2,2}]},None];
 
+
+runDerivativeCase[name_, diagonal_:False] := Module[
+ {q, mix, known, canonical, raw, selected, full, core, tail, check},
+ q={{1,0,0},{0,1,1},{0,0,1}};
+ mix={{1,0,0},{-eps^2 x^2/(y-1),1,0},{0,0,1}};
+ known=q.mix;
+ canonical={eps/x If[diagonal,{{0,0,0},{1,1,0},{0,0,2}},
+    {{0,0,0},{1,0,1},{0,1,0}}],eps/y IdentityMatrix[3]};
+ raw=MapThread[Map[Together,(D[known,#2]+known.#1).Inverse[known],{2}]&,
+   {canonical,{x,y}}];
+ selected=<|"candidate_id"->name,"member_candidate_ids"->{name},
+   "new_basis_rows"->Inverse[q],"full_transformation"->q,
+   "transformed_matrices"->CanonMethodCard`GaugeTransform[raw,{x,y},q]|>;
+ full=<|"family_id"->family,"sector"->sector,"current_basis_id"->name,
+   "accepted_prefix_id"->"unit-lower","source_basis"->{l1,j1,j2},
+   "source_matrices"->raw,"variables"->{x,y},"regulator"->eps,
+   "alphabet"->{x,y,y-1},"convention"->"old=T.new",
+   "block_boundaries"-><|"lower_dimension"->1,"current_dimension"->2|>,
+   "candidates"->{selected}|>;
+ core=<|"candidate_id"->name|>;
+ tail=invoke[name<>"-tail","mma/SolveTail.wls","SOLVE_TAIL",sector,
+   <|"full_sector_de"->put[name<>"-full",full],
+     "core_transform"->put[name<>"-core",core],
+     "method_options"-><|"package_entry"->packageEntry|>|>];
+ check=If[tail["result","code"]==="TAIL_READY",
+   invoke[name<>"-check","mma/CheckCanonical.wls","CHECK_CANONICAL",sector,
+     <|"full_sector_de"->put[name<>"-check-full",full],
+       "sector_transform"->ref[tail,"sector_transform"]|>],None];
+ <|"tail"->tail,"check"->check,"known"->known,
+   "transformation"->If[tail["result","code"]==="TAIL_READY",
+     read[tail,"sector_transform"]["transformation"],None]|>
+];
+coupledDerivative=runDerivativeCase["coupled-derivative"];
+insufficientDerivative=runDerivativeCase["insufficient-derivative",True];
+
 tests={
+ VerificationTest[coupledDerivative["tail","result","summary","method"],
+  "scalar-first-derivative-completion",TestID->"coupled-current-block-uses-one-simple-seed"],
+ VerificationTest[coupledDerivative["check","result","code"],"CANONICAL_PASS",
+  TestID->"derived-completion-passes-original-source-gauge-and-dlog-check"],
+ VerificationTest[CanonMethodCard`ZeroMatrixQ[Map[Together,
+   coupledDerivative["transformation"]-coupledDerivative["known"],{2}]],True,
+  TestID->"derived-completion-recovers-independent-known-three-master-map"],
+ VerificationTest[insufficientDerivative["tail","result","summary","method"],
+  "canonica-off-diagonal",TestID->"rank-deficient-first-derivatives-do-not-adopt-a-completion"],
  VerificationTest[Last[algebraic["runs"]]["result","code"],"ALL_PASS",
   TestID->"algebraic-affine-tail-with-distinct-roots-is-repaired-in-all-directions"],
  VerificationTest[Quiet[Together[CanonMethodCard`AlgebraicPrimitive[{1,y},{x,y}]-x-y^2/2],Solve::svars],0,

@@ -10,6 +10,14 @@ Run `mma/SolveTail.wls` with `full_sector_de`, `core_transform`, and
 completions need no package call. For an affine epsilon tail, the script first
 extracts a common regulator factor and integrates the epsilon-zero block in all
 variables, allowing algebraic primitives (arXiv:2206.04609, Eq. 78).
+If that does not solve a multi-master current block, the script tries one
+completion from its simplest current row and first derivatives in variable order.
+An exact full-rank cut selects the rows and aligns the completion; a common
+regulator-only factor targets epsilon order one. Only a full-direction exact
+epsilon/shared-dlog result is retained. Opposite square-root radicands are
+expressed in the source generators as a new candidate, with the source gauge
+checked by CHECK_CANONICAL. This is a bounded candidate operation, not a
+completeness claim.
 Otherwise the script calls the public
 `TransformOffDiagonalBlock` and `TransformDlogToEpsForm` on all directions,
 then composes their transformation with the selected core completion.
