@@ -1,0 +1,42 @@
+cff-version: 1.2.0
+message: "If you use CANON, cite this software and identify the version or commit used. Cite the relevant external methods separately."
+type: software
+title: CANON
+abstract: "An agent-assisted workflow for constructing and checking canonical differential equations for Feynman integrals."
+authors:
+  - family-names: Jian
+    given-names: Dongshan
+    orcid: "https://orcid.org/0000-0002-7131-3181"
+    website: "https://inspirehep.net/authors/2864703"
+  - family-names: Liu
+    given-names: Yuanche
+    orcid: "https://orcid.org/0009-0008-4604-1306"
+    website: "https://inspirehep.net/authors/2856186"
+  - family-names: Ma
+    given-names: Yanqing
+    orcid: "https://orcid.org/0000-0001-5795-3791"
+    website: "https://inspirehep.net/authors/1056966"
+  - family-names: Shi
+    given-names: Boxuan
+    orcid: "https://orcid.org/0009-0008-2479-6783"
+    website: "https://inspirehep.net/authors/3068334"
+  - family-names: Wu
+    given-names: Yu
+    orcid: "https://orcid.org/0009-0001-7239-4614"
+    website: "https://inspirehep.net/authors/2806413"
+  - family-names: Wu
+    given-names: Zihao
+    orcid: "https://orcid.org/0000-0003-3561-5403"
+    website: "https://inspirehep.net/authors/1818783"
+  - family-names: Zhang
+    given-names: Yang
+    orcid: "https://orcid.org/0000-0001-9151-8486"
+    website: "https://inspirehep.net/authors/1062340"
+repository-code: "https://github.com/Alice-Shimada/CANON"
+url: "https://github.com/Alice-Shimada/CANON"
+license: MIT
+keywords:
+  - Feynman integrals
+  - canonical differential equations
+  - integration by parts
+  - agent-assisted research

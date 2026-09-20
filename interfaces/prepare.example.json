@@ -1,0 +1,12 @@
+{
+  "schema": "canon-neu/script-input/v1",
+  "task_id": "triangle-sector-5-PREPARE",
+  "step": "PREPARE",
+  "sector": null,
+  "payload": {
+    "family_spec": {
+      "type": "mathematica-expression",
+      "path": "family-spec.example.wl"
+    }
+  }
+}

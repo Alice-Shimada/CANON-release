@@ -3,4 +3,5 @@ __pycache__/
 runs/
 .state-management/
 /.worklogs/
+/dist/
 .DS_Store

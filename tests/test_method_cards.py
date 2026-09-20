@@ -1745,6 +1745,9 @@ Quit[If[derived === automatic, 0, 1]];
                     ("FAIL", "STRUCTURED_REPAIR_REJECTED"),
                 )
                 self.assertIn(expected_reason, result["summary"]["rejection_signature"])
+                if name == "unresolved-target":
+                    self.assertFalse(result["summary"]["checks"]["epsilon_factorized"])
+                    self.assertIn("not_epsilon_factorized", result["summary"]["rejection_signature"])
 
     def test_structured_repair_checker_hashes_package_without_executing_it(self) -> None:
         marker = self.run_root / "checker-executed-package.marker"

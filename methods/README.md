@@ -32,6 +32,12 @@ DE 变换之前；它不再复用 `SEARCH_CORE`。`SEARCH_CORE` 保持为 Libra/
 package 未返回候选时，本卡 fail closed 为 `INCONCLUSIVE/METHOD_EXHAUSTED`，且不写
 `integral_candidates`。
 
+[Gram 分子与离切代表卡](gram/SKILL.md) 补充有界的人工积分构造指导：按当前
+family 的圈数、参考维数与外部空间，区分 cut、d 维 IBP 秩及完整低扇区耦合，
+按失败支持选择 Gram、余子式、适用的对称性或 contact 修正。
+它没有独立运行器或自动路由，产物沿用 `integral-candidates/v1`
+及现有独立检查；不改变下面可执行 provider 的权限或 demo 的 DE/tail 路线。
+
 DlogBasis-refine 的每个 module-lift 方向是一个候选；方法卡按预算截取候选方向。
 IBP 后由 `mma/RouteCoreCandidates.wls` 按当前 sector 的实际 master rank 选择独立行基
 及单行替换，再构造 `R` 和 `T=Inverse[R]`。该 adapter 只返回 provisional pool，

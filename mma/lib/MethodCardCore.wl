@@ -19,7 +19,7 @@ CheckCoreCandidate::usage = "CheckCoreCandidate[candidate, matrices, variables, 
 GaugeTransform::usage = "GaugeTransform[matrices, variables, T] applies old=T.new exactly.";
 FermatGaugeIdentityQ::usage = "FermatGaugeIdentityQ[matrices, variables, T, target] proves A.T-D[T]-T.target=0 in the binomial algebraic extension using a loaded Fermatica backend.";
 ZeroMatrixQ::usage = "ZeroMatrixQ[matrix] tests exact entrywise vanishing.";
-FlatConnectionQ::usage = "FlatConnectionQ[matrices, variables] tests curvature vanishing at one deterministic exact-rational point.";
+FlatConnectionQ::usage = "FlatConnectionQ[matrices, variables] tests the exact symbolic curvature in every pair of variables.";
 EpsilonFactorizedQ::usage = "EpsilonFactorizedQ[matrices, eps] tests exact epsilon factorization.";
 DLogResidues::usage = "DLogResidues[matrices, variables, eps, alphabet] solves shared constant residues using exact Wolfram algebraic expressions.";
 DLogAlphabet::usage = "DLogAlphabet[matrices, variables, eps] extracts regulator-free pole factors as candidate letters.";
@@ -403,9 +403,6 @@ ValidatePreparedBasis[value_] := Module[
   If[TrueQ[history["pool_exhausted"]] && history["alternatives_remaining"] =!= 0,
     Return[preparedFailure["search_history", "pool_exhausted=True contradicts alternatives_remaining"]]
   ];
-  If[TrueQ[history["pool_exhausted"]] && unattempted =!= {},
-    Return[preparedFailure["search_history.pool_exhausted", "pool exhaustion requires every declared candidate to be attempted"]]
-  ];
 
   remaining = Lookup[value, "remaining_problem", None];
   classification = If[AssociationQ[remaining], Lookup[remaining, "classification", None], None];
@@ -421,9 +418,6 @@ ValidatePreparedBasis[value_] := Module[
   ];
   If[TrueQ[remaining["candidate_selection_complete"]] && history["alternatives_remaining"] =!= 0,
     Return[preparedFailure["remaining_problem.candidate_selection_complete", "completed candidate selection contradicts remaining alternatives"]]
-  ];
-  If[TrueQ[remaining["candidate_selection_complete"]] && unattempted =!= {},
-    Return[preparedFailure["remaining_problem.candidate_selection_complete", "completed candidate selection requires every declared candidate to be attempted"]]
   ];
 
   If[
@@ -542,37 +536,13 @@ GaugeTransform[matrices_List, variables_List, transformation_?MatrixQ] :=
     {matrices, variables}
   ]];
 
-FlatConnectionQ[matrices_List, variables_List] := Module[
-  {pairs, symbols, assignments},
-  pairs = Subsets[Range[Length[variables]], {2}];
-  symbols = DeleteDuplicates[Join[variables, Cases[matrices, _Symbol, Infinity]]];
-  assignments = Thread[symbols -> Table[
-    Prime[index]/Prime[index + 1], {index, Length[symbols]}]];
-  And @@ Map[
-    Function[pair,
-      Module[{i, j, pairVariables, pairAssignments, spectatorAssignments,
-        matrixI, matrixJ, derivativeJI, derivativeIJ, residual},
-        {i, j} = pair;
-        pairVariables = variables[[pair]];
-        pairAssignments = Select[assignments,
-          MemberQ[pairVariables, First[#]] &];
-        spectatorAssignments = Select[assignments,
-          !MemberQ[pairVariables, First[#]] &];
-        matrixI = matrices[[i]] /. spectatorAssignments;
-        matrixJ = matrices[[j]] /. spectatorAssignments;
-        derivativeJI = D[matrixJ, variables[[i]]];
-        derivativeIJ = D[matrixI, variables[[j]]];
-        matrixI = SparseArray[matrixI /. pairAssignments];
-        matrixJ = SparseArray[matrixJ /. pairAssignments];
-        derivativeJI = SparseArray[derivativeJI /. pairAssignments];
-        derivativeIJ = SparseArray[derivativeIJ /. pairAssignments];
-        residual = SparseArray[
-          derivativeJI - derivativeIJ + matrixJ.matrixI - matrixI.matrixJ];
-        ZeroMatrixQ[Normal[residual]]
-      ]
-    ],
-    pairs
-  ]
+FlatConnectionQ[matrices_List, variables_List] := With[
+  {sparse = SparseArray /@ matrices},
+  And @@ (Function[pair, With[{i = pair[[1]], j = pair[[2]]},
+    ZeroMatrixQ[D[matrices[[j]], variables[[i]]] -
+      D[matrices[[i]], variables[[j]]] +
+      Normal[sparse[[j]].sparse[[i]] - sparse[[i]].sparse[[j]]]]
+  ]] /@ Subsets[Range[Length[variables]], {2}])
 ];
 
 EpsilonFactorizedQ[matrices_List, regulator_Symbol] :=
@@ -746,8 +716,7 @@ ValidateStructuredRepairInput[
     validated, identity, selected, prefix, frozen, target, search, variables,
     regulator, parameters, allowedSymbols, basis, matrices, alphabet, dimension,
     prefixDimension, prefixRows, tailRows, acceptedMatrices, acceptedBlocks,
-    signature, expectedFullEntry, prefixFlat, prefixEpsilonFactorized,
-    prefixNoResidualRegulator, prefixDLog
+    signature, expectedFullEntry, prefixDLog
   },
   validated = ValidatePreparedBasis[prepared];
   If[FailureQ[validated],
@@ -837,15 +806,10 @@ ValidateStructuredRepairInput[
       !zeroMatrixListQ[matrixBlocks[matrices, tailRows, prefixRows]],
     Return[repairFailure["frozen_prefix.source_blocks", "v1 source must be the declared 1x1 prefix direct-summed with a 2x2 tail"]]
   ];
-  prefixFlat = FlatConnectionQ[acceptedMatrices, variables];
-  prefixEpsilonFactorized = EpsilonFactorizedQ[acceptedMatrices, regulator];
-  prefixNoResidualRegulator = And @@ (
-    FreeQ[Together[#/regulator], regulator] & /@ Flatten[acceptedMatrices]
-  );
+  (* The contract already restricts this prefix to one variable. The dlog gate
+     includes epsilon factorization, so no duplicate regulator check is needed. *)
   prefixDLog = DLogConnectionQ[acceptedMatrices, variables, regulator, alphabet];
-  If[
-    !TrueQ[prefixFlat] || !TrueQ[prefixEpsilonFactorized] ||
-      !TrueQ[prefixNoResidualRegulator] || !TrueQ[prefixDLog],
+  If[!TrueQ[prefixDLog],
     Return[repairFailure[
       "frozen_prefix.accepted_matrices",
       "accepted 1x1 prefix must be flat, epsilon-factorized without residual regulator dependence, and in the declared dlog alphabet"

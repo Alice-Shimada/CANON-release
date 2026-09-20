@@ -1,0 +1,36 @@
+{
+	"schema":"canon-neu\/script-result\/v1",
+	"task_id":"13-final",
+	"step":"FINAL_CHECK",
+	"status":"PASS",
+	"code":"ALL_PASS",
+	"artifacts":{
+		"canonical_basis":{
+			"type":"mathematica-expression",
+			"path":"canonical-basis.wl"
+		},
+		"canonical_de":{
+			"type":"mathematica-expression",
+			"path":"canonical-de.wl"
+		}
+	},
+	"summary":{
+		"master_count":1,
+		"sector_count":1,
+		"alphabet_size":1,
+		"checks":{
+			"artifact_identity":true,
+			"source_basis_resident_order":true,
+			"sector_trace_resident_order":true,
+			"candidate_trace_coverage":true,
+			"cursor_complete":true,
+			"accepted_prefix_hash":true,
+			"invertible_cumulative_transformation":true,
+			"exact_global_gauge":true,
+			"flat_connection":true,
+			"epsilon_factorized":true,
+			"epsilon_free_alphabet":true,
+			"constant_residue_dlog":true
+		}
+	}
+}

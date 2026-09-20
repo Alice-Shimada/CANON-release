@@ -5,6 +5,13 @@ description: Use for multi-step scientific research in CANON, including master-i
 
 # Persistent Scientific Research
 
+The scientific workflow is independent of the host and model. Use
+[`docs/agent-workflow.md`](../../../docs/agent-workflow.md) to prepare inputs,
+choose the next scientific step, and interpret results. Host setup is described in
+[`docs/installation.md`](../../../docs/installation.md); Codex-specific rules below
+apply only in Codex. Documentation and packaging of user-selected historical
+examples do not start a research run or require their scientific checks to be repeated.
+
 Use the `statemng` MCP tools for every state operation. Never ask the user to run the internal CLI. If these tools are unavailable, stop and report the integration error.
 
 In Codex, run persistent research only in a Local session. If the current session is a Worktree, stop and report the adapter error; do not operate state in another checkout. The MCP server is non-required only to keep the Codex session usable after an integration failure, never as permission to bypass state management.
@@ -18,7 +25,8 @@ platform, or core count. Use DlogBasis-refine for candidate proposals and record
 declared package revision plus actual file hash; an outer CANON Git HEAD is not a
 dependency revision. External directories hold source for user installation, not
 ready-built dependencies. Distribution preparation does not compile packages or copy
-foundation libraries, machine launchers, or research outputs.
+foundation libraries or machine launchers. Include research outputs only when the
+user selects them for examples or delivery, retaining their original evidence scope.
 
 ## Main Agent
 
@@ -26,7 +34,7 @@ foundation libraries, machine launchers, or research outputs.
 2. Determine one unambiguous overall `task_name`. If none is clear, call `statemng_project_list` and ask the user to choose; do not guess between existing tasks.
 3. Call `statemng_init` for a new overall task or `statemng_project_resume` for an existing one.
 4. Create only necessary subtasks. Write each description as JSON containing `objective`, `background`, and `acceptance_criteria`; when the task requires repository skills, also add the optional `required_skills` array with each repository-relative `SKILL.md` path. Criteria specify the result and required checks, not a new provenance or replay pipeline. List shared input producers and the latest needed result directly in `depends_on`, so workers can reuse their artifacts in place. Do not place priority or unrelated context in the description.
-5. Dispatch each ready subtask only through the Codex `persistent_research_worker` custom agent, passing only the overall task name, task ID, and necessary research instructions. Do not use an unrestricted built-in worker.
+5. Dispatch each ready subtask through the host's native worker with the six worker tools specified below, passing the overall task name, task ID, and necessary research instructions. In Codex, use only the project `persistent_research_worker` custom agent, not an unrestricted built-in worker. Other hosts use their own role names and enforce the same tool boundary.
 6. Review the submitted inputs, checker results, and artifacts against the acceptance criteria. Existing independent scientific checkers provide the required mathematical verification. Additional replay or a verification worker needs a specific unresolved question, changed input/implementation, or user request; do not repeat a successful unchanged pipeline merely for main-Agent review. Accept once the criteria are met.
 7. Alone call `statemng_task_accept` after successful review. Alone call `statemng_task_unblock` after confirming that a recorded blocking condition has actually been removed.
 8. Replan from accepted evidence until the overall research goal is satisfied or a genuine external block must be reported.

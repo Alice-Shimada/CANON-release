@@ -1,0 +1,76 @@
+schema: canon.family/v0
+family_id: three_loop_parametric_3513
+
+expression_dialect: wolfram-inputform/v1
+
+regulator:
+  symbol: eps
+  dimension_symbol: d
+  dimension: 4 - 2*eps
+
+integration_convention:
+  loop_measure: LoopMeasure[q1,d]*LoopMeasure[q2,d]*LoopMeasure[q3,d]/((I*Pi^(d/2))^3)
+  prefactor: Exp[3*EulerGamma*eps]
+  propagator_prescription: +i0
+  metric_signature: mostly_minus
+
+momenta:
+  loops: [q1, q2, q3]
+  external: [p, l, paux]
+  momentum_conservation:
+    eliminate: paux
+    rule: paux -> -p-l
+
+# Kira's backend invariants sh and uh both have mass dimension two.  The
+# physical coordinates are s=sh and u=uh/sh, so u is exactly dimensionless.
+kinematics:
+  scalar_product_rules:
+    - SP[p,p] -> 0
+    - SP[l,l] -> 0
+    - SP[paux,paux] -> sh
+    - SP[p,l] -> sh/2
+    - SP[p,paux] -> -sh/2
+    - SP[l,paux] -> -sh/2
+  independent_scales: [sh, uh]
+  differential_variables: [s, u]
+  variable_map:
+    - s -> sh
+    - u -> uh/sh
+  base_region:
+    assumptions:
+      - s != 0
+      - u > 0
+      - u < 1
+    root_branches: []
+
+# The eight positive slots of Kira sector 3513 are physical propagators.
+# The remaining four quadratic inverse propagators are auxiliary coordinates
+# in CANON's terminology; index_order below restores the user's D1..D12 order.
+propagators:
+  - {id: D1, expression: "SP[q1,q1]"}
+  - {id: D4, expression: "SP[q2+(1-uh/sh)*p,q2+(1-uh/sh)*p]"}
+  - {id: D5, expression: "SP[q1+q2,q1+q2]"}
+  - {id: D6, expression: "SP[l+q1+q2,l+q1+q2]"}
+  - {id: D8, expression: "SP[q3,q3]"}
+  - {id: D9, expression: "SP[l+q2+q3-(uh/sh)*p,l+q2+q3-(uh/sh)*p]"}
+  - {id: D11, expression: "SP[l-p+q3,l-p+q3]"}
+  - {id: D12, expression: "SP[q1-q3+(uh/sh)*p,q1-q3+(uh/sh)*p]"}
+
+isps:
+  - {id: D2, expression: "SP[p+q3,p+q3]"}
+  - {id: D3, expression: "SP[q1+(uh/sh)*p,q1+(uh/sh)*p]"}
+  - {id: D7, expression: "SP[q2+q3,q2+q3]"}
+  - {id: D10, expression: "SP[q2,q2]"}
+
+integral_notation:
+  index_order: [D1, D2, D3, D4, D5, D6, D7, D8, D9, D10, D11, D12]
+  positive_index_semantics: denominator_power
+  nonpositive_index_semantics: numerator_power
+
+targets:
+  sectors:
+    - [1, 1, 1, 1, 1, 1, 1, 1]
+  include_subsectors: true
+
+user_metadata:
+  description: Blind full-family canonicalization of the three-loop sector-3513 family

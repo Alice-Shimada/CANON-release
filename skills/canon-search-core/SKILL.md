@@ -21,6 +21,14 @@ It selects a basis of the reduced current-sector rows and independent single-row
 exchanges. Proper-subsector coefficients remain in the full rows. The required
 rank is the actual sector master count. No full subset enumeration is performed.
 
+For Gram-sensitive rank gaps or candidates whose cut core passes but full-prefix
+couplings fail, consult [the Gram candidate card](../../methods/gram/SKILL.md).
+Its bounded integrand proposals use the same candidate bridge. If a hypothesis
+requires several simultaneous row replacements, submit that complete ordered
+bundle as a separate proposal; the router's single-row exchanges do not enumerate
+all such bundles. This manual route is optional and adds no prerequisite for DE
+methods or SOLVE_TAIL.
+
 Pass each provider's `core_candidates` to `CheckSectorCore.wls`. Rank shortage or
 failure of the selected candidate space can route directly to CANONICA; neither
 requires exhausting every numerator/dot ansatz. A bounded search failure is not

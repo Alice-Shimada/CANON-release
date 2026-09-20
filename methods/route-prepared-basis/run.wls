@@ -25,17 +25,12 @@ prepared = CanonMethodCard`LoadArtifact[task, inputPath, "prepared_basis"];
 If[FailureQ[prepared],
   writeFailure["无法加载 prepared_basis 产物", "prepared_basis"]
 ];
-validated = CanonMethodCard`ValidatePreparedBasis[prepared];
-If[FailureQ[validated],
-  writeFailure[
-    Lookup[validated[[2]], "Message", "prepared_basis 校验失败"],
-    Lookup[validated[[2]], "Field", "prepared_basis"]
-  ]
-];
-
-decision = CanonMethodCard`PreparedBasisRoute[validated];
+decision = CanonMethodCard`PreparedBasisRoute[prepared];
 If[FailureQ[decision],
-  writeFailure["prepared_basis 路线构造失败", "prepared_basis"]
+  writeFailure[
+    Lookup[decision[[2]], "Message", "prepared_basis 校验失败"],
+    Lookup[decision[[2]], "Field", "prepared_basis"]
+  ]
 ];
 artifactPath = CanonMethodCard`WriteWLArtifact[
   decision,

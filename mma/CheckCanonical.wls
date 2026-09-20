@@ -22,15 +22,6 @@ computed = CanonMethodCard`GaugeTransform[
 {lowerDimension, currentDimension} =
   fullDE["block_boundaries"] /@ {"lower_dimension", "current_dimension"};
 currentRows = lowerDimension + Range[currentDimension];
-currentComputed = blocks[computed, currentRows, currentRows];
-currentDeclared = blocks[declared, currentRows, currentRows];
-
-coreChecks = <|
-  "exact_gauge" -> sameMatrices[currentComputed, currentDeclared],
-  "flat_connection" -> CanonMethodCard`FlatConnectionQ[currentComputed, variables],
-  "epsilon_factorized" -> CanonMethodCard`EpsilonFactorizedQ[currentComputed, regulator],
-  "declared_dlog_alphabet" -> CanonMethodCard`DLogConnectionQ[
-    currentComputed, variables, regulator, alphabet]|>;
 lowerRows = Range[lowerDimension];
 upperRightZero = lowerDimension === 0 || And @@ (
   CanonMethodCard`ZeroMatrixQ /@ blocks[computed, lowerRows, currentRows]);
@@ -41,6 +32,19 @@ fullChecks = <|
   "declared_dlog_alphabet" -> CanonMethodCard`DLogConnectionQ[
     computed, variables, regulator, alphabet],
   "upper_right_zero" -> upperRightZero|>;
+
+(* A flat block-triangular dlog system has flat dlog diagonal blocks. Only
+   diagnose the current block separately when the full-prefix check fails. *)
+coreChecks = If[And @@ Values[fullChecks], KeyDrop[fullChecks, "upper_right_zero"],
+  currentComputed = blocks[computed, currentRows, currentRows];
+  currentDeclared = blocks[declared, currentRows, currentRows];
+  <|
+    "exact_gauge" -> sameMatrices[currentComputed, currentDeclared],
+    "flat_connection" -> CanonMethodCard`FlatConnectionQ[currentComputed, variables],
+    "epsilon_factorized" -> CanonMethodCard`EpsilonFactorizedQ[currentComputed, regulator],
+    "declared_dlog_alphabet" -> CanonMethodCard`DLogConnectionQ[
+      currentComputed, variables, regulator, alphabet]|>
+];
 
 If[!And @@ Values[fullChecks],
   CanonMethodCard`WriteResult[task, outputDir, "FAIL",

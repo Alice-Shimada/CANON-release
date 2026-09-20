@@ -103,7 +103,7 @@ canonicalDE = <|
   "matrices" -> computed,
   "convention" -> "D[basis, variables[[i]]] = matrices[[i]] . basis",
   "check_scope" ->
-    "exact-global-gauge-deterministic-exact-rational-point-flatness-multivariable-shared-residue-declared-dlog-span",
+    "exact-global-gauge-symbolic-flatness-multivariable-shared-residue-declared-dlog-span",
   "gauge_backend" -> gaugeBackend,
   "checks" -> checks
 |>;

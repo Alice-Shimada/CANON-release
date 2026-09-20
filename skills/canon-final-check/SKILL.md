@@ -10,7 +10,7 @@ Run `mma/CheckFullSystem.wls` with `prepared_family`, `master_basis`,
 The script independently verifies the cumulative accepted transformation against
 the ordered source matrices. It requires exact resident source/master and sector
 trace order, a complete cursor, the accepted prefix hash, invertibility, equality
-to the committed matrices, flatness at one deterministic exact-rational point,
+to the committed matrices, exact symbolic flatness in every pair of variables,
 and epsilon factorization. The dlog gate
 solves one shared exact constant residue vector per matrix entry across
 every differential direction, reconstructs all directions over the explicit

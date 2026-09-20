@@ -10,7 +10,7 @@ Run `mma/CheckSectorCore.wls` with `sector_basis`, `sector_cut_de`, and
 
 - reduction-rank invertibility;
 - the exact gauge identity for `old_basis = T . new_basis`;
-- flatness at one deterministic exact-rational point;
+- exact symbolic flatness in every pair of variables;
 - epsilon factorization.
 
 The first passing candidate returns `PASS/CORE_PASS` and `core_transform`; later

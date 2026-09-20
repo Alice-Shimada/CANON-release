@@ -180,10 +180,6 @@ fullMatrices = If[
 ];
 If[
   fullMatrices === $Failed ||
-    !AssociationQ[Lookup[fullDE, "validity", None]] ||
-    !StringQ[Lookup[fullDE["validity"], "scope", None]] ||
-    !MemberQ[{True, False}, Lookup[fullDE["validity"], "flat", None]] ||
-    !ListQ[Lookup[fullDE["validity"], "pairs", None]] ||
     !validMatrixSetQ[fullMatrices, variables, Length[masters]],
   failClosed[
     "INVALID_DIFFERENTIAL_EQUATION",

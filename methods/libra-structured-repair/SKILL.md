@@ -10,7 +10,7 @@ description: 对显式满足 REPAIR_WITH_LIBRA 路由的精确单变量 1x1 已�
 耗尽（剩余替代项为零且所有已声明候选均已尝试）证据的
 `canon-neu/libra-structured-repair-input/v1`。平台期只能作为诊断元数据，不能授权修复。
 
-使用 Mathematica 14 ARM64，以 `-noinit -noprompt -script` 运行
+使用已安装的 WolframKernel，以 `-noinit -noprompt -script` 运行
 `run.wls <input.json> <fresh-output-dir>`。调用方通过
 `method_options.package_entry` 注入只读 Libra 主文件；运行器记录实际加载的版本身份、
 禁用 Fermatica，并仅运行

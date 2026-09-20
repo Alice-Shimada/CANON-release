@@ -187,13 +187,14 @@ class CodexAdapterTests(unittest.TestCase):
     def test_readme_documents_codex_setup_and_agent_facing_entry(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         self.assertNotIn("workflow.py", readme)
-        self.assertIn("用户不需要了解或调用状态管理 CLI", readme)
-        self.assertIn("install_launcher.py --check", readme)
-        self.assertIn("statemng_project_list", readme)
-        self.assertIn("Local", readme)
-        self.assertIn("MCP tool surface 在会话初始化时确定", readme)
-        self.assertIn("跨通用 Agent 的持续研究状态管理基础设施设计方案", readme)
-        self.assertIn("持续研究状态管理的 Agent 接入补充方案", readme)
+        for path in ("docs/agent-workflow.md", "docs/installation.md", "docs/hosts/codex.md"):
+            self.assertIn(path, readme)
+            self.assertTrue((ROOT / path).is_file())
+        codex_setup = (ROOT / "docs" / "hosts" / "codex.md").read_text(encoding="utf-8")
+        self.assertIn("install_launcher.py --check", codex_setup)
+        self.assertIn("statemng_project_list", codex_setup)
+        self.assertIn("Local", codex_setup)
+        self.assertIn("persistent_research_worker", codex_setup)
 
 
 if __name__ == "__main__":

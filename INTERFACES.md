@@ -14,6 +14,10 @@ wolframscript -file <script.wls> <input.json> <output_dir>
 
 ## 统一输入
 
+可直接用于 `PREPARE` 的请求见 [`interfaces/prepare.example.json`](interfaces/prepare.example.json)，
+其科学输入是 [`interfaces/family-spec.example.wl`](interfaces/family-spec.example.wl) 中的
+Wolfram Association。输入准备与主 Agent 路由见 [agent workflow](docs/agent-workflow.md)。
+
 ```json
 {
   "schema": "canon-neu/script-input/v1",
@@ -115,14 +119,14 @@ wolframscript -file <script.wls> <input.json> <output_dir>
 具体 `ERROR/*`。其余 method-card provider 同样遵守 `methods/README.md` 的单一 typed
 协议。
 
-| step | PASS | 可恢复 FAIL |
+| step | PASS | 未通过或未求解 |
 |---|---|---|
 | `PREPARE` | `OK` | 无 |
 | `DISCOVER` | `SECTORS_READY` | 无 |
 | `BUILD_CUT_DE` | `OK` | 无 |
 | `CHECK_CORE` | `CORE_PASS` | `CORE_FAIL` |
 | `BUILD_FULL_DE` | `OK` | 无 |
-| `SOLVE_TAIL` | `TAIL_READY` | `TAIL_UNSOLVED` |
+| `SOLVE_TAIL` | `TAIL_READY` | `INCONCLUSIVE/TAIL_UNSOLVED` |
 | `CHECK_CANONICAL` | `CANONICAL_PASS` | `CORE_FAIL`, `TAIL_FAIL` |
 | `COMMIT_SECTOR` | `OK` | 无 |
 | `NEXT_SECTOR` | `OK` | 无 |
@@ -292,7 +296,7 @@ completion。`declared_alphabet` 必须显式给 descriptor 或 `null`；后者�
 `CheckCanonical.wls` 从 `source_matrices` 和 `sector_transform` 重算完整 gauge，使用
 `sector_transform["alphabet"]`，检查 epsilon factorization、shared constant residues 与
 prefix 闭合。对低 sector 的归一化改变作为完整变换的一部分接受，不另设冻结限制。
-原有 flatness 检查仍是一个确定性精确点。完整检查失败时按 current-current block
+flatness 检查使用全部变量对的精确符号曲率。完整检查失败时按 current-current block
 是否失败区分 `CORE_FAIL` 与 `TAIL_FAIL`。
 
 `CommitSector.wls` 记录 `Taccepted=diag(Tlower,I).Tfull`、完整的新基与已检查矩阵；

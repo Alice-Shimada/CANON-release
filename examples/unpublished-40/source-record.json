@@ -1,0 +1,43 @@
+{
+  "source_run": "CANON/runs/3l2p-u-3513-blind",
+  "packaging_date": "2026-09-20",
+  "scientific_checks_rerun": false,
+  "copy_policy": "Original file bytes retained. Absolute paths inside historical metadata are inert provenance, not dependencies of the saved-result reader.",
+  "files": [
+    {
+      "path": "family.yaml",
+      "bytes": 2248,
+      "sha256": "10e86167f203bd67ec965907c1f18834fbdc123a04ef707a41fac4cab195d552"
+    },
+    {
+      "path": "algebra.yaml",
+      "bytes": 257,
+      "sha256": "896ffd46fda40087e19db8eb44f99ea573a12e3b8eb03cc66f740629089c5caa"
+    },
+    {
+      "path": "final-canonical-system.m",
+      "bytes": 617998,
+      "sha256": "d33a3bf496490bb461dcdae5a4e0225c8d17889da7be6b68fa270b5a3888e488"
+    },
+    {
+      "path": "dlog-decomposition.m",
+      "bytes": 17557,
+      "sha256": "431fe8e9b710b97afc911b201abd6029b7033e3338b1d9eeb0620f8206946c72"
+    },
+    {
+      "path": "accepted-prefix-checkpoint-final.m",
+      "bytes": 720089,
+      "sha256": "572602ae3c35f093d0a74b08e05d6c95d46d874e8202c6a2cc5e9007be7ac466"
+    },
+    {
+      "path": "FINAL-RESULT.md",
+      "bytes": 5200,
+      "sha256": "dfd8ad2c7f3319a91f05888fecfaa2939d56e964e2e301df80063f5feecb539c"
+    },
+    {
+      "path": "DLOG-DECOMPOSITION.md",
+      "bytes": 13726,
+      "sha256": "608bfadd3f21307279483d2378b3504f431e0c38ad48b482c0c52a5946c91666"
+    }
+  ]
+}

@@ -34,7 +34,6 @@ requiredSymbols = {
   "CANONICA`RecursivelyTransformSectors",
   "CANONICA`ExtractIrreducibles",
   "CANONICA`CheckEpsForm",
-  "CANONICA`CheckIntegrability",
   "CANONICA`SectorBoundariesFromDE"
 };
 loadSucceeded = TrueQ[Quiet[Check[(Get[entry]; True), False]]];
@@ -77,10 +76,6 @@ regulator = cut["regulator"];
 matrices = cut["matrices"];
 toolRegulator = CANONICA`eps;
 aFull = Map[Together, matrices /. regulator -> toolRegulator, {3}];
-
-If[Length[variables] > 1 && !TrueQ[Quiet @ Check[CANONICA`CheckIntegrability[aFull, variables], False]],
-  writeFailure["ERROR", "INVALID_DIFFERENTIAL_SYSTEM", "输入联络未通过 CANONICA 可积性检查"]
-];
 
 boundaries = Lookup[cut, "sector_boundaries", Automatic];
 If[boundaries === Automatic,

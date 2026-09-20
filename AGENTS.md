@@ -1,12 +1,19 @@
 # CANON Agent Rules
 
+CANON's scientific interfaces and method cards are independent of the agent host
+and model. Start with `docs/agent-workflow.md` for scientific decisions and
+`docs/installation.md` for the host capability contract. Host-specific requirements
+below apply only in that host; the shipped Codex setup is documented separately in
+`docs/hosts/codex.md`. Release documentation and packaging of explicitly selected
+historical examples do not initiate new scientific research or require replay.
+
 ## 持续研究接入规则
 
 1. 多步骤科研任务必须加载 `persistent-scientific-research` Skill。
 2. 用户只与主 Agent 交互；不得要求用户执行内部 CLI。
 3. 所有状态操作必须通过项目提供的 `statemng` MCP tools 完成。
 4. `statemng_task_accept` 和 `statemng_task_unblock` 只允许主 Agent 调用，subagent 不得调用。
-5. 主 Agent 派发持续研究任务时必须使用 Codex 项目专用的 `persistent_research_worker` custom agent，不得改用未限制 tools 的内置 worker；宿主侧配置必须将其限制为六项 worker tools。受 Codex role-MCP 回归影响而无法物理过滤时，只有 launcher runtime guard 已经由主 Agent 的 `init/resume` 绑定且 worker 在 `task_show` 中验证为受限角色后才可继续。
+5. 在 Codex 中，主 Agent 派发持续研究任务时必须使用项目专用的 `persistent_research_worker` custom agent，不得改用未限制 tools 的内置 worker；宿主侧配置必须将其限制为六项 worker tools。受 Codex role-MCP 回归影响而无法物理过滤时，只有 launcher runtime guard 已经由主 Agent 的 `init/resume` 绑定且 worker 在 `task_show` 中验证为受限角色后才可继续。其他宿主使用其原生 subagent 机制并实现同样的六项 worker tools 边界，不要求 Codex 角色名称或授权字段。
 6. `statemng` tools 不可用时，停止研究并报告接入错误；不得绕过状态管理继续研究。
 7. 不得使用已经删除的 `workflow.py`。
 8. Codex 初版只允许在 Local 会话中执行持续研究；Worktree 会话必须停止持续研究并报告接入错误，不得操作另一 checkout 的状态目录。

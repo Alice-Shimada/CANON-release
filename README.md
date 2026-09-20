@@ -1,205 +1,132 @@
 # CANON
 
-直接向 Agent 提出科研目标。对于需要多步骤推进的研究，Agent 会自动使用项目内部的 `statemng` 持续研究状态管理基础设施，并负责初始化、恢复、任务派发、结果审查和后续规划。用户不需要了解或调用状态管理 CLI。
+**Agent-assisted construction of canonical differential equations for Feynman integrals.**
 
-## 当前可用范围
+CANON combines scientific reasoning with explicit Wolfram Language interfaces:
+prepare an integral family, obtain IBP reductions and differential equations,
+propose basis transformations, repair lower-sector couplings, and check the
+complete result. An agent chooses and revises the approach; the scientific
+scripts compute and check the algebra.
 
-当前已经完成 Codex 接入，使用条件为：
+The workflow and method cards are independent of the agent host and model.
+They do not require a particular GPT model. Persistent research uses the local
+`statemng` MCP server and the host's native workers. The repository includes a
+working Codex integration; other hosts can use the documented MCP contract, but
+their native integrations have not been validated in this release.
 
-- macOS 或 Linux；
-- Python 3.10 或更高版本；
-- Codex 将本仓库识别为 trusted project；
-- 使用项目原始 checkout 的 Local 会话，不使用 Worktree 会话执行持续研究。
+## Start here
 
-OpenCode、Claude Code 和 Hermes 的接入尚未实现。Windows 原生环境也尚未适配。
+- [Installation and minimum dependencies](docs/installation.md)
+- [Agent workflow and input preparation](docs/agent-workflow.md)
+- [Saved examples](examples/README.md)
+- [Reading a basis, transformation, DE, and alphabet](docs/results.md)
+- [Codex setup](docs/hosts/codex.md), for that host only
 
-## 分发与科学依赖
-
-外部程序的源码逐个放在仓库根目录下的 `external/` 中，供用户自行编译、安装：
-DlogBasis-refine、CANONICA、Libra、Fermatica、INITIAL、FiniteFlow、Kira、Singular。
-原始仓库、提交号和安装入口见 [external/README.md](external/README.md) 与
-[external/sources.json](external/sources.json)。基础库由用户自行安装；Fermat 源码的
-获取限制单独记录在 [external/Fermat/README.md](external/Fermat/README.md)。
-
-当前候选工具是 `external/DlogBasis-refine/DlogBasis.wl` 的
-`DlogBasis` 上下文与 `DlogBasisSearch`；旧 LS 压缩包已移除。
-
-安装位置由调用方通过 `method_options.package_entry`、
-`method_options.finite_flow_package_file`、`method_options.singular_executable`
-及 Kira request 的 `executable` 传入；Fermat 使用 `FERMATPATH`。Wolfram 的普通
-包搜索和原生库搜索分别使用 `$Path`、`$LibraryPath`。命令行工具可从 PATH 查找；
-Python 测试允许 `CANON_WOLFRAM_KERNEL` 指定 kernel。并行数由请求参数指定。
-
-JSON 的相对文件路径以声明它的 JSON 所在目录为准，family spec 内的资源路径以
-spec 文件所在目录为准。JSON 不做环境变量或 `~` 展开；调用方可从环境或全局配置
-取得路径，再传入请求。输出目录命令行参数仍相对于当前工作目录解析。
-INITIAL 的组件配置与真实 provider 测试变量详见
-[外部依赖配置](external/README.md#initial-独立组件配置)。
-
-迁移源码后，用户安装所需程序并重新配置路径；Agent 重新安装当前 checkout 的
-statemng launcher。已存在研究产物中的当次绝对路径不会自动重写。
-
-## 首次准备
-
-### 用户操作
-
-1. 在 Codex Desktop 中打开本仓库，按 Codex 的原生提示信任项目。
-2. 新建一个 **Local** 会话。即使机器本地 launcher 尚未安装，该会话也应当可以正常创建。
-3. 将下面的指令交给 Agent：
+After configuring a host, give its main agent a request such as:
 
 ```text
-请为当前 CANON checkout 完成 statemng Codex 接入准备：
-
-1. 确认当前是 Local 会话，并确认 .git 是目录、git-dir 与 common-dir 都是 .git。
-2. 由你运行 state-management/adapters/codex/install_launcher.py，安装机器本地 launcher。
-3. 由你运行 state-management/adapters/codex/install_launcher.py --check，确认 launcher 指向当前 checkout。
-4. 不要运行 statemng CLI，不要创建或修改任何研究状态。
-5. 报告检查结果，并明确告诉我是否需要新建 Local 会话。
+Work in this CANON checkout. Read AGENTS.md and docs/agent-workflow.md.
+Create a research task named triangle-demo using
+interfaces/family-spec.example.wl. Use the installed tools and resource
+budget I provide. Carry the family through the canonical workflow and
+return the basis, transformation, DE, alphabet, and result summary.
+Reuse accepted inputs and checker results when continuing the task.
 ```
 
-4. 如果 Codex 请求允许 Agent 写入 `$HOME/.codex/statemng/CANON/mcp`，批准这一明确路径的操作；不需要授予更宽泛的文件写入权限。
-5. 安装完成后，完全退出并重新打开 Codex Desktop，再在本仓库中新建一个 Local 会话。MCP tool surface 在会话初始化时确定，安装 launcher 的旧会话不会热加载 `statemng` tools。
+The [typed family example](interfaces/family-spec.example.wl) and its
+[PREPARE request](interfaces/prepare.example.json) use the supplied one-loop
+fixture. The user specifies the scientific problem and resources; the agent
+handles internal task commands and scientific files.
 
-用户不应手动运行 `statemng` CLI、直接启动 `mcp_server.py`，也不应直接修改 `.state-management/` 中的 JSON。
+For a first look without running a calculation, read a saved result in a fresh
+Wolfram session, with the checkout as the working directory:
 
-### Agent 操作
+```wl
+basis = Get["examples/one-loop/canonical-basis.wl"];
+de = Get["examples/one-loop/canonical-de.wl"];
+{basis["basis"], de["alphabet"], de["matrices"]}
+```
 
-接入 Agent 必须在仓库根目录执行：
+## Scientific scope
+
+The current prepared input consists of a family specification, Kira project/jobs,
+ordered masters, and derivative operators for each variable. The agent can
+prepare these using available tools and explicit conventions; `PrepareFamily.wls`
+itself binds the supplied files. It is not a general compiler from an arbitrary
+list of propagators. Physical definitions, known masters/rules, and existing DEs
+should be supplied when available; see the [input guide](docs/agent-workflow.md).
+
+The scientific route is:
 
 ```text
-state-management/adapters/codex/install_launcher.py
-state-management/adapters/codex/install_launcher.py --check
+PREPARE → DISCOVER → IBP and ordered DE
+  → sector core proposal → CHECK_CORE → full-prefix construction and tail repair
+  → CHECK_CANONICAL → COMMIT_SECTOR → next sector → FINAL_CHECK
 ```
 
-安装器会将当前 checkout 和当前 Python 的绝对路径写入：
+CANONICA supplies rational DE transformations, Libra supplies the implemented
+single-variable route, and DlogBasis-refine supplies bounded integral candidates
+that are subsequently reduced. These are method choices, not a mandatory chain
+of fallbacks. The [method cards](methods/README.md) describe their actual scopes.
 
-```text
-$HOME/.codex/statemng/CANON/mcp
+A successful final check returns a canonical basis and DE in the declared
+integral space and dlog alphabet. Current checks include the exact gauge identity,
+symbolic flatness, epsilon factorization, and shared constant residue matrices.
+Algebraic letters can be declared as exact Wolfram expressions. A bounded search
+failure means that the selected search did not find a solution.
+
+The implementation does not guarantee a canonical basis for every family,
+complete automatic algebraic-letter discovery, master completeness, or physical
+boundary constants. A canonical DE alone does not fix all UT normalizations.
+The [scientific audit](docs/scientific-audit-20260908.md) gives the detailed scope.
+
+## Examples
+
+| Example | Masters / sectors | Included result |
+| --- | --- | --- |
+| [One-loop sector 5](examples/one-loop/README.md) | 1 / 1 | Small prepared input and saved canonical output |
+| [Massless planar 2l5p pentabox](examples/2l5p/README.md) | 61 / 46 | Complete five-variable basis, DE, and 24 active letters |
+| [Unpublished three-loop family](examples/unpublished-40/README.md) | 40 / 28 | Complete two-variable system and residues for `{s,u,1-u}` |
+
+These are existing successful results, packaged with their historical method and
+check records. They were not rerun for this release preparation. In particular,
+the 2l5p record uses its original flatness scope, and the 40-master example comes
+from the earlier resident CANON workflow and keeps its original export schema.
+
+## Interfaces and extension
+
+Science lives in `mma/`, proposals in `methods/`, and step instructions in
+`skills/`. [INTERFACES.md](INTERFACES.md) documents the request/result contracts.
+A typical stateless call is:
+
+```sh
+wolframscript -file mma/PrepareFamily.wls interfaces/prepare.example.json runs/triangle-prepare
 ```
 
-该 launcher 是机器本地文件，不属于仓库，也不保存研究状态。CANON 接入配置不包含个人安装路径；其他用户机器上的接入 Agent 执行安装器后，会得到适合该机器的 launcher。
+Use a fresh output directory. Relative artifact paths are resolved from their
+declaring JSON; family-spec resources are resolved from the spec. Supply tool
+entries and thread budgets through the documented task parameters or environment.
 
-如果 `--check` 失败，Agent 应重新安装 launcher，并停止当前会话中的持续研究，等待全新 Local 会话加载 MCP。不得继续使用可能指向其他 checkout 的 tools。安装程序同时准备当前 checkout 专用的机器本地授权目录；它不保存研究结果，也不会写入 Git。
+The agent owns planning and acceptance. `statemng` stores research tasks and
+artifacts in `.state-management/<task-name>/`; it does not choose scientific
+methods. See [AGENTS.md](AGENTS.md) and the
+[persistent-research skill](.agents/skills/persistent-scientific-research/SKILL.md).
 
-## MCP 自检
+External source snapshots and their own licenses are in [external/](external/README.md),
+with revisions in [sources.json](external/sources.json). Install only the programs
+needed by the selected route. Historical architecture notes are under
+[docs/history/](docs/history/README.md).
 
-在重新打开的 Local 会话中，将下面的指令交给 Agent：
+## Citation and development
 
-```text
-请只做 statemng MCP 接入自检，不开展研究，也不修改任何研究状态：
+Authors, in alphabetical order by family name: Dongshan Jian, Yuanche Liu,
+Yanqing Ma, Boxuan Shi, Yu Wu, Zihao Wu, and Yang Zhang.
 
-1. 确认当前是 Codex Local 会话。
-2. 由你运行 state-management/adapters/codex/install_launcher.py --check。
-3. 确认 statemng_project_list 位于你的 MCP tool surface。
-4. 必须通过 MCP 调用 statemng_project_list 一次，禁止用 shell、statemng CLI 或直接运行 mcp_server.py 代替。
-5. 报告 launcher 校验结果、MCP tool 调用是否成功，以及 tool 返回的完整 structured result。
-```
+Use [CITATION.cff](CITATION.cff) and identify the version or commit used. Author
+identifiers and method references are listed in [CREDITS.md](CREDITS.md).
+CANON-owned code and documentation use the [MIT license](LICENSE); external
+components retain their own licenses.
 
-自检成功必须同时满足：
-
-- 会话正常创建，没有 `required MCP servers failed to initialize`；
-- launcher 校验返回 `"ok": true`；
-- Agent 实际产生 `statemng_project_list` 的 MCP tool call；
-- tool 返回 `isError: false`，且 `structuredContent.ok` 为 `true`。
-
-`task_names` 为空只表示尚未创建持续研究任务，不是错误。Codex 显示的完整工具名可能是 `mcp__statemng__statemng_project_list`；前缀是宿主增加的命名空间。
-
-## 正常使用
-
-准备完成后，用户只需在 Local 会话中用自然语言提出科研目标。对于多步骤科研任务，Agent 必须加载 `persistent-scientific-research` Skill，并通过 `statemng` MCP tools 完成所有状态操作。
-
-研究状态保存在：
-
-```text
-.state-management/[TASK_NAME]/
-```
-
-不同总体任务彼此隔离。已有任务由 Agent 恢复，不存在的任务由 Agent 初始化；用户不需要选择内部命令或管理任务状态。
-
-`.state-management/` 已加入 `.gitignore`。其中的状态、run workspace 和 artifact 均保留在当前项目本地，不随 Git 提交。
-
-worker 在自己的 workspace 写入新结果，直接只读复用 `task_show` 提供的依赖文件。
-多文件结果分别登记，以一个入口产物或简短索引提交；每个 sector 不打包历史依赖。
-主审复用现有独立科学 checker 的结果，不默认重跑整个流程。具体交接规则见
-`AGENTS.md` 的 4.1 节。
-
-## 科学接口
-
-科学输入是 trusted family specification、Kira project/jobs、有序 masters 和逐变量导数算符。
-`propagator_slots` 声明实际传播子在完整指标列表中的位置，`regulator` 与 `dimension_rule`
-显式给出。流程不限制圈数、传播子个数、ISP 位置、sector rank 或运动学变量个数；仍以
-给定 masters 和 IBP 约化为输入，不额外证明 master 完备性或识别函数类别。
-
-主 Agent 在现有 `statemng` 任务中按以下顺序调用无状态科学接口：
-
-1. `PrepareFamily.wls` 绑定输入；`DiscoverSectors.wls` 从 masters 生成 sector mask、rank
-   和 resident order，不需要文献 sector manifest。
-2. 用 `MasterDerivativeTargets[masters, preparedDerivatives]` 生成原始 DE 所需 targets，
-   交给 `ReduceIBP.wls`。`BuildSectorCutDE.wls` 从 `ibp_reduction` 构造一次完整
-   `ordered_master_de`；后续 sector 用 `SliceSectorCutDE.wls` 复用它。
-3. 对每个 sector，直接选择 CANONICA 的多变量有理 DE 方法或 Libra 的单变量方法；
-   也可用 DlogBasis-refine 提出积分候选，经 `ReduceCandidateIBP.wls` 约化，再由
-   `RouteCoreCandidates.wls` 选择独立行基及单行替换。原始 DE 路线不以 LS 候选成功为前提。
-4. `CheckSectorCore.wls` 通过后，`BuildFullSectorDE.wls` 将同一候选行表示嵌入完整 prefix。
-   `SolveTail.wls` 使用 CANONICA 的公开 `TransformOffDiagonalBlock` 和
-   `TransformDlogToEpsForm` 求新的非零 subsector 修正与 epsilon 归一化。
-5. `CheckCanonical.wls` 重算完整 gauge；`CommitSector.wls` 累计完整变换，包括求解所需的
-   lower-prefix 归一化。`NextSector.wls` 从 manifest 与 trace 计算下一项。
-6. 全部 sector 完成后，`CheckFullSystem.wls` 从原始 ordered DE 和累计变换重算全局 gauge，
-   联立所有方向的常数留数。只有 `ALL_PASS` 输出 `canonical_basis` 与 `canonical_de`。
-
-`BUILD_FULL_DE` 的 `declared_alphabet` 可为 `null`，表示从联络的 pole factors 生成字母候选；
-也可提供含精确代数表达式的 `letters`。根式以 Wolfram 原生表达式表示，例如
-`x + Sqrt[1+x^2]`；求导、化简和 shared-residue solve 使用同一表达式，不要求先有理化。
-这支持声明代数候选的传递与判定，不承诺自动发现所有代数字母。CANONICA 搜索仍有其有理
-变换的算法范围；超出某次搜索空间只表示尚未找到，不表示不存在 canonical basis。
-
-科学脚本继续使用：
-
-```text
-wolframscript -file mma/PrepareFamily.wls INPUT.json OUTPUT_DIR
-wolframscript -file mma/ReduceIBP.wls REQUEST.json RESULT.wl
-```
-
-候选 IBP 桥与内存 DE API 的完整调用见 `INTERFACES.md`。所有运行输出放在调用方 workspace。
-程序信任所声明的科学输入与工具入口；不增加版本白名单、重复检查或自动重试。
-
-针对当前科学接口的测试：
-
-```text
-wolframscript -file tests/RunPrepareDiscoverUnitTests.wls PENTABOX_RESOURCE_DIRECTORY
-wolframscript -file tests/RunDEBuilderUnitTests.wls
-wolframscript -file tests/RunSectorCutDEUnitTests.wls
-wolframscript -file tests/RunCandidateIBPBridgeUnitTests.wls
-wolframscript -file tests/RunCoreCandidateRouteUnitTests.wls
-wolframscript -file tests/RunFullSectorTailUnitTests.wls CANONICA_ENTRY
-wolframscript -file tests/RunCanonicalCommitUnitTests.wls
-wolframscript -file tests/RunFullSystemUnitTests.wls
-```
-
-真实积分链路使用显式提供的 DlogBasis-refine、FiniteFlow、Kira 和正常安装的 Fermat：
-
-```text
-wolframscript -file tests/RunEndToEndWorkflowLiveTest.wls DLOGBASIS_ENTRY FINITEFLOW_ENTRY KIRA_EXECUTABLE FRESH_OUTPUT
-```
-
-两变量 tail 测试覆盖非零 coupling 和 lower epsilon 归一化；最终检查测试覆盖显式代数字母。
-真实一圈回归与这些有限测试均不构成任意 MPL family 的完备性证明，也不单独证明 UT。
-
-## 维护与故障处理
-
-- checkout 路径、Python 路径或当前主要 checkout 发生变化后，Agent 必须重新安装并校验 launcher，然后使用全新 Local 会话。
-- 每个用户的 `$HOME/.codex/statemng/CANON/mcp` 同时只指向一个 CANON checkout；首次状态调用前的 `--check` 用于防止写入另一 checkout。
-- Worktree 会话仍可处理普通任务，但不得执行持续研究。
-- `statemng` MCP 启动失败时，Codex 会话应保持可用；Agent 必须停止持续研究并报告接入错误，不得绕过 MCP 改用 CLI。
-
-修改 Codex 接入或状态管理代码后，可从 `state-management/` 目录运行完整测试：
-
-```text
-python3 -m unittest discover -s tests -p 'test_*.py' -v
-```
-
-设计文档：
-
-- [`跨通用 Agent 的持续研究状态管理基础设施设计方案.md`](docs/state-management/跨通用%20Agent%20的持续研究状态管理基础设施设计方案.md)
-- [`持续研究状态管理的 Agent 接入补充方案.md`](docs/state-management/持续研究状态管理的%20Agent%20接入补充方案.md)
+See [CONTRIBUTING.md](CONTRIBUTING.md) for reporting problems and proportionate
+checks, and [CHANGELOG.md](CHANGELOG.md) for the release draft. The saved examples
+are not an automatic test suite.
