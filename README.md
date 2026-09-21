@@ -18,6 +18,7 @@ their native integrations have not been validated in this release.
 
 - [Installation and minimum dependencies](docs/installation.md)
 - [Agent workflow and input preparation](docs/agent-workflow.md)
+- [Next-action routing for agents](skills/canon-workflow/SKILL.md)
 - [Saved examples](examples/README.md)
 - [Reading a basis, transformation, DE, and alphabet](docs/results.md)
 - [Codex setup](docs/hosts/codex.md), for that host only
@@ -25,7 +26,7 @@ their native integrations have not been validated in this release.
 After configuring a host, give its main agent a request such as:
 
 ```text
-Work in this CANON checkout. Read AGENTS.md and docs/agent-workflow.md.
+Work in this CANON checkout. Read AGENTS.md and skills/canon-workflow/SKILL.md.
 Create a research task named triangle-demo using
 interfaces/family-spec.example.wl. Use the installed tools and resource
 budget I provide. Carry the family through the canonical workflow and
@@ -64,15 +65,20 @@ PREPARE → DISCOVER → IBP and ordered DE
   → CHECK_CANONICAL → COMMIT_SECTOR → next sector → FINAL_CHECK
 ```
 
-CANONICA supplies rational DE transformations, Libra supplies the implemented
-single-variable route, and DlogBasis-refine supplies bounded integral candidates
-that are subsequently reduced. These are method choices, not a mandatory chain
-of fallbacks. The [method cards](methods/README.md) describe their actual scopes.
+For integral-basis discovery from a family (UT or canonical), prioritize a bounded DlogBasis-refine
+candidate search, followed by candidate IBP reduction and the existing checks.
+CANONICA supplies rational DE transformations and Libra the implemented
+single-variable route when a direct-DE approach is justified. A supplied-DE-only
+task can start there. The [routing skill](skills/canon-workflow/SKILL.md) explains when
+to change routes; an exhaustive numerator/dot search is not required. The
+[method cards](methods/README.md) describe their actual scopes.
 
 A successful final check returns a canonical basis and DE in the declared
 integral space and dlog alphabet. Current checks include the exact gauge identity,
 symbolic flatness, epsilon factorization, and shared constant residue matrices.
-Algebraic letters can be declared as exact Wolfram expressions. A bounded search
+The tail solver proposes pole factors and supported quadratic-root letters from
+the DE; an input alphabet is optional. Explicit algebraic letters can also be
+declared as exact Wolfram expressions. A bounded search
 failure means that the selected search did not find a solution.
 
 The implementation does not guarantee a canonical basis for every family,

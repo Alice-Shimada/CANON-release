@@ -15,13 +15,13 @@ CSS_PATH = UI_ROOT / "assets" / "project_state.css"
 JS_PATH = UI_ROOT / "assets" / "project_state.js"
 
 STATUS_META = {
-    "pending": ("待依赖", "○"),
-    "ready": ("待执行", "●"),
-    "running": ("执行中", "▶"),
-    "submitted": ("待验收", "◆"),
-    "completed": ("已完成", "✓"),
-    "blocked": ("已阻塞", "!"),
-    "failed": ("已失败", "×"),
+    "pending": ("Pending", "○"),
+    "ready": ("Ready", "●"),
+    "running": ("Running", "▶"),
+    "submitted": ("Awaiting review", "◆"),
+    "completed": ("Completed", "✓"),
+    "blocked": ("Blocked", "!"),
+    "failed": ("Failed", "×"),
 }
 
 
@@ -49,29 +49,29 @@ def _detail_section(label: str, value: Any, *, ordered: bool = False) -> str:
 def _render_details(task: dict[str, Any], *, hidden: bool) -> str:
     task_id = str(task.get("task_id", ""))
     status = str(task.get("status", ""))
-    status_label, status_icon = STATUS_META.get(status, (status or "未知", "?"))
+    status_label, status_icon = STATUS_META.get(status, (status or "Unknown", "?"))
     sections: list[str] = []
-    for field, label in (("objective", "目标"), ("background", "背景")):
+    for field, label in (("objective", "Objective"), ("background", "Background")):
         if field in task:
             sections.append(_detail_section(label, task[field]))
     if "acceptance_criteria" in task and isinstance(task["acceptance_criteria"], list):
-        sections.append(_detail_section("验收标准", task["acceptance_criteria"], ordered=True))
+        sections.append(_detail_section("Acceptance criteria", task["acceptance_criteria"], ordered=True))
     if "required_skills" in task and isinstance(task["required_skills"], list):
         required_skills = task["required_skills"]
         sections.append(
-            _detail_section("必需 Skills", required_skills, ordered=True)
+            _detail_section("Required skills", required_skills, ordered=True)
             if required_skills
-            else _detail_section("必需 Skills", "无")
+            else _detail_section("Required skills", "None")
         )
     if "dependencies" in task and isinstance(task["dependencies"], list):
         dependencies = task["dependencies"]
-        sections.append(_detail_section("依赖", "、".join(map(str, dependencies)) or "无"))
+        sections.append(_detail_section("Dependencies", ", ".join(map(str, dependencies)) or "None"))
     for field, label in (
-        ("run_id", "当前 run ID"),
-        ("summary", "结果摘要"),
+        ("run_id", "Current run ID"),
+        ("summary", "Result summary"),
         ("artifact_id", "Artifact ID"),
-        ("reason", "阻塞或失败原因"),
-        ("completed_at", "完成时间"),
+        ("reason", "Block or failure reason"),
+        ("completed_at", "Completion time"),
     ):
         if field in task:
             sections.append(_detail_section(label, task[field]))
@@ -92,13 +92,13 @@ def _render_details(task: dict[str, Any], *, hidden: bool) -> str:
 def _render_node(task: dict[str, Any], layout: LayoutResult) -> str:
     task_id = str(task.get("task_id", ""))
     status = str(task.get("status", ""))
-    status_label, status_icon = STATUS_META.get(status, (status or "未知", "?"))
+    status_label, status_icon = STATUS_META.get(status, (status or "Unknown", "?"))
     position = layout.positions[task_id]
     return (
         '<button type="button" class="task-node" '
         f'data-task-id="{_text(task_id)}" data-status="{_text(status)}" '
         f'style="left:{position.left}px;top:{position.top}px" '
-        f'aria-label="{_text(task_id)} {_text(task.get("title", ""))}，{_text(status_label)}">'
+        f'aria-label="{_text(task_id)} {_text(task.get("title", ""))}, {_text(status_label)}">'
         '<span class="node-topline">'
         f'<span class="node-icon" aria-hidden="true">{_text(status_icon)}</span>'
         f'<span class="node-id">{_text(task_id)}</span>'
@@ -142,10 +142,10 @@ def render_project_state(meta: dict[str, Any], tasks: list[dict[str, Any]]) -> s
     abnormal = status_counts["blocked"] + status_counts["failed"]
     stats = "".join(
         (
-            _render_stat("待执行", waiting, "waiting"),
-            _render_stat("进行中", active, "active"),
-            _render_stat("已完成", status_counts["completed"], "completed"),
-            _render_stat("异常", abnormal, "abnormal"),
+            _render_stat("Waiting", waiting, "waiting"),
+            _render_stat("In progress", active, "active"),
+            _render_stat("Completed", status_counts["completed"], "completed"),
+            _render_stat("Blocked or failed", abnormal, "abnormal"),
         )
     )
 
@@ -155,12 +155,12 @@ def render_project_state(meta: dict[str, Any], tasks: list[dict[str, Any]]) -> s
     )
     if not ordered_tasks:
         details = (
-            '<div class="empty-detail"><h2>尚无任务</h2>'
-            "<p>创建任务后，可在这里查看目标、依赖和运行结果。</p></div>"
+            '<div class="empty-detail"><h2>No tasks yet</h2>'
+            "<p>Create a task to view its objective, dependencies, and run results here.</p></div>"
         )
 
     replacements = {
-        "{{PAGE_TITLE}}": _text(f"任务状态 · {meta.get('task_name', '')}"),
+        "{{PAGE_TITLE}}": _text(f"Task state · {meta.get('task_name', '')}"),
         "{{TASK_NAME}}": _text(meta.get("task_name", "")),
         "{{GOAL}}": _text(meta.get("goal", "")),
         "{{STATUS_STATS}}": stats,

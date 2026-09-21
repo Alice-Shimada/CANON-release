@@ -23,6 +23,8 @@ convention `old_prefix_basis = Tfull . candidate_prefix_basis`.
 
 PASS writes one `full_sector_de` descriptor whose sole schema is
 `canon-neu/full-prefix-candidates/v1`: one source matrix list, block
-boundaries, and one completion for every declared core group.  Use `declared_alphabet -> null` for pole-factor inference in SOLVE_TAIL, or
+boundaries, and one completion for every declared core group. Use
+`declared_alphabet -> null` for pole-factor and supported quadratic-root letter
+inference in SOLVE_TAIL, or
 supply a `canon-neu/declared-alphabet/v1` artifact with exact rational or
 algebraic letters.  This step makes no canonical or tail-solvability claim.

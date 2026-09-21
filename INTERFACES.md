@@ -1,22 +1,28 @@
-# Mathematica 脚本接口
+# Mathematica script interfaces
 
-这里定义接口，不定义算法、内部函数或实现细节。前半部分是 typed method-card
-envelope；文末的直接 IBP/DE 接口是无状态科学适配层，不接收该 envelope，也不定义
-第二套研究状态机。
+This document defines interfaces, not algorithms, internal functions, or implementation
+details. The first part describes the typed method-card envelope. The direct IBP/DE
+interfaces at the end are a stateless scientific adapter layer; they do not accept
+that envelope or define another research state machine.
 
-## 统一调用
+## Common invocation
 
 ```text
 wolframscript -file <script.wls> <input.json> <output_dir>
 ```
 
-脚本实现后必须在 `<output_dir>/result.json` 写统一结果。科学 artifact 推荐写成 `.wl`，Python 只传递路径，不读取内容。
+Implemented scripts must write the common result format to `<output_dir>/result.json`.
+Use `.wl` for scientific artifacts where possible; Python passes their paths without
+reading their contents.
 
-## 统一输入
+## Common input
 
-可直接用于 `PREPARE` 的请求见 [`interfaces/prepare.example.json`](interfaces/prepare.example.json)，
-其科学输入是 [`interfaces/family-spec.example.wl`](interfaces/family-spec.example.wl) 中的
-Wolfram Association。输入准备与主 Agent 路由见 [agent workflow](docs/agent-workflow.md)。
+For a request ready to use with `PREPARE`, see
+[`interfaces/prepare.example.json`](interfaces/prepare.example.json). Its scientific
+input is the Wolfram Association in
+[`interfaces/family-spec.example.wl`](interfaces/family-spec.example.wl).
+See the [agent guide](docs/agent-workflow.md) for input preparation and the
+[workflow skill](skills/canon-workflow/SKILL.md) for scientific routing.
 
 ```json
 {
@@ -31,9 +37,9 @@ Wolfram Association。输入准备与主 Agent 路由见 [agent workflow](docs/a
 }
 ```
 
-全局步骤的 `sector` 是 `null`。
+For global steps, `sector` is `null`.
 
-## 统一输出
+## Common output
 
 ```json
 {
@@ -52,15 +58,17 @@ Wolfram Association。输入准备与主 Agent 路由见 [agent workflow](docs/a
 }
 ```
 
-`status` 使用唯一的 typed method-card 协议，可为 `ERROR`、`INCONCLUSIVE`、
-`PROVISIONAL`、`FAIL` 或 `PASS`。provider 只能发布前三类中受其 card 允许的 code，
-不能发布 `PASS` 或 `FAIL`；独立 checker 保留最终 `PASS`/`FAIL` 权限。artifact 路径
-相对于 `result.json` 所在目录，由 method-card caller 解析；`statemng` 不解析科学
-`result.json`，也不根据其中的 code 自动推进 scientific stage graph。
+`status` follows the single typed method-card protocol and is one of `ERROR`,
+`INCONCLUSIVE`, `PROVISIONAL`, `FAIL`, or `PASS`. Providers may emit only codes
+allowed by their cards within the first three categories; they cannot emit `PASS`
+or `FAIL`. Independent checkers retain final `PASS`/`FAIL` authority. Artifact
+paths are relative to the directory containing `result.json` and are resolved by
+the method-card caller. `statemng` neither parses scientific `result.json` files
+nor automatically advances the scientific stage graph based on their codes.
 
-## 各步骤 SKILL、payload 与输出
+## Skills, payloads, and outputs by step
 
-| step | SKILL | 脚本 | payload keys | artifact keys |
+| step | SKILL | script | payload keys | artifact keys |
 |---|---|---|---|---|
 | `PREPARE` | `canon-prepare-family` | `mma/PrepareFamily.wls` | `family_spec` | `prepared_family` |
 | `PROPOSE_INTEGRAL_CANDIDATES` | `canon-dlogbasis-integral-candidates` | `methods/dlogbasis/run.wls` | `family_identity`, `sector_identity`, `prepared_family`, `dimension_policy`, `numerator_or_power_counting_policy`, `candidate_budget`, `candidate_unit`, `normalization_policy`, `method_options` | `integral_candidates` |
@@ -77,14 +85,15 @@ Wolfram Association。输入准备与主 Agent 路由见 [agent workflow](docs/a
 | `NEXT_SECTOR` | `canon-commit-sector` | `mma/NextSector.wls` | `sector_manifest`, `accepted_prefix` | `sector_cursor` |
 | `FINAL_CHECK` | `canon-final-check` | `mma/CheckFullSystem.wls` | `prepared_family`, `master_basis`, `sector_manifest`, `ordered_master_de`, `accepted_prefix` | `canonical_basis`, `canonical_de` |
 
-`canon-build-de`、`canon-build-cut-de`、`canon-build-full-de`、
-`canon-solve-tail`、`canon-check-canonical`、`canon-commit-sector` 与 `canon-final-check`
-记录当前直接科学实现；
-其余仍未实现的历史步骤不得因表中占位接口而视为完成。
+`canon-build-de`, `canon-build-cut-de`, `canon-build-full-de`,
+`canon-solve-tail`, `canon-check-canonical`, `canon-commit-sector`, and
+`canon-final-check` document the current direct scientific implementations.
+Historical steps that remain unimplemented must not be treated as complete merely
+because the table contains placeholder interfaces for them.
 
-首个 sector 的 `accepted_prefix` 或 `previous_accepted_prefix` 是 `null`。
+For the first sector, `accepted_prefix` or `previous_accepted_prefix` is `null`.
 
-`DISCOVER/PASS` 还必须给出：
+`DISCOVER/PASS` must also provide:
 
 ```json
 {
@@ -96,48 +105,56 @@ Wolfram Association。输入准备与主 Agent 路由见 [agent workflow](docs/a
 }
 ```
 
-脚本按 sector manifest rank 稳定排序 masters；同 sector 保持原 Kira position。
+Scripts stably sort masters by sector manifest rank; within a sector they preserve
+the original Kira positions.
 
-## 最小结果码
+## Minimum result codes
 
-`PROPOSE_INTEGRAL_CANDIDATES` 是可选的约化前候选路线。原始 DE 构造和 DE provider
-不依赖它。当前 provider 将 sector ID 展开为完整指标顺序的 bit mask，调用
-``DlogBasis`DlogBasisSearch``，按 candidate budget 截取候选方向。候选归一化约定是
-`normalization.factor ReleaseHold[exact_definition]` 精确重建 package 组合。
-非空输出为 `PROVISIONAL/INTEGRAL_CANDIDATES`；没有候选为
-`INCONCLUSIVE/METHOD_EXHAUSTED`。`method_options` 保留显式 `loop_order`、`loop_dimensions`、
-`package_entry`、`finite_flow_package_file`，以及已有 numerator/backend 选项。
-包与 FiniteFlow 文件的相对路径以输入 JSON 所在目录为准；可选 `package_revision`
-记录调用方声明的源码版本，未提供时为 `null`。实际入口始终记录 SHA-256。
+`PROPOSE_INTEGRAL_CANDIDATES` is an optional candidate route before reduction.
+Raw DE construction and DE providers do not depend on it. The current provider
+expands the sector ID into a bit mask in full index order, calls
+``DlogBasis`DlogBasisSearch``, and truncates candidate directions to the candidate
+budget. The normalization convention requires
+`normalization.factor ReleaseHold[exact_definition]` to reconstruct the package
+combination exactly. Nonempty output is `PROVISIONAL/INTEGRAL_CANDIDATES`; no
+candidates gives `INCONCLUSIVE/METHOD_EXHAUSTED`. `method_options` retains explicit
+`loop_order`, `loop_dimensions`, `package_entry`, `finite_flow_package_file`, and
+the existing numerator/backend options. Relative package and FiniteFlow file
+paths are resolved from the input JSON directory. Optional `package_revision`
+records the caller's declared source revision and is `null` when omitted. The
+actual entry file's SHA-256 is always recorded.
 
-`ROUTE_CORE_CANDIDATES` 在 IBP 之后按当前 sector 的实际 master rank 选择独立行基与单行替换，
-输出 `PROVISIONAL/CORE_CANDIDATES_ROUTED`。它不枚举全部大小为 rank 的子集。
+After IBP, `ROUTE_CORE_CANDIDATES` selects an independent row basis and single-row
+exchanges using the current sector's actual master rank, returning
+`PROVISIONAL/CORE_CANDIDATES_ROUTED`. It does not enumerate every subset of that rank.
 
-`SEARCH_CORE` 是 provider 步骤，不使用下表的 authoritative `PASS`/`FAIL`：候选已生成时
-发布 `PROVISIONAL/CANDIDATE_TRANSFORMATION`，范围或方法未建立时发布
-`INCONCLUSIVE/OUT_OF_SCOPE` 或 `INCONCLUSIVE/METHOD_EXHAUSTED`，输入或工具故障发布
-具体 `ERROR/*`。其余 method-card provider 同样遵守 `methods/README.md` 的单一 typed
-协议。
+`SEARCH_CORE` is a provider step and does not use the authoritative `PASS`/`FAIL`
+statuses below. It emits `PROVISIONAL/CANDIDATE_TRANSFORMATION` when candidates
+have been generated, `INCONCLUSIVE/OUT_OF_SCOPE` or `INCONCLUSIVE/METHOD_EXHAUSTED`
+when the scope or method has not been established, and a specific `ERROR/*` for
+input or tool failures. Other method-card providers follow the same single typed
+protocol in `methods/README.md`.
 
-| step | PASS | 未通过或未求解 |
+| step | PASS | Failed or unsolved |
 |---|---|---|
-| `PREPARE` | `OK` | 无 |
-| `DISCOVER` | `SECTORS_READY` | 无 |
-| `BUILD_CUT_DE` | `OK` | 无 |
+| `PREPARE` | `OK` | None |
+| `DISCOVER` | `SECTORS_READY` | None |
+| `BUILD_CUT_DE` | `OK` | None |
 | `CHECK_CORE` | `CORE_PASS` | `CORE_FAIL` |
-| `BUILD_FULL_DE` | `OK` | 无 |
+| `BUILD_FULL_DE` | `OK` | None |
 | `SOLVE_TAIL` | `TAIL_READY` | `INCONCLUSIVE/TAIL_UNSOLVED` |
 | `CHECK_CANONICAL` | `CANONICAL_PASS` | `CORE_FAIL`, `TAIL_FAIL` |
-| `COMMIT_SECTOR` | `OK` | 无 |
-| `NEXT_SECTOR` | `OK` | 无 |
-| `FINAL_CHECK` | `ALL_PASS` | 无 |
+| `COMMIT_SECTOR` | `OK` | None |
+| `NEXT_SECTOR` | `OK` | None |
+| `FINAL_CHECK` | `ALL_PASS` | None |
 
-这些 code 只定义 scientific method-card 合同语义；当前 `statemng` 只记录显式研究任务
-状态，不把 code 当作自动 scientific coordinator 的转移规则。
+These codes define only the scientific method-card contract. `statemng` currently
+records explicit research task states; it does not use these codes as transition
+rules for an automatic scientific coordinator.
 
 ## `integral-candidates/v1`
 
-`PROPOSE_INTEGRAL_CANDIDATES` 的 WL artifact 形状为：
+The WL artifact from `PROPOSE_INTEGRAL_CANDIDATES` has this form:
 
 ```wl
 <|
@@ -179,64 +196,106 @@ Wolfram Association。输入准备与主 Agent 路由见 [agent workflow](docs/a
 |>
 ```
 
-输入 envelope 必须同时用 `family_identity`、`sector_identity` 和顶层 `sector` 绑定同一
-family/sector；output 必须原样保持这些稳定 identity。`dimension_policy`、
-`numerator_or_power_counting_policy`、`candidate_budget`、`pool_exhausted`、
-`candidate_unit` 和 `normalization_policy` 是不同字段，provider 不能从其中一个静默推断
-另一个。provider 把 package 的每个 `CandidateCombinations` 方向作为一个 candidate；
-candidate pool 只记录已有方向及预算截断。候选 IBP 桥保留每个 ID、定义与归一化；
-group 在约化后才由 `BuildCoreCandidates` 生成，并携带其独立行选择范围。
+The input envelope must bind the same family/sector through `family_identity`,
+`sector_identity`, and top-level `sector`; output must preserve these stable
+identities unchanged. `dimension_policy`, `numerator_or_power_counting_policy`,
+`candidate_budget`, `pool_exhausted`, `candidate_unit`, and `normalization_policy`
+are distinct fields: the provider must not silently infer one from another. The
+provider treats each package `CandidateCombinations` direction as one candidate;
+the candidate pool records only available directions and budget truncation. The
+candidate IBP bridge preserves every ID, definition, and normalization. Groups
+are generated by `BuildCoreCandidates` only after reduction and carry the scope
+of their independent-row selection.
 
-## Agent 与状态边界
+## Agent and state boundaries
 
-`canon-neu/script-result/v1` 只描述 method-card 调用结果，不定义持久研究状态或 agent
-delegation。当前唯一状态权限与交接协议由根目录 `AGENTS.md` 和 `README.md` 的 `statemng`
-规则定义；本接口不创建第二套状态机。
+`canon-neu/script-result/v1` describes only the result of a method-card call; it
+does not define persistent research state or agent delegation. The `statemng`
+rules in the root `AGENTS.md` and `README.md` define the sole current state
+authority and handoff protocol. This interface does not create another state machine.
 
-## 直接 IBP/DE 接口
+## Direct IBP/DE interfaces
 
-以下程序只处理数学输入和普通文件。调用它们的 Agent 负责在已分配 workspace 中运行，
-并通过 `statemng` 登记需要保留的结果。
+The following programs handle only mathematical inputs and ordinary files. The
+calling agent runs them in its assigned workspace and registers results to retain
+through `statemng`.
 
 ### Production typed family preparation
 
-`PrepareFamily.wls` 的 `family_spec` 是 trusted Wolfram Association，包含
-`family_ref`、`basis_ref`、`topology`、`parameters`、`variables`、`regulator`、
-`dimension_rule`、`index_order`、`propagator_slots`、`sector_convention`、`kira`、
-`family_data`、`prepared_derivatives` 和 `ordered_masters`。Kira 字段与现有 project/jobs
-保持一致；`family_data`、导数与 masters 是源文件路径。spec 内的相对资源路径（包括
-`kira.project`）以 spec 所在目录为基准，Kira jobs/config/targets 相对于该 project。
-`propagator_slots` 使用完整指标中的
-一基位置。新的通用接口不读取 `sector_source` 或文献 basis indices。
+The `family_spec` for `PrepareFamily.wls` is a trusted Wolfram Association with
+`family_ref`, `basis_ref`, `topology`, `parameters`, `variables`, `regulator`,
+`dimension_rule`, `index_order`, `propagator_slots`, `sector_convention`, `kira`,
+`family_data`, `prepared_derivatives`, and `ordered_masters`. Kira fields must
+match the existing project/jobs; `family_data`, derivatives, and masters are
+source file paths. Relative resource paths in the spec, including `kira.project`,
+are based on the spec directory; Kira jobs/config/targets are relative to that
+project. `propagator_slots` uses one-based positions in the full index list. The
+new general interface does not read `sector_source` or literature basis indices.
 
-`DiscoverSectors.wls` 从有序 master list 计算完整指标顺序的 `sector_bits`，ISP 位为零；
-`id = sector_bits . 2^Range[0,n-1]`。每个 sector 同时给出 `propagator_count` 与
-`master_count`，按 `(propagator_count,id)` 排序，同 sector 保持原 master 相对顺序。
+`DiscoverSectors.wls` computes `sector_bits` in full index order from the ordered
+master list, with ISP bits set to zero; `id = sector_bits . 2^Range[0,n-1]`.
+Each sector reports both `propagator_count` and `master_count`. Sectors are sorted
+by `(propagator_count,id)`, preserving the original relative master order within
+each sector.
 
-### 导数算符选择
+### Derivative operator selection
 
 ```wl
 Get[FileNameJoin[{repoRoot, "mma", "lib", "BaikovDerivative.wl"}]];
 choice = ChooseDerivativeOperator[prepared, variable];
 ```
 
-`prepared` 同时提供 affine denominator operator 与有界 enhanced-Baikov membership
-数据。找到 exact zero-growth 解时返回：
+`prepared` supplies both an affine denominator operator and bounded
+enhanced-Baikov membership data. These are inputs to candidate derivative
+compilation, not inputs to `methods/dlogbasis/run.wls`.
+
+The `operators` Association maps each declared variable to one record per
+denominator/ISP slot, in the full index order. Each record has `constant` and
+`linear`; each linear term has `denominator` (one-based slot) and `coefficient`.
+Use the same symbol contexts, variable order and dimension convention as the
+prepared family and reduction.
+
+The `exact_strategy` Association supplies:
+
+| Field | Value to prepare from the family |
+|---|---|
+| `baikov_variables` | One symbolic `z` variable per full propagator/ISP slot, in index order. |
+| `propagator_slots` | The same protected slots declared by the prepared family. |
+| `loop_count` | Number of independent loop momenta. |
+| `independent_external_count` | Number of independent external momenta after momentum conservation. |
+| `fixed_scale_substitutions` | The declared fixed-scale rules, or `{}` if no scale is fixed. |
+| `external_gram_determinant` | The Gram determinant of those independent external momenta. |
+| `baikov_polynomial` | The determinant of the Gram matrix of loop and independent external momenta, expressed in the declared `z` variables and kinematics. Use the full determinant convention of the bridge's measure below. |
+| `search_max_total_degree` | A declared nonnegative integer bounding the cofactor search. |
+
+To prepare the polynomial, solve the propagator/ISP definitions for the
+loop-dependent scalar products, substitute them into that Gram determinant,
+and apply the declared kinematic/fixed-scale rules consistently. Both selector
+branches require these family-derived Gram expressions and a nonnegative search
+degree. The bounded membership calculation determines which branch applies.
+
+An exact zero-growth solution returns:
 
 ```wl
 <|"kind" -> "enhanced-baikov", "cofactors" -> {...}, "f_cofactor" -> ...|>
 ```
 
-声明次数内未找到解不是错误，直接返回：
+Finding no solution within the declared degree is not an error; it returns:
 
 ```wl
 <|"kind" -> "affine-fallback", "operator" -> prepared["operators", variable]|>
 ```
 
-该包不生成 Kira targets、不运行 IBP、不构造 DE。cofactor 到 reducer targets 的转换
-属于可替换的合作者准备接口。
+A missing or malformed `exact_strategy` returns a preparation failure; a valid
+bounded search with no enhanced solution returns `affine-fallback`. For a
+preparation failure, retain the integral candidates, supply the required fields
+and resume their bridge.
 
-### 候选导数与 IBP 桥
+The package does not generate Kira targets, run IBP, or construct DEs. Conversion
+from cofactors to reducer targets belongs to the replaceable preparation interface
+supplied by collaborators.
+
+### Candidate derivatives and IBP bridge
 
 ```text
 wolframscript -file mma/ReduceCandidateIBP.wls \
@@ -244,10 +303,12 @@ wolframscript -file mma/ReduceCandidateIBP.wls \
   PREPARED-DERIVATIVES.wl REQUEST.json RESULT.wl
 ```
 
-输入候选使用 DlogBasis-refine 适配器给出的 `j[family,a1,...,an]` 线性组合；桥把它映射为
-声明的 Kira topology head，并保留整体有理 prefactor、`candidate_id` 和有符号指标。
-每个变量只采用 `ChooseDerivativeOperator` 的实际返回值。affine 分支使用声明的
-denominator derivative；enhanced-Baikov 分支令
+Input candidates are the linear combinations of `j[family,a1,...,an]` supplied by
+the DlogBasis-refine adapter. The bridge maps them to the declared Kira topology
+head, preserving the overall rational prefactor, `candidate_id`, and signed
+indices. For each variable it uses only the actual return value of
+`ChooseDerivativeOperator`. The affine branch uses the declared denominator
+derivative; the enhanced-Baikov branch sets
 
 ```wl
 lambda = (d-L-E-1)/2; kappa = (E-d+1)/2;
@@ -256,101 +317,133 @@ weight = kappa D[Gext,x]/Gext + lambda cF +
   Sum[a_i v_i/z_i - D[v_i,z_i], {i,n}];
 ```
 
-并逐项采用 `z^m I[a] = I[a-m]`。因此 protected `z_i c_i` 产生的真实 proper-subsector
-tail 不得在 sector 过滤前删除；ISP 指标按 Kira 的负号 convention 原样保存。候选线性
-组合还包括显式 `D[prefactor,x]` 项。
+and applies `z^m I[a] = I[a-m]` term by term. Thus actual proper-subsector tails
+from protected `z_i c_i` must not be removed before sector filtering. ISP indices
+retain Kira's negative-sign convention unchanged. Candidate linear combinations
+also include explicit `D[prefactor,x]` terms.
 
-成功的 `canon-neu/candidate-ibp-bridge/v1` 只携带 family/basis/topology identity、slot
-order、sector convention、逐变量 operator choice、有序 masters、候选导数与全部
-ordered-master affine 导数的精确 reducer targets、
-完全回代 rules、candidate pool，以及逐 `candidate_id` 的原定义、topology expression、derivatives、target
-metadata、reduced expression 和 reduced derivatives。target metadata 恰有 `integral`、
-`indices`、`sector_mask` 和 `numerator_indices`。该 artifact 是 IBP 闭合结果，不证明候选
-为 UT、canonical basis 或完整 master basis。
+A successful `canon-neu/candidate-ibp-bridge/v1` carries only family/basis/topology
+identities, slot order, sector convention, per-variable operator choices, ordered
+masters, exact reducer targets for candidate derivatives and all ordered-master
+affine derivatives, fully back-substituted rules, the candidate pool, and, for each
+`candidate_id`, its original definition, topology expression, derivatives, target
+metadata, reduced expression, and reduced derivatives. Target metadata has exactly
+`integral`, `indices`, `sector_mask`, and `numerator_indices`. This artifact records
+IBP closure; it does not establish that the candidates are UT, a canonical basis,
+or a complete master basis.
 
-### Core、完整 prefix 与 tail
+### Core, full prefix, and tail
 
-`RouteCoreCandidates.wls` 消费 `prepared_family`、`sector_basis`、`sector_cut_de` 和
-`candidate_ibp_bridge`。IBP 后的候选行先投影到 resident current-sector masters，再选择一个
-独立基及其独立单行替换。低 sector 系数保留在 `full_new_basis_rows`，列顺序是顶层
-`source_basis`。所有 group 的 `T=Inverse[R]`，使用 `old_basis=T.new_basis`。
-该 group pool 是有界选择空间，耗尽不代表穷尽了所有积分代表。
+`RouteCoreCandidates.wls` consumes `prepared_family`, `sector_basis`,
+`sector_cut_de`, and `candidate_ibp_bridge`. After IBP, candidate rows are first
+projected onto resident current-sector masters; an independent basis and its
+independent single-row exchanges are then selected. Lower-sector coefficients
+remain in `full_new_basis_rows`, whose columns follow the top-level `source_basis`
+order. Every group has `T=Inverse[R]` with `old_basis=T.new_basis`. This group pool
+is a bounded selection space; exhausting it does not exhaust all integral representatives.
 
-CANONICA/Libra 直接 provider 使用相同的 `source_basis`、`full_new_basis_rows` 与
-`member_candidate_ids`；其 source basis 可以仅含 current-sector masters。
-`BuildFullSectorDE.wls` 按显式 source-basis 映射将行嵌入 raw prefix，缺少的列系数为零。
-它复用完整 `ordered_master_de`，不再次进行 IBP 或构造 DE。
+The direct CANONICA/Libra providers use the same `source_basis`,
+`full_new_basis_rows`, and `member_candidate_ids`; their source basis may contain
+only current-sector masters. `BuildFullSectorDE.wls` embeds rows into the raw
+prefix using the explicit source-basis mapping, with zero coefficients for
+missing columns. It reuses the full `ordered_master_de` without repeating IBP or
+DE construction.
 
-若 `old_lower=Tlower.accepted_lower`，先用 `T0=diag(Tlower,I)` 得到 mixed prefix DE。
-完整候选行为 `{{I,0},{Rlower.Tlower,Rcurrent}}`，其逆为 `Tfull`。输出沿用
-`canon-neu/full-prefix-candidates/v1`，包括 `source_matrices`、`block_boundaries` 和候选
-completion。`declared_alphabet` 必须显式给 descriptor 或 `null`；后者表示自动 pole-factor
-字母候选。显式 `letters` 允许 Wolfram 根式表达式。
+If `old_lower=Tlower.accepted_lower`, first use `T0=diag(Tlower,I)` to obtain the
+mixed prefix DE. The full candidate rows are
+`{{I,0},{Rlower.Tlower,Rcurrent}}`, whose inverse is `Tfull`. Output retains
+`canon-neu/full-prefix-candidates/v1`, including `source_matrices`,
+`block_boundaries`, and candidate completions. `declared_alphabet` must explicitly
+provide a descriptor or `null`; the latter leaves SOLVE_TAIL to propose pole-factor
+and supported quadratic-root letters. Explicit `letters` may include Wolfram
+radical expressions.
 
-`SolveTail.wls` 只消费 `full_sector_de`、`core_transform`、`method_options.package_entry`
-（CANONICA）。若候选已经是完整 dlog form，直接交付；否则调用
-`TransformOffDiagonalBlock` 与 `TransformDlogToEpsForm` 求新的修正，并组合完整变换。
-不要求 candidate pool 耗尽，也不强制 dotted replay。求解未得到变换时返回
-`INCONCLUSIVE/TAIL_UNSOLVED`；所得 `sector_transform` 交给 `CHECK_CANONICAL`。
+`SolveTail.wls` consumes only `full_sector_de`, `core_transform`, and
+`method_options.package_entry` when a CANONICA call is needed. Supported algebraic
+primitives, scalar root repairs and multi-master derivative completions are
+attempted internally. Remaining rational inputs can use `TransformOffDiagonalBlock`
+and `TransformDlogToEpsForm`; unresolved algebraic inputs return a method-domain
+reason. The [tail skill](skills/canon-solve-tail/SKILL.md) defines these scopes.
+The solver composes the full transformation and requires neither candidate-pool exhaustion
+nor a dotted replay. If solving produces no transformation, it returns
+`INCONCLUSIVE/TAIL_UNSOLVED`; a resulting `sector_transform` goes to `CHECK_CANONICAL`.
+An unresolved result includes `summary.reason` and `summary.diagnostics`:
+`current_master_count`, `epsilon_factorized`, `affine_in_epsilon`,
+`rational_coefficients`, and `alphabet_candidate_count`. These describe the
+retained attempted matrices, not all possible representatives. Use the
+[tail skill](skills/canon-solve-tail/SKILL.md) to choose the next bounded action.
 
-`CheckCanonical.wls` 从 `source_matrices` 和 `sector_transform` 重算完整 gauge，使用
-`sector_transform["alphabet"]`，检查 epsilon factorization、shared constant residues 与
-prefix 闭合。对低 sector 的归一化改变作为完整变换的一部分接受，不另设冻结限制。
-flatness 检查使用全部变量对的精确符号曲率。完整检查失败时按 current-current block
-是否失败区分 `CORE_FAIL` 与 `TAIL_FAIL`。
+`CheckCanonical.wls` recomputes the full gauge transformation from
+`source_matrices` and `sector_transform`, uses `sector_transform["alphabet"]`,
+and checks epsilon factorization, shared constant residues, and prefix closure.
+Lower-sector normalization changes are accepted as part of the full
+transformation, with no separate freezing constraint. Flatness is checked using
+exact symbolic curvature for every variable pair. When the full check fails,
+failure of the current-current block distinguishes `CORE_FAIL` from `TAIL_FAIL`.
 
-`CommitSector.wls` 记录 `Taccepted=diag(Tlower,I).Tfull`、完整的新基与已检查矩阵；
-不把 lower blocks 强行改回旧值。旧 artifact 不修改，sector/candidate trace 追加一项。
-`NextSector.wls` 由 manifest 与 trace 计算下一项；迭代和持久化仍属于主 Agent 与 statemng。
+`CommitSector.wls` records `Taccepted=diag(Tlower,I).Tfull`, the complete new basis,
+and the checked matrices; it does not force lower blocks back to their previous
+values. Previous artifacts remain unchanged, and one entry is appended to the
+sector/candidate trace. `NextSector.wls` computes the next item from the manifest
+and trace; iteration and persistence remain the responsibility of the main agent
+and `statemng`.
 
-`CheckFullSystem.wls` 从原始完整 DE 与累计变换重算全局 gauge，调用与 sector checker
-共用的 `DLogResidues`，对所有变量联合求解常数留数并精确重建。仅 `ALL_PASS` 输出
-`canonical_basis` 与 `canonical_de`。精确代数表达式直接使用 Wolfram 求导、化简与
-`SolveAlways`；不额外构建代数域或分支管理层。
+`CheckFullSystem.wls` recomputes the global gauge transformation from the original
+full DE and cumulative transformation. It calls `DLogResidues`, shared with the
+sector checker, to solve jointly for constant residues in all variables and
+reconstruct exactly. Only `ALL_PASS` outputs `canonical_basis` and `canonical_de`.
+Exact algebraic expressions use Wolfram differentiation, simplification, and
+`SolveAlways` directly; no additional algebraic-field or branch-management layer
+is constructed.
 
-### IBP 约化
+### IBP reduction
 
 ```text
 wolframscript -file mma/ReduceIBP.wls REQUEST.json RESULT.wl
 ```
 
-请求必须恰有七个字段：
+The request must have exactly seven fields:
 
 | field | meaning |
 |---|---|
-| `executable` | 合作者指定的 reducer executable 或命令名 |
-| `project` | 已准备的 Kira project |
-| `jobs` | 按运行顺序给出的两个 project-relative job 文件 |
-| `topology` | Kira topology / Wolfram integral head 名 |
-| `targets` | project-relative target list |
-| `output` | 尚不存在的 Kira 工作目录 |
-| `options` | 逐项传给 Kira 的 argv，例如 `--parallel=1`；线程数由调用方按资源预算指定 |
+| `executable` | Reducer executable or command name supplied by the collaborator |
+| `project` | Prepared Kira project |
+| `jobs` | Two project-relative job files in execution order |
+| `topology` | Kira topology / Wolfram integral head name |
+| `targets` | Project-relative target list |
+| `output` | Kira working directory that does not yet exist |
+| `options` | Individual argv entries passed to Kira, such as `--parallel=1`; the caller sets the thread count within its resource budget |
 
-`project`、`output` 和带路径分隔符的 `executable` 相对于请求 JSON 所在目录解析；
-仅给命令名的 `executable` 从 PATH 查找。`jobs`、`targets` 相对于 Kira project。
-候选 IBP 桥使用同一规则；命令行的结果文件路径仍相对于调用方工作目录。
+`project`, `output`, and an `executable` containing a path separator are resolved
+relative to the request JSON directory. An `executable` supplied as a command name
+alone is found on PATH. `jobs` and `targets` are relative to the Kira project.
+The candidate IBP bridge uses the same rules; the result file path on the command
+line remains relative to the caller's working directory.
 
-示例见 `interfaces/ibp-request.example.json`。适配器信任合作者准备的 project 与 Kira
-输出，复制 project、依次运行两个 argv job，并直接读取有序 `masters.final` 与导出
-rules。调用者的正向科学测试负责核对精确 target 覆盖、master 顺序和 RHS 闭合。
+See `interfaces/ibp-request.example.json` for an example. The adapter trusts the
+collaborator's prepared project and Kira output, copies the project, runs the two
+argv jobs in order, and directly reads ordered `masters.final` and exported rules.
+The caller's positive scientific tests check exact target coverage, master order,
+and RHS closure.
 
-成功结果只有：
+The successful result contains only:
 
 ```wl
 <|"masters" -> orderedMasters, "rules" -> fullyReducedRules|>
 ```
 
-适配器不探测版本、不计算 hash、不保存 log/provenance/sector manifest，也不修改研究
-状态；master 顺序原样保留 Kira 的 `masters.final`。
+The adapter does not probe versions, compute hashes, save logs/provenance/sector
+manifests, or change research state. Master order preserves Kira's `masters.final`
+unchanged.
 
-### 微分方程构造
+### Differential equation construction
 
 ```wl
 Get[FileNameJoin[{repoRoot, "mma", "lib", "DEBuilder.wl"}]];
 result = BuildDifferentialEquations[family, masters, rules];
 ```
 
-`family` 必须恰有声明参数和有序 affine operators：
+`family` must contain exactly the declared parameters and ordered affine operators:
 
 ```wl
 <|
@@ -359,15 +452,18 @@ result = BuildDifferentialEquations[family, masters, rules];
 |>
 ```
 
-若积分有 `m` 个指标，每个 `Cx` 的维数必须为 `m x (m+1)`，表示
-`d D_i/dx = Cx[[i,1]] + Sum_j Cx[[i,j+1]] D_j`。`masters` 固定矩阵顺序；
-immediate `rules` 必须已经完全回代到这些 masters，所有系数属于声明的有理函数域。
+For integrals with `m` indices, each `Cx` must have dimensions `m x (m+1)`,
+representing `d D_i/dx = Cx[[i,1]] + Sum_j Cx[[i,j+1]] D_j`. `masters` fixes matrix
+order. Immediate `rules` must already be fully back-substituted to these masters,
+with all coefficients in the declared rational-function field.
 
-矩阵采用 `D[masters,x] == A_x . masters`。每一变量对先完成符号求导，再按完整有序参数
-列表在单个显式精确点 `{Prime[i]/Prime[i+1]}` 赋值维数与全部运动学变量；不重试或换点，
-因此只证明记录的 exact-point samples。
+Matrices use `D[masters,x] == A_x . masters`. For each variable pair, symbolic
+differentiation is performed first; the dimension and all kinematic variables are
+then assigned at the single explicit exact point `{Prime[i]/Prime[i+1]}` in full
+ordered-parameter order. There are no retries or alternative points, so this
+establishes only the recorded exact-point samples.
 
-成功输出只有：
+Successful output contains only:
 
 ```wl
 <|
@@ -379,23 +475,26 @@ immediate `rules` 必须已经完全回代到这些 masters，所有系数属于
 |>
 ```
 
-DE core 不读写文件、不运行 reducer、不生成 targets、不搜索算符，也不产生路径、hash、
-provenance、sector 或 artifact 信息。
+The DE core does not read or write files, run a reducer, generate targets, search
+for operators, or produce path, hash, provenance, sector, or artifact information.
 
-### 当前扇区 cut DE
+### Current-sector cut DE
 
 ```text
 wolframscript -file mma/BuildSectorCutDE.wls INPUT.json FRESH_OUTPUT_DIR
 ```
 
-`prepared_family` 必须显式携带 `regulator` 与 `dimension_rule`；例如两圈五点取
-`eps` 与 `d -> 4 - 2 eps`，脚本不从符号名推断。它把 accepted prepared derivative
-records 转成上述 affine matrices，以 `master_basis["masters"]` 的原序和
-`ibp_reduction["rules"]` 调用 `BuildDifferentialEquations` 恰好一次。完整 DE
-构造后才应用 `dimension_rule`。
+`prepared_family` must explicitly carry `regulator` and `dimension_rule`; for
+example, `eps` and `d -> 4 - 2 eps` for a two-loop five-point case. The script does
+not infer them from symbol names. It converts accepted prepared derivative
+records into the affine matrices above and calls `BuildDifferentialEquations`
+exactly once with the original order of `master_basis["masters"]` and
+`ibp_reduction["rules"]`. It applies `dimension_rule` only after constructing the
+full DE.
 
-requested sector 的正指标 bits 与每个 master 的传播子 bits 精确比较；匹配位置保持
-resident/Kira 顺序，并同时用于取矩阵的行与列：
+The requested sector's positive-index bits are compared exactly with each
+master's propagator bits. Matching positions preserve resident/Kira order and
+select both matrix rows and columns:
 
 ```wl
 masterBits = SectorBits[#, propagatorSlots] & /@ masters;
@@ -403,10 +502,11 @@ positions = Flatten @ Position[masterBits, currentBits];
 cutMatrices = (#[[positions, positions]] & /@ orderedMatrices);
 ```
 
-因此同一 sector 内的 dots、numerators 与线性混合全部保留；列投影仅商掉 manifest
-声明的 strict proper-subsector tails。`proper_subsectors` 明列这些 proper subsectors；`sector_boundaries` 是当前矩阵的
-行号区间 `{{1,n}}`。
-输出为：
+Thus all dots, numerators, and linear mixtures within the sector are retained.
+Column projection quotients out only the strict proper-subsector tails declared
+by the manifest. `proper_subsectors` explicitly lists these proper subsectors;
+`sector_boundaries` is the row-index interval `{{1,n}}` of the current matrix.
+Output is:
 
 ```wl
 <|
@@ -418,21 +518,23 @@ cutMatrices = (#[[positions, positions]] & /@ orderedMatrices);
 |>
 ```
 
-以及同 identity、同 basis 的 `canon-neu/sector-cut-de/v1`，其 ordered `variables`、显式
-`regulator`、exact-rational `matrices` 与 `sector_boundaries` 遵循
-`D[basis,variable[[i]]] == matrices[[i]].basis`。同一次调用还写
-`canon-neu/ordered-master-de/v1`，保留完整 master basis、矩阵与 DEBuilder validity，供
-`BUILD_FULL_DE` 直接复用。该产物只证明这个 quotient block 和
-DEBuilder 记录的 exact validity scope；不证明 UT、canonical form、全局 IBP 完备性或
-完整 canonical system。
+along with `canon-neu/sector-cut-de/v1` carrying the same identity and basis. Its
+ordered `variables`, explicit `regulator`, exact-rational `matrices`, and
+`sector_boundaries` follow `D[basis,variable[[i]]] == matrices[[i]].basis`. The same
+call also writes `canon-neu/ordered-master-de/v1`, retaining the full master basis,
+matrices, and DEBuilder validity for direct reuse by `BUILD_FULL_DE`. This artifact
+establishes only this quotient block and the exact validity scope recorded by
+DEBuilder; it does not establish UT, canonical form, global IBP completeness, or
+a full canonical system.
 
-### 原始 DE 的独立 targets
+### Independent targets for the raw DE
 
 ```wl
 Get[FileNameJoin[{repoRoot,"mma","lib","CandidateIBPBridge.wl"}]];
 targets = CANON`CandidateIBPBridge`MasterDerivativeTargets[masters, preparedDerivatives];
 ```
 
-该函数只根据 masters 和已有 affine operators 生成所需导数积分，排除已在 master basis
-中的项。将这些 targets 按 reducer 的积分文本格式交给 `ReduceIBP.wls`，即可为
-`BUILD_CUT_DE` 提供不依赖 LS 候选的 `ibp_reduction`。
+This function generates the required derivative integrals using only masters
+and existing affine operators, excluding terms already in the master basis.
+Passing these targets to `ReduceIBP.wls` in the reducer's integral text format
+provides `ibp_reduction` for `BUILD_CUT_DE` independently of LS candidates.

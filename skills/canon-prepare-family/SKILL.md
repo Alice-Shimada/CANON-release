@@ -27,3 +27,11 @@ checkout root for script locations and pass installed tool paths explicitly.
 The caller supplies every scientific source path and owns the fresh output
 directory. The script does not copy the project, run Kira, or update research
 state; register retained output only through `statemng`.
+
+A PREPARE pass binds source descriptors. Each subsequent operation uses its
+own input contract. For a defined-family integral-basis search, prepare the
+`Family` and kinematic rules required by the
+[DlogBasis proposal](../../methods/dlogbasis/SKILL.md). Candidate derivative
+`exact_strategy` is needed by the later [IBP bridge](../canon-reduce-ibp/SKILL.md).
+The proposal can run without it. Retain generated candidates while preparing
+the bridge inputs from the [derivative contract](../../INTERFACES.md#derivative-operator-selection).

@@ -1,7 +1,7 @@
-# CANON_neu 历史架构（已退役）
+# Historical CANON_neu architecture (retired)
 
-早期架构已移至 [docs/history/ARCHITECTURE.md](docs/history/ARCHITECTURE.md)，
-不得恢复或作为当前事实引用。
+The early architecture has moved to [docs/history/ARCHITECTURE.md](docs/history/ARCHITECTURE.md).
+Do not restore it or cite it as the current architecture.
 
-当前流程由 `AGENTS.md`、`README.md` 和 `statemng` 协议定义。
-参见 [Agent workflow](docs/agent-workflow.md) 与 [科学接口](INTERFACES.md)。
+The current workflow is defined by `AGENTS.md`, `README.md`, and the `statemng` protocol.
+See the [agent workflow](docs/agent-workflow.md) and [scientific interfaces](INTERFACES.md).

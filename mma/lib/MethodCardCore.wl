@@ -23,6 +23,7 @@ FlatConnectionQ::usage = "FlatConnectionQ[matrices, variables] tests the exact s
 EpsilonFactorizedQ::usage = "EpsilonFactorizedQ[matrices, eps] tests exact epsilon factorization.";
 DLogResidues::usage = "DLogResidues[matrices, variables, eps, alphabet] solves shared constant residues using exact Wolfram algebraic expressions.";
 DLogAlphabet::usage = "DLogAlphabet[matrices, variables, eps] extracts regulator-free pole factors as candidate letters.";
+QuadraticRootLetters::usage = "QuadraticRootLetters[matrices, variables] proposes norm-ratio letters for quadratic roots with rational square leading coefficients.";
 AlgebraicPrimitive::usage = "AlgebraicPrimitive[components, variables] solves a polynomial-over-poles primitive in the algebraic components of an exact one-form.";
 DLogConnectionQ::usage = "DLogConnectionQ[matrices, variables, eps, alphabet] tests the exact shared-residue dlog form across all directions.";
 ExactRationalExpressionQ::usage = "ExactRationalExpressionQ[expr] accepts only finite exact rational functions.";
@@ -592,6 +593,28 @@ DLogAlphabet[matrices_List, variables_List, regulator_Symbol] := DeleteDuplicate
   Flatten[(First /@ Rest[FactorList[Denominator[Together[#/regulator]]]]) & /@
     Flatten[matrices]],
   FreeQ[#, regulator] && !FreeQ[#, Alternatives @@ variables] &];
+
+QuadraticRootLetters[matrices_List, variables_List] := Module[
+  {bases, squareRoot, candidates = {}, a, c, numerators},
+  squareRoot[value_] := Module[{factors = FactorList[Together[value]]},
+    If[And @@ (EvenQ[Last[#]] & /@ Rest[factors]),
+      Sqrt[factors[[1, 1]]] Times @@ (First[#]^(Last[#]/2) & /@ Rest[factors]),
+      $Failed]];
+  bases = DeleteDuplicates @ Cases[matrices,
+    Power[b_, p_Rational] /; Denominator[p] === 2 :> Factor[b], Infinity];
+  Do[
+    If[PolynomialQ[base, variables] && Exponent[base, x] === 2,
+      a = squareRoot[Coefficient[base, x, 2]];
+      If[a =!= $Failed,
+        c = squareRoot[Coefficient[base, x, 0]];
+        numerators = If[c === $Failed, {D[base, x]/(2 a)},
+          Expand /@ {a x - c, a x + c}];
+        candidates = Join[candidates,
+          ((# + Sqrt[base])/(# - Sqrt[base]) &) /@ numerators]
+      ]
+    ], {base, bases}, {x, variables}];
+  DeleteDuplicates[candidates]
+];
 
 DLogResidues[matrices_List, variables_List, regulator_Symbol, alphabet_List] := Catch[Module[
   {powers, bases, orders, roots, relations, formal, numerator, fieldPowers,

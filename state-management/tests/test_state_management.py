@@ -297,7 +297,7 @@ class TaskLifecycleTests(StateManagementTestCase):
         html = html_path.read_text(encoding="utf-8")
         self.assertIn("Required Skills", markdown)
         self.assertIn(required_skills[0], markdown)
-        self.assertIn("必需 Skills", html)
+        self.assertIn("Required skills", html)
         self.assertIn(required_skills[1], html)
 
     def test_required_skills_reject_invalid_paths_types_and_duplicates(self) -> None:

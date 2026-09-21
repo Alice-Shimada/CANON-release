@@ -4,7 +4,7 @@ repoRoot = DirectoryName[DirectoryName[DirectoryName[ExpandFileName[$InputFileNa
 Get[FileNameJoin[{repoRoot, "mma", "lib", "MethodCardCore.wl"}]];
 
 args = CanonMethodCard`ScriptArguments[];
-If[Length[args] =!= 2, Print["用法：run.wls <input.json> <output_dir>"]; Quit[2]];
+If[Length[args] =!= 2, Print["Usage: run.wls <input.json> <output_dir>"]; Quit[2]];
 {inputPath, outputDir} = ExpandFileName /@ args;
 task = CanonMethodCard`ReadTask[inputPath, "SEARCH_CORE"];
 If[FailureQ[task], Print[InputForm[task]]; Quit[2]];
@@ -21,14 +21,14 @@ package = CanonMethodCard`ResolveMethodPackage[task, inputPath, "CANONICA`"];
 If[FailureQ[package],
   If[
     MatchQ[package, Failure["INVALID_METHOD_OPTIONS", _Association]],
-    writeFailure["ERROR", "INVALID_OPTIONS", "method_options.package_entry 必须是非空路径字符串"],
-    writeFailure["ERROR", "TOOL_UNAVAILABLE", "无法从 method_options.package_entry 或 Wolfram $Path 解析 CANONICA"]
+    writeFailure["ERROR", "INVALID_OPTIONS", "method_options.package_entry must be a nonempty path string"],
+    writeFailure["ERROR", "TOOL_UNAVAILABLE", "Cannot resolve CANONICA from method_options.package_entry or Wolfram $Path"]
   ]
 ];
 entry = package["entry"];
 entryHash = Quiet @ Check[FileHash[entry, "SHA256", "HexString"], $Failed];
 If[!StringQ[entryHash] || !StringMatchQ[entryHash, RegularExpression["[0-9a-fA-F]{64}"]],
-  writeFailure["ERROR", "TOOL_ERROR", "无法计算 CANONICA 入口的 SHA-256"]
+  writeFailure["ERROR", "TOOL_ERROR", "Cannot compute the CANONICA entry SHA-256"]
 ];
 requiredSymbols = {
   "CANONICA`RecursivelyTransformSectors",
@@ -39,10 +39,10 @@ requiredSymbols = {
 loadSucceeded = TrueQ[Quiet[Check[(Get[entry]; True), False]]];
 symbolsAvailable = And @@ (NameQ /@ requiredSymbols);
 If[!loadSucceeded,
-  writeFailure["ERROR", "TOOL_ERROR", "CANONICA 加载失败"]
+  writeFailure["ERROR", "TOOL_ERROR", "CANONICA failed to load"]
 ];
 If[!symbolsAvailable,
-  writeFailure["ERROR", "TOOL_ERROR", "CANONICA 缺少本卡所需的公共符号"]
+  writeFailure["ERROR", "TOOL_ERROR", "CANONICA lacks public symbols required by this card"]
 ];
 
 sectorBasis = CanonMethodCard`LoadArtifact[task, inputPath, "sector_basis"];
@@ -53,7 +53,7 @@ If[
     !CanonMethodCard`ValidCutDEQ[cut],
   writeFailure[
     "ERROR", "INVALID_DIFFERENTIAL_SYSTEM",
-    "sector_basis 或 sector_cut_de 产物无效"
+    "Invalid sector_basis or sector_cut_de artifact"
   ]
 ];
 If[
@@ -64,11 +64,11 @@ If[
     sectorBasis["basis"] =!= cut["basis"],
   writeFailure[
     "ERROR", "INVALID_DIFFERENTIAL_SYSTEM",
-    "任务、sector_basis 与 sector_cut_de 的扇区/族/基/顺序不匹配"
+    "Sector, family, basis, or order differs between the task, sector_basis, and sector_cut_de"
   ]
 ];
 If[!CanonMethodCard`FlatConnectionQ[cut["matrices"], cut["variables"]],
-  writeFailure["ERROR", "INVALID_DIFFERENTIAL_SYSTEM", "输入微分联络不可积"]
+  writeFailure["ERROR", "INVALID_DIFFERENTIAL_SYSTEM", "The input differential connection is not flat"]
 ];
 
 variables = cut["variables"];
@@ -82,7 +82,7 @@ If[boundaries === Automatic,
   boundaries = Quiet[CANONICA`SectorBoundariesFromDE[aFull]]
 ];
 If[boundaries === $Failed || !ListQ[boundaries] || boundaries === {},
-  writeFailure["INCONCLUSIVE", "METHOD_EXHAUSTED", "CANONICA 无法确定扇区边界"]
+  writeFailure["INCONCLUSIVE", "METHOD_EXHAUSTED", "CANONICA could not determine sector boundaries"]
 ];
 
 result = Quiet @ CheckAbort[
@@ -96,7 +96,7 @@ result = Quiet @ CheckAbort[
   $Aborted
 ];
 If[result === $Aborted || !ListQ[result] || Length[result] < 2,
-  writeFailure["INCONCLUSIVE", "METHOD_EXHAUSTED", "CANONICA 未生成变换"]
+  writeFailure["INCONCLUSIVE", "METHOD_EXHAUSTED", "CANONICA produced no transformation"]
 ];
 
 transformation = result[[1]];
@@ -110,7 +110,7 @@ providerEFormQ = TrueQ @ Quiet @ Check[
 ];
 alphabet = alphabet /. toolRegulator -> regulator;
 If[!providerEFormQ,
-  writeFailure["INCONCLUSIVE", "METHOD_EXHAUSTED", "CANONICA 变换未通过提供者 ε 形式检查"]
+  writeFailure["INCONCLUSIVE", "METHOD_EXHAUSTED", "The CANONICA transformation failed the provider epsilon-form check"]
 ];
 
 candidateArtifact = <|
@@ -157,7 +157,7 @@ candidateArtifact = <|
 
 artifactPath = CanonMethodCard`WriteWLArtifact[candidateArtifact, outputDir, "core-candidates.wl"];
 If[artifactPath === $Failed,
-  writeFailure["ERROR", "OUTPUT_ERROR", "无法写入核心候选产物"]
+  writeFailure["ERROR", "OUTPUT_ERROR", "Cannot write the core-candidate artifact"]
 ];
 resultPath = CanonMethodCard`WriteProviderResult[
   task,
@@ -172,5 +172,5 @@ resultPath = CanonMethodCard`WriteProviderResult[
     "candidate_count" -> 1
   |>
 ];
-If[resultPath === $Failed, Print["写入 result.json 失败"]; Quit[1]];
+If[resultPath === $Failed, Print["Failed to write result.json"]; Quit[1]];
 Quit[0];

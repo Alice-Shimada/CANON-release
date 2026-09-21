@@ -1,47 +1,63 @@
 ---
 name: canon-initial-official-ladder-evidence
-description: 为固定的 INITIAL 2.1 官方无质量 3L4P 梯图候选生成待独立验证的 UT 证据；不搜索、排序、替换或修复候选。
+description: Produce UT evidence awaiting independent verification for the fixed INITIAL 2.1 official massless 3L4P ladder candidate, without candidate search, ranking, replacement, or repair.
 ---
 
-# INITIAL 官方梯图 UT 证据卡
+# INITIAL official ladder UT evidence
 
-本卡只接受 INITIAL 2.1 官方 `massless_3L4P` 平面三圈四点梯图：26 项官方基顺序、
-第一项 UT 种子
-`G[2,{1,1,1,1,1,1,1,1,1,1,-1,0,0,0,0}]`、`D=4-2 eps`、
-`x=t/s`、字母表 `{x,1+x}`、`TakeRow -> 1`。任何族、候选、基、顺序、归一化、参考、
-种子或字母表偏离都返回 `INCONCLUSIVE/OUT_OF_SCOPE`，且不会调用工具或触发其他工作流
-动作。
+## Trigger and fixed scope
 
-调用方须在 `method_options` 中显式提供 `package_entry`（INITIAL.m）、
-`finite_flow_package_file`（FiniteFlow.m）、`finite_flow_library`（本机编译的
-fflowmlink 原生库文件）、`reference_directory`（官方 `examples/massless_3L4P`），
-以及精确身份
-`INITIAL 2.1; 63d8f813ac415f82f7ef945ee7e3f78a242fae49` 和
-`FiniteFlow; 278344c169010b74e791af8c5604c8cb9cd8df11`。所有相对路径以输入 JSON
-所在目录为基准；使用与本机原生库兼容的 WolframKernel：
+Use this opt-in evidence card only when the task explicitly requests the
+official ladder contract below. It is not a prerequisite for general tail
+solving or canonical acceptance.
+
+This card accepts only the INITIAL 2.1 official `massless_3L4P` planar
+three-loop four-point ladder: the official 26-element basis order, first UT seed
+`G[2,{1,1,1,1,1,1,1,1,1,1,-1,0,0,0,0}]`, `D=4-2 eps`, `x=t/s`, alphabet
+`{x,1+x}`, and `TakeRow -> 1`. Any change to the family, candidate, basis,
+order, normalization, reference, seed, or alphabet returns
+`INCONCLUSIVE/OUT_OF_SCOPE` before calling the tool or triggering another
+workflow action.
+
+## Inputs and command
+
+Supply `method_options.package_entry` (INITIAL.m), `finite_flow_package_file`
+(FiniteFlow.m), `finite_flow_library` (the locally built fflowmlink native
+library), and `reference_directory` (official `examples/massless_3L4P`), plus
+the exact identities `INITIAL 2.1; 63d8f813ac415f82f7ef945ee7e3f78a242fae49`
+and `FiniteFlow; 278344c169010b74e791af8c5604c8cb9cd8df11`. Relative paths
+resolve from the input JSON directory. Use a WolframKernel compatible with
+the installed native library:
 
 ```bash
 "${CANON_WOLFRAM_KERNEL:-WolframKernel}" \
   -noinit -noprompt -script methods/initial/run.wls input.json NEW_OUTPUT_DIR
 ```
 
-`NEW_OUTPUT_DIR` 必须不存在、其父目录必须已存在且可写，并且不能位于工具组件目录
-内。`threads` 由调用方指定为正整数，省略时为 1。运行器显式加载声明的 FiniteFlow
-原生库和 INITIAL 入口，
-随后执行官方模板中的 `TCalc` 与 `basisChange`。它不调用 Libra、CANONICA 或任何候选
-搜索、排序、替换、修复及路由逻辑。
+`NEW_OUTPUT_DIR` must not exist; its parent must exist and be writable, and
+the output must be outside the tool component directories. The caller may
+supply a positive integer `threads` (default 1). The runner explicitly loads
+the declared FiniteFlow native library and INITIAL entry, then runs the
+official template's `TCalc` and `basisChange`. It does not call Libra, CANONICA,
+or candidate search, ranking, replacement, repair, or routing logic.
 
-成功计算只返回 `PROVISIONAL/EVIDENCE_AWAITING_VERIFICATION` 和
-`canon-neu/ut-evidence/v1` 产物。提供者自报的参考、规范检查、ε 或 dlog 结果均不是最终
-结论。只有随后独立运行 `mma/CheckUTEvidence.wls`，重新读取官方 A/基/参考并复算所有
-精确条件后，才能得到 `PASS/VERIFIED_EVIDENCE`。
+## Result and next action
 
-独立检查器在 `checker_options` 中接收相同的 `package_entry`、
-`finite_flow_package_file`、`reference_directory`，不需要加载原生库。分发源码在
-`external/INITIAL` 和 `external/FiniteFlow`；编译与安装说明见 `external/README.md`。
+Successful computation returns only `PROVISIONAL/EVIDENCE_AWAITING_VERIFICATION`
+with a `canon-neu/ut-evidence/v1` artifact. Provider reference, gauge,
+epsilon-form, or dlog checks are not final acceptance. Only an independent
+`mma/CheckUTEvidence.wls` run that rereads the official A, basis, and reference
+and recomputes every exact condition can return `PASS/VERIFIED_EVIDENCE`.
 
-结果类别互不替代：范围外为 `INCONCLUSIVE/OUT_OF_SCOPE`；配置、组件、身份、加载或
-计算故障为具体的 `ERROR/TOOL_*`；提供者局部的参考、规范检查、ε 或 dlog 证据未建立时为
-`INCONCLUSIVE/METHOD_EXHAUSTED`。提供者永远不能写出 `PASS` 或 `FAIL`；只有独立检查器
-才能发布 `PASS/VERIFIED_EVIDENCE` 或
-`FAIL/EVIDENCE_REJECTED`。
+The checker accepts the same `package_entry`, `finite_flow_package_file`, and
+`reference_directory` in `checker_options`; it does not load the native library.
+Source is distributed in `external/INITIAL` and `external/FiniteFlow`; see
+[installation instructions](../../external/README.md).
+
+Keep result categories distinct. Unsupported scope returns
+`INCONCLUSIVE/OUT_OF_SCOPE`. Configuration, component, identity, loading, or
+computation errors return a specific `ERROR/TOOL_*`. Unestablished provider
+reference, gauge, epsilon, or dlog evidence returns
+`INCONCLUSIVE/METHOD_EXHAUSTED`. The provider never writes `PASS` or `FAIL`;
+only the independent checker issues `PASS/VERIFIED_EVIDENCE` or
+`FAIL/EVIDENCE_REJECTED`.

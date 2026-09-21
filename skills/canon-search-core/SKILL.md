@@ -1,38 +1,113 @@
 ---
 name: canon-search-core
-description: Find current-sector transformations from reduced integral candidates or the raw DE.
+description: Choose the next unresolved-sector core method, distinguishing DlogBasis search inputs from later candidate-reduction inputs and allowing only evidence-based direct-DE exceptions.
 ---
 
-# Current-sector core search
+# Select one core method
 
-Use the resident `sector_basis` and `sector_cut_de`. A complete DlogBasis pool
-is not a prerequisite for DE methods. Select CANONICA for multivariable rational
-DEs, or the existing Libra card for a single variable. Their `core_candidates`
-include `source_basis` and `full_new_basis_rows` for the same full-prefix builder.
-For a rational DE regular at epsilon zero, `methods/epsilon-zero/run.wls` can
-instead search homogeneous horizontal rows with algebraic prefactors from the
-trace and `declared_alphabet`. It also attempts a two-dimensional epsilon-singular
-completion. Its finite polynomial ansatz remains a provisional core proposal.
+First apply the completion rule in [canon-workflow](../canon-workflow/SKILL.md).
+This skill is for an unresolved sector with `sector_basis` and `sector_cut_de`.
+Reuse an untested candidate or a passing core before generating another.
 
-When using DlogBasis-refine, first reduce the individual candidate combinations
-with `ReduceCandidateIBP.wls`, then call `RouteCoreCandidates.wls` with
-`prepared_family`, `sector_basis`, `sector_cut_de`, and `candidate_ibp_bridge`.
-It selects a basis of the reduced current-sector rows and independent single-row
-exchanges. Proper-subsector coefficients remain in the full rows. The required
-rank is the actual sector master count. No full subset enumeration is performed.
+## 1. Decide whether the integral search comes first
 
-For Gram-sensitive rank gaps or candidates whose cut core passes but full-prefix
-couplings fail, consult [the Gram candidate card](../../methods/gram/SKILL.md).
-Its bounded integrand proposals use the same candidate bridge. If a hypothesis
-requires several simultaneous row replacements, submit that complete ordered
-bundle as a separate proposal; the router's single-row exchanges do not enumerate
-all such bundles. This manual route is optional and adds no prerequisite for DE
-methods or SOLVE_TAIL.
+Apply this list in order. Stop at the first matching item.
 
-Pass each provider's `core_candidates` to `CheckSectorCore.wls`. Rank shortage or
-failure of the selected candidate space can route directly to CANONICA; neither
-requires exhausting every numerator/dot ansatz. A bounded search failure is not
-proof that a canonical form does not exist. On CORE_PASS continue with
-BUILD_FULL_DE, SOLVE_TAIL, CHECK_CANONICAL, COMMIT_SECTOR, and NEXT_SECTOR.
-After the final resident sector, run FINAL_CHECK on the original ordered DE and
-cumulative transformation. The main Agent and statemng own the loop.
+1. **The user explicitly requested DE-only work or a particular method:** follow
+   that request within the method's input contract. This scope is set by the
+   user's request; worker assignments specify only their local operations.
+2. **Only a DE was supplied and the physical family cannot be recovered from
+   available inputs:** use the direct-DE choices in section 3. State which
+   physical definition is unavailable. When propagators, momenta, masses and
+   kinematic relations are available, generate the required family files from
+   those definitions and continue with the integral route.
+3. **A bounded integral route already has an applicable, recorded limitation:**
+   use section 3. Examples are no candidates within the stated search bounds,
+   insufficient reduced rank, rejected cores, or an unresolved bridge
+   construction after a concrete bounded preparation attempt. Retain its input,
+   attempted operation and result. A preparation limitation requires an attempted
+   construction and its specific failure. An absent field identifies preparation
+   to perform.
+4. **Otherwise, run one bounded DlogBasis-refine search for the unresolved
+   sector.** This is also the route when a rational DE is available and when
+   candidate derivative metadata still needs preparation.
+
+If the required provider genuinely cannot be made available within the remaining
+resources, record that operational condition and let the coordinator choose an
+available alternative or report the block. Input errors return to preparation.
+No exhaustive numerator/dot enumeration is required.
+
+## 2. Prepare and execute the integral route in order
+
+Run each operation as soon as its own inputs are ready.
+
+| Current state | Immediate action |
+|---|---|
+| Physical family is defined; `Family` or its kinematic rules need encoding | Prepare that object from the supplied definition using the [DlogBasis card](../../methods/dlogbasis/SKILL.md). |
+| Search inputs and tools are ready, with or without `prepared_derivatives.exact_strategy` | Run `methods/dlogbasis/run.wls` with `PROPOSE_INTEGRAL_CANDIDATES`. The proposal is independent of `exact_strategy`. |
+| Package loading and `CreateDlogFamily` are complete | Run the bounded provider search. |
+| Integral candidates exist; derivative/IBP inputs are incomplete | Save the candidates, prepare the missing inputs using the [IBP skill](../canon-reduce-ibp/SKILL.md), then reduce these same candidates. |
+| Candidate bridge exists | Run `mma/RouteCoreCandidates.wls`, then CHECK_CORE. |
+| The bounded route gives no usable core | Record its result and limits; select the next applicable untried method in section 3. |
+
+Include `methods/dlogbasis/SKILL.md` in the worker's `required_skills`. Declare
+loop order/dimensions, numerator/dot bounds, candidate count and wall time. The
+card invokes `DlogBasisSearch`; loading the package alone is not that invocation.
+
+The candidate chain is:
+
+```text
+PROPOSE_INTEGRAL_CANDIDATES
+  -> prepare any missing candidate derivative/IBP data
+  -> ReduceCandidateIBP.wls
+  -> ROUTE_CORE_CANDIDATES
+  -> CHECK_CORE
+```
+
+The coordinator may split this chain between workers. Pass the saved candidates,
+required inputs and exact unfinished operation to the next worker. Assign any
+needed derivative/IBP preparation as part of this chain.
+If a worker lacks the assignment or resources to prepare it, the coordinator
+assigns that preparation or records the actual exhausted budget/limitation.
+
+Keep full reduced rows, including proper-subsector coefficients. The required
+rank is the sector's actual master count. The router selects a rank basis and
+independent single-row exchanges. A geometry-motivated simultaneous row
+replacement is a new complete proposal; exhaustive subset search is not required.
+
+## 3. Select a direct-DE method only after section 1 allows it
+
+Take the first applicable untried row for the unchanged input.
+
+| Condition | Method |
+|---|---|
+| A rational-transformation obstruction such as CANONICA `nonrationalinv` is recorded, and the rational DE is regular at epsilon zero | [epsilon-zero](../../methods/epsilon-zero/SKILL.md), with finite polynomial/prefactor bounds |
+| The cut DE is rational and CANONICA has not failed on this input | [CANONICA](../../methods/canonica/SKILL.md) |
+| The rational cut DE has one variable, CANONICA did not produce a checked core, and the implemented Libra route is untried | [Libra](../../methods/libra/SKILL.md) |
+| The rational cut DE is regular at epsilon zero and epsilon-zero is untried | [epsilon-zero](../../methods/epsilon-zero/SKILL.md) |
+| These choices are exhausted or inapplicable | Return exact failures and remaining scope to the coordinator. Use the [Gram card](../../methods/gram/SKILL.md) only with a concrete new Gram/contact-term or dimensional-extension hypothesis. |
+
+A direct-DE provider returns `core_candidates`; run CHECK_CORE directly, without
+an integral-candidate IBP bridge. A rational DE may require an algebraic
+transformation; see [normalization and tails](references/normalization-and-tails.md).
+Do not repeat a refuted rational transformation or reinstall a working provider
+because its scientific ansatz failed.
+
+## 4. Continue from the result
+
+- `PASS/CORE_PASS`: BUILD_FULL_DE, SOLVE_TAIL, then CHECK_CANONICAL. The core is
+  not the complete sector. Follow the [main route](../canon-workflow/SKILL.md).
+- Missing fields, bad paths, incomplete kinematic rules or unreduced integrals:
+  repair the named input/runtime/coverage problem and resume the affected step.
+  These do not consume a method's scientific attempt.
+- Rank shortage, CORE_FAIL or METHOD_EXHAUSTED: preserve the measured scope and
+  select the next applicable untried branch. Failure of one method is not a ban
+  on other methods, and one sector's failure does not reject an entire family.
+- Passing core but unresolved full tail: use [canon-solve-tail](../canon-solve-tail/SKILL.md).
+  Reconsider a full integral representative when indicated instead of repeating
+  an unchanged tail solve.
+
+Before every new assignment, the coordinator applies the main route to the
+current scope. Reuse accepted sectors. Matching FINAL_CHECK ALL_PASS leads to
+submission, review, acceptance and delivery, then ends scientific work for that
+scope.

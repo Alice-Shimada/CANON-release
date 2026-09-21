@@ -1,31 +1,38 @@
-# CANON_neu 历史架构（已退役）
+# Historical CANON_neu architecture (retired)
 
-> 本文件仅保存早期 scientific pipeline 设计意图，不描述当前状态权限、agent 交接或
-> 可执行 coordinator。下文的 `workflow.py`、`state.json`、`delegate`、`subreport` 和
-> 单一旧控制流均已退役，不得恢复或作为当前事实引用。当前唯一持续研究状态协议由
-> 根目录 `AGENTS.md` 与 `README.md` 的 `statemng` 规则定义。
+> This file preserves the intent of an early scientific pipeline design. It does
+> not describe current state permissions, agent handoffs, or an executable
+> coordinator. The `workflow.py`, `state.json`, `delegate`, `subreport`, and single
+> legacy control flow below are retired; do not restore them or cite them as
+> current facts. The only current persistent-research state protocol is the
+> `statemng` protocol in the root `AGENTS.md` and `README.md`. For active scientific
+> work, follow [the current agent workflow](../agent-workflow.md) and current skills.
 
-## 目标
+## Goal
 
-CANON_neu 只保留一个状态机：`workflow.py`。它是供 AI agent 查询和更新的任务看板，不是科学计算程序。
+CANON_neu retains only one state machine: `workflow.py`. It is a task board for AI
+agents to query and update, not a scientific computation program.
 
-状态机只负责：
+The state machine is responsible only for:
 
-- 维护当前阶段、sector 顺序、任务状态和 artifact 路径；
-- 向主 agent 发出一个明确的当前任务包；
-- 在指定任务上强制主 agent 调派 subagent；
-- 接收标准化 `result.json`，按固定表推进或回环；
-- 保留全部任务历史。
+- Maintaining the current stage, sector order, task status, and artifact paths;
+- Issuing one explicit current task package to the main agent;
+- Requiring the main agent to delegate to a subagent for specified tasks;
+- Receiving standardized `result.json` files and advancing or looping according to a fixed table;
+- Retaining the complete task history.
 
-每一个科学步骤都由 agent 显式运行预先准备的无状态 Mathematica 脚本：
+For every scientific step, the agent explicitly runs a prepared, stateless
+Mathematica script:
 
 ```text
 wolframscript -file <script.wls> <input.json> <output_dir>
 ```
 
-脚本读取一个 JSON，写出 `<output_dir>/result.json` 和若干不透明 artifact。当前阶段的 `.wls` 全部只是接口模板，没有科学实现。
+The script reads one JSON file and writes `<output_dir>/result.json` plus opaque
+artifacts. At this stage, all `.wls` files are interface templates without
+scientific implementations.
 
-## 唯一控制流
+## Single control flow
 
 ```mermaid
 flowchart TD
@@ -49,68 +56,79 @@ flowchart TD
     FINAL -- "PASS" --> DONE["DONE"]
 ```
 
-`DISCOVER` 报告每个 sector 的 `id` 和 `propagator_count`。Python 只按
-`(propagator_count, id)` 排序，不从 propagator 或 Mathematica 表达式推导这些值。
+`DISCOVER` reports each sector's `id` and `propagator_count`. Python sorts only by
+`(propagator_count, id)`; it does not derive these values from propagators or
+Mathematica expressions.
 
-未画出的 `ERROR` 和没有固定恢复路径的 `FAIL` 会把 workflow 标记为 `BLOCKED`。状态机不猜测科学恢复策略。
+An `ERROR`, or a `FAIL` without a fixed recovery path, marks the workflow as
+`BLOCKED`; these cases are omitted from the diagram. The state machine does not
+infer a scientific recovery strategy.
 
-## Agent 交互
+## Agent interaction
 
-任意时刻只有一个主任务：
+There is only one main task at any time:
 
 ```text
 READY -> RUNNING -> DONE
                   -> BLOCKED
 ```
 
-典型交互是：
+A typical interaction is:
 
-1. 主 agent 用 `status` 或 `next` 查询看板和动态生成的任务包；任务包明确给出
-   当前步骤的 `SKILL.md`、脚本、输入和输出位置。
-2. 主 agent 用 `start` 领取任务。
-3. 如果任务要求 delegation，主 agent 用 `delegate` 指定 subagent、角色和脚本。
-4. subagent 运行被指定的脚本，只写标准 `script-result/v1`；它不写 `state.json`。
-5. 主 agent 用 `subreport` 登记这个标准脚本结果。
-6. 主 agent 可以直接采用同一个结果，再用 `report` 提交；也可以在汇总其他
-   路线后提交另一个符合相同协议的结果。
-7. `workflow.py` 创建下一个任务，或创建同一阶段的新 attempt。
+1. The main agent uses `status` or `next` to query the board and dynamically
+   generated task package. The package explicitly identifies the current step's
+   `SKILL.md`, script, input, and output locations.
+2. The main agent claims the task with `start`.
+3. If delegation is required, the main agent uses `delegate` to specify the
+   subagent, role, and script.
+4. The subagent runs the assigned script and writes only a standard
+   `script-result/v1`; it does not write `state.json`.
+5. The main agent registers this standard script result with `subreport`.
+6. The main agent may adopt the same result and submit it with `report`, or
+   combine findings from other routes and submit another result under the same
+   protocol.
+7. `workflow.py` creates the next task or a new attempt at the same stage.
 
-当前仅 `SEARCH_CORE` 强制一个 `candidate_route` subagent。这样足以实现并验证 delegation gate，而不把每一步都复杂化。未完成该角色的 subreport 时，主任务不能提交。
+At this stage, only `SEARCH_CORE` requires a `candidate_route` subagent. This is
+sufficient to implement and verify the delegation gate without complicating
+every step. The main task cannot be submitted until that role's subreport is complete.
 
-## 数据边界
+## Data boundary
 
-状态机理解的科学数据只有：
+The only scientific data understood by the state machine are:
 
-- sector 的 `id` 与 `propagator_count`；
-- artifact 的逻辑名、类型和文件路径；
-- `PASS | FAIL | ERROR`；
-- `CHECK_CANONICAL/FAIL` 的 `CORE_FAIL | TAIL_FAIL` 路由码。
+- A sector's `id` and `propagator_count`;
+- An artifact's logical name, type, and file path;
+- `PASS | FAIL | ERROR`;
+- The `CORE_FAIL | TAIL_FAIL` routing codes for `CHECK_CANONICAL/FAIL`.
 
-以下内容永远不进入 Python：
+The following never enter Python:
 
-- Mathematica、Kira、Blade 或其他 provider 的启动和进程管理；
-- `.wl` 表达式解析；
-- IBP、DE、leading singularity、Gram/Baikov、ansatz 和规范变换计算；
-- UT 或 canonical 判定；
-- DlogBasis-refine 或 MethodCard 的科学选择；
-- Mathematica kernel、notebook 或 session 状态。
+- Launching and managing Mathematica, Kira, Blade, or other provider processes;
+- Parsing `.wl` expressions;
+- IBP, DE, leading-singularity, Gram/Baikov, ansatz, and gauge-transformation calculations;
+- UT or canonical-form decisions;
+- Scientific selection of DlogBasis-refine or a MethodCard;
+- Mathematica kernel, notebook, or session state.
 
-## 文件协议
+## File protocol
 
-每个任务目录只有三个固定位置：
+Each task directory has only three fixed locations:
 
 ```text
 runs/<run-id>/tasks/<task-id>/
-├── input.json      # 对应 .wls 的标准输入
+├── input.json      # Standard input for the corresponding .wls
 └── output/
-    └── result.json # .wls 的标准结果
+    └── result.json # Standard result from the .wls
 ```
 
-`next` 直接从 `state.json` 生成任务包，不额外保存副本。`state.json`
-是唯一真相源，只有协调主 agent 通过 `workflow.py` 修改它。实现没有数据库、
-Web UI、DAG、锁服务、自动重试、checkpoint/replay 或旧 CANON 兼容层。
+`next` generates a task package directly from `state.json` without storing another
+copy. `state.json` is the sole source of truth, modified only by the coordinating
+main agent through `workflow.py`. The implementation has no database, Web UI, DAG,
+lock service, automatic retries, checkpoint/replay, or compatibility layer for
+legacy CANON.
 
-## 目录
+## Directories
 
 ```text
 CANON_neu/
@@ -120,7 +138,7 @@ CANON_neu/
 ├── README.md
 ├── project.example.json
 ├── interfaces/
-├── skills/               # 每个 workflow step 的空白 agent SKILL
+├── skills/               # Empty agent SKILL for each workflow step
 ├── mma/
 ├── methods/
 │   ├── dlogbasis/
@@ -128,13 +146,16 @@ CANON_neu/
 └── tests/
 ```
 
-旧 CANON 只提供过概念参考；本目录不导入、迁移或兼容它的代码和状态。
+Legacy CANON provided conceptual references only. This directory does not import,
+migrate, or provide compatibility with its code or state.
 
-# 当前 IBP/DE 科学平面
+# IBP/DE scientific components at the time of this record
 
-本节只描述当前无状态科学组件，不恢复上面的历史 coordinator。持续研究的 task、
-run、workspace 与 artifact 仍由根目录 `AGENTS.md` 和 `README.md` 所规定的
-`statemng` 管理；科学程序既不知道 task ID，也不修改 `.state-management/`。
+This section describes the stateless scientific components recorded here; it does
+not restore the historical coordinator above. Persistent-research tasks, runs,
+workspaces, and artifacts remain managed by `statemng` as specified in the root
+`AGENTS.md` and `README.md`. Scientific programs neither know task IDs nor modify
+`.state-management/`.
 
 ```text
 collaborator preparation
@@ -147,18 +168,19 @@ collaborator preparation
   -> canonical check -> cumulative commit -> next sector -> final shared residues
 ```
 
-- `mma/PrepareFamily.wls` 从 trusted typed family-spec 直接绑定生产 family/Kira 输入；
-- `mma/lib/BaikovDerivative.wl` 提供有界 exact zero-growth 搜索与 affine fallback；
-- `mma/lib/CandidateIBPBridge.wl` 把当前 `j[family,inds]` 候选及完整 Baikov measure
-  cofactor 公式变成带 sector/numerator metadata 的精确 targets；
-- `mma/ReduceIBP.wls` 只运行请求中指定的两个 Kira job，交付 masters 与 rules；
-- `mma/lib/DEBuilder.wl` 只消费内存数学对象，交付 matrices 与 validity。
+- `mma/PrepareFamily.wls` directly binds production family/Kira inputs from a trusted typed family-spec;
+- `mma/lib/BaikovDerivative.wl` provides a bounded exact zero-growth search and affine fallback;
+- `mma/lib/CandidateIBPBridge.wl` converts current `j[family,inds]` candidates and the complete Baikov measure cofactor formula into exact targets with sector/numerator metadata;
+- `mma/ReduceIBP.wls` runs only the two Kira jobs specified in the request and delivers masters and rules;
+- `mma/lib/DEBuilder.wl` consumes only in-memory mathematical objects and delivers matrices and validity.
 
-`canon-neu/candidate-ibp-bridge/v1` 只证明所列 targets 对 frozen masters 的有界 IBP
-闭合；不能把 cofactor search 或 reduction PASS 冒充为 UT/canonical 交付。DE 使用 column-vector convention
-`D[I,x] == A_x.I`；曲率只在一个确定性精确有理点上检查，不把该点 PASS 外推为全局
-flatness。
+`canon-neu/candidate-ibp-bridge/v1` establishes only bounded IBP closure of the
+listed targets on the frozen masters. A cofactor search or reduction PASS must
+not be presented as a UT/canonical result. The DE uses the column-vector convention
+`D[I,x] == A_x.I`. Curvature is checked at only one deterministic exact rational
+point; a PASS there must not be extrapolated to global flatness.
 
-发布代码不保存用户名、home path、固定 Kira 位置、live-run 日志、数据库、rules 或
-矩阵结果。冻结 fixture 与离线测试属于可复用输入契约；真实 Kira pentabox 始终是显式
-opt-in，并在 Git 忽略的 fresh workspace 中运行。
+The released code does not retain usernames, home paths, a fixed Kira location,
+live-run logs, databases, rules, or matrix results. Frozen fixtures and offline
+tests are reusable input contracts. A real Kira pentabox run is always explicitly
+opt-in and runs in a fresh workspace ignored by Git.

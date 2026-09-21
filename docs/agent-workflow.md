@@ -64,7 +64,7 @@ Use the project's persistent research skill, statemng tools and installed
 agent roles to initialize or resume the task and coordinate the work.
 Resolve scientific tool entries from this checkout and the installed
 configuration. Read the supplied fixture inputs without modifying them.
-Choose an applicable method from the current evidence. Limit this run to
+Follow skills/canon-workflow/SKILL.md to select each next action. Limit this run to
 30 minutes total, one reducer thread, at most two provider calls and at most
 two candidate directions per call. Do not expand these limits automatically.
 Reuse accepted artifacts and existing checker results when their inputs and
@@ -88,74 +88,36 @@ illustrated by the source of
 [RunEndToEndWorkflowLiveTest.wls](../tests/RunEndToEndWorkflowLiveTest.wls);
 running that regression is not a prerequisite for using the example.
 
-## Coordinator loop
+## Execute or resume the workflow
 
-Load `persistent-scientific-research` for a multi-step research task and follow
-[AGENTS.md](../AGENTS.md). Identify the overall task, initialize or resume it
-through `statemng`, inspect unfinished runs, and create only the next necessary
-tasks and dependencies. The assigned project workers claim and read their
-tasks, use accepted dependencies read-only, and submit new artifacts. The
-coordinator reviews and accepts them. A scientific script result does not itself
-change persistent task status; only an accepted `completed` task satisfies a
-dependency. Users do not operate the internal state CLI.
+Read [canon-workflow](../skills/canon-workflow/SKILL.md). It is the single
+scientific routing entry: identify the current artifact/result, take the first
+matching action, then read only that step's skill. Method cards describe how to
+execute the selected method; they do not define a second coordinator loop.
 
-1. **Bind and order.** Run PREPARE and DISCOVER. Resident order is ascending
-   `(propagator_count, sector_id)`; within a sector preserve the supplied Kira
-   order. Sector bits follow the full index list, with ISP bits zero and `a1`
-   least significant. Work on the first unresolved resident sector.
-2. **Build the raw DE once.** Generate ordered-master derivative targets with
-   `MasterDerivativeTargets`, and obtain missing rules through `ReduceIBP.wls`.
-   Require target coverage and rule right-hand sides closed on the selected
-   masters. `BuildSectorCutDE.wls` constructs the complete `ordered_master_de`
-   and the first cut block; later sectors use `SliceSectorCutDE.wls`.
-3. **Choose a current-sector hypothesis.** Use the evidence and method scope in
-   the table below. Integral proposals pass through the existing candidate IBP
-   bridge and `RouteCoreCandidates.wls`. Raw-DE providers need no integral
-   proposal. Keep complete reduced rows, including proper-subsector tails.
-4. **Check and complete the prefix.** Run CHECK_CORE. A passing core goes through
-   BUILD_FULL_DE, SOLVE_TAIL and CHECK_CANONICAL. The cut gate alone does not
-   certify the full dlog system. Tail solving may change lower-sector epsilon
-   normalization; retain the complete returned prefix map and matrices.
-5. **Accept and advance.** COMMIT_SECTOR records the new cumulative basis and
-   transformation; NEXT_SECTOR computes the cursor from the manifest and trace.
-   Register and accept the new result through `statemng` before dependent work.
-6. **Close the stated scope.** After every resident sector is committed,
-   FINAL_CHECK checks the cumulative transformation against the original
-   ordered DE. Only `PASS/ALL_PASS` produces the final canonical artifacts.
+The route distinguishes successful intermediate results, provisional candidates,
+method exhaustion and operational failure. In particular:
 
-Each new hypothesis has a finite declared domain: numerator/dot bounds,
-coefficient or prefactor support, loop order/dimensions when relevant, candidate
-count, and resources. Candidate-count truncation does not bound the runtime of
-an external provider; the coordinator must also supervise the elapsed budget.
+- A defined-family UT/canonical search starts with a bounded DlogBasis-refine
+  proposal. Candidate derivative data are prepared for the subsequent IBP bridge;
+  the proposal uses its own family and provider inputs. See the ordered
+  [core-selection rules](../skills/canon-search-core/SKILL.md).
+- A passing core continues through the full DE and tail; it is not a final result.
+- An absent alphabet is a supported input. The solver proposes pole factors and
+  supported quadratic-root letters, then checks the resulting span exactly.
+- An unsupported algebraic tail does not go to a rational backend by default.
+- FINAL_CHECK runs only after all resident sectors are committed.
+- Matching FINAL_CHECK ALL_PASS ends scientific work for that scope. The worker
+  submits; the coordinator reviews, accepts and delivers. The delivery describes
+  the methods used and any unmet applicable workflow requirements. Further
+  computation addresses only unresolved requested scope or changed inputs.
 
-| Current evidence | Applicable next action |
-|---|---|
-| Rational cut DE in one or several variables | Consider the [CANONICA card](../methods/canonica/SKILL.md) within its rational-transformation scope. |
-| Small rational cut DE in one variable | Consider the current automatic [Libra card](../methods/libra/SKILL.md). Its scope is narrower than Libra's full capabilities. |
-| Rational DE regular at epsilon zero | Consider the finite polynomial [epsilon-zero proposal](../methods/epsilon-zero/SKILL.md), with its declared algebraic normalization. |
-| Useful integrand/cut geometry | Use [DlogBasis-refine](../methods/dlogbasis/SKILL.md) for bounded integral candidates, then test the reduced full rows. |
-| Gram-sensitive rank gap or a core that passes while its full tail fails | Use the [Gram guidance](../methods/gram/SKILL.md) for a concrete dimensional extension or contact-term hypothesis. It is guidance, not a separate executable provider. |
-
-This is a choice among hypotheses, not a universal provider sequence. Do not
-require exhaustion of every numerator or dot ansatz before a DE method or tail
-solve. Consult a specialized card only when its actual scope matches the input.
-
-## Responding to failures and limits
-
-| Observation | Coordinator decision |
-|---|---|
-| Missing IBP targets or rules | Identify the missing targets and extend the existing reduction within budget. Reuse covered rules; an unreduced expression is not a failed canonical candidate. |
-| Candidate rank below the current master count | Record the actual rank and sampled/ansatz scope. Try a bounded independent direction, a complete replacement bundle, or an applicable DE method. The router's single-row exchanges do not enumerate all bundles. |
-| CHECK_CORE fails | Read its exact rejection signature and choose a new current-block hypothesis. A lower-sector-only repair cannot fix a failing current diagonal block. |
-| `TAIL_UNSOLVED` or `TAIL_FAIL` | Inspect the offending coupling and epsilon dependence. Use the existing tail solver or a motivated change of full integral representative, preserving complete lower-prefix normalization. |
-| `METHOD_EXHAUSTED`, `OUT_OF_SCOPE`, or a candidate budget limit | Record exactly which method/domain ended. Try another justified route only within the remaining user budget; otherwise checkpoint as inconclusive. |
-| Timeout, memory pressure, missing installation or unresolved convention | Record the run, retained outputs and restart point. Pause dependent work and report the operational condition; no mathematical nonexistence claim follows. |
-
-Provider output is provisional. A provider's exit code or self-reported epsilon
-form is not acceptance. CHECK_CORE, CHECK_CANONICAL and FINAL_CHECK supply the
-existing independent scientific gates; their symbolic flatness checks are
-stronger than DEBuilder's recorded exact-point validity samples. A cut or
-finite-field result must retain its own scope.
+The coordinator uses `statemng` and the persistent-research skill to dispatch and
+accept tasks. Scientific scripts return artifacts and receipts; they do not
+change persistent task status. Include the last result code/reason, exact input
+references, changed hypothesis, applicable skills and remaining budget in each
+continuation task. A new worker should not need the full conversation to know
+its next step.
 
 ## Artifact ownership and delivery
 

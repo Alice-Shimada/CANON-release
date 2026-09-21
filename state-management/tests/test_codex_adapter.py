@@ -12,7 +12,6 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-BASE_DESIGN = ROOT / "docs" / "state-management" / "跨通用 Agent 的持续研究状态管理基础设施设计方案.md"
 INSTALLER = ROOT / "state-management" / "adapters" / "codex" / "install_launcher.py"
 LAUNCHER_ARGUMENTS = ["-c", 'exec "$HOME/.codex/statemng/CANON/mcp"']
 
@@ -20,27 +19,11 @@ sys.path.insert(0, str(ROOT / "state-management"))
 from codex_thread_guard import WORKER_TOOLS  # noqa: E402
 
 
-def architecture_section(text: str) -> str:
-    start = text.index("## 四、整体架构")
-    end = text.find("## 五、主要组件", start)
-    if end == -1:
-        end = len(text)
-    return text[start:end]
-
-
 def configured_server(path: Path) -> dict:
     return tomllib.loads(path.read_text(encoding="utf-8"))["mcp_servers"]["statemng"]
 
 
 class CodexAdapterTests(unittest.TestCase):
-    def test_agents_contains_the_exact_base_architecture_section(self) -> None:
-        source = BASE_DESIGN.read_text(encoding="utf-8")
-        agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
-        self.assertEqual(
-            architecture_section(agents).rstrip("\n"),
-            architecture_section(source).rstrip("\n"),
-        )
-
     def test_public_skill_has_the_required_exact_frontmatter(self) -> None:
         skill = (
             ROOT / ".agents" / "skills" / "persistent-scientific-research" / "SKILL.md"

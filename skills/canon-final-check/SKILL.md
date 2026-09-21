@@ -7,6 +7,12 @@ Run `mma/CheckFullSystem.wls` with `prepared_family`, `master_basis`,
 `sector_manifest`, the original complete `ordered_master_de`, and the final
 `accepted_prefix`.
 
+Enter this step after every resident sector is committed. Scalar/core epsilon
+forms and a flat raw DE do not establish a full canonical system. If the tail
+or a sector remains unresolved, report that scope. Record FINAL_CHECK as not
+run when it has not been invoked; an intermediate calculation does not itself
+constitute a final-check pass or failure.
+
 The script independently verifies the cumulative accepted transformation against
 the ordered source matrices. It requires exact resident source/master and sector
 trace order, a complete cursor, the accepted prefix hash, invertibility, equality
@@ -29,3 +35,14 @@ version, entry hash, and Fermat executable/version/hash.
 Only `PASS/ALL_PASS` writes `canonical_basis` and `canonical_de`. This certifies
 the exact canonical form within that stated scope; candidate dlog evidence remains
 separate and does not prove a UT basis.
+
+After `PASS/ALL_PASS`, finish the existing task: the worker registers the final
+basis, DE and receipt, submits, and returns; the coordinator reviews, accepts
+when the criteria are met, delivers, and stops this scope. Review uses the
+existing receipt. Additional verification requires a specific unresolved check,
+changed inputs or implementation, or a separate user request. Delivery records
+the methods used and any unmet applicable workflow requirements; optional
+methods need not be exhausted.
+Apply the [workflow completion rule](../canon-workflow/SKILL.md) if only a subset
+was requested/completed, the inputs changed, or the user separately requested
+another deliverable.

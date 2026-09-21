@@ -1,7 +1,7 @@
-# CANON 历史 scientific worklist（非状态看板）
+# Historical CANON scientific worklist (not a state dashboard)
 
-历史记录已移至 [docs/history/WORKLIST.md](docs/history/WORKLIST.md)，
-不是当前任务状态或 authority。
+Historical records have moved to [docs/history/WORKLIST.md](docs/history/WORKLIST.md).
+They are not the current task state or its authority.
 
-当前研究状态通过 `statemng` 管理；协议见 `AGENTS.md` 与 `README.md`。
-当前发行内容见 [CHANGELOG.md](CHANGELOG.md)。
+Current research state is managed through `statemng`; see `AGENTS.md` and `README.md` for the protocol.
+See [CHANGELOG.md](CHANGELOG.md) for the current release contents.

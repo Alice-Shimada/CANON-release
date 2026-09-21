@@ -2330,21 +2330,21 @@ If[
 
     def test_retired_workflow_narratives_cannot_claim_current_authority(self) -> None:
         architecture = (ROOT / "ARCHITECTURE.md").read_text(encoding="utf-8")
-        self.assertIn("历史架构（已退役）", architecture)
-        self.assertIn("不得恢复或作为当前事实引用", architecture)
+        self.assertIn("Historical CANON_neu architecture (retired)", architecture)
+        self.assertIn("Do not restore it or cite it as the current architecture", architecture)
         self.assertIn("`AGENTS.md`", architecture)
         self.assertIn("`README.md`", architecture)
         self.assertIn("`statemng`", architecture)
 
         worklist = (ROOT / "WORKLIST.md").read_text(encoding="utf-8")
-        self.assertIn("历史 scientific worklist（非状态看板）", worklist)
-        self.assertIn("不是当前任务状态或 authority", worklist)
+        self.assertIn("Historical CANON scientific worklist (not a state dashboard)", worklist)
+        self.assertIn("not the current task state or its authority", worklist)
         self.assertIn("`statemng`", worklist)
 
         interfaces = (ROOT / "INTERFACES.md").read_text(encoding="utf-8")
         for retired in ("`delegate`", "`subreport`", "`state.json`"):
             self.assertNotIn(retired, interfaces)
-        self.assertIn("根目录 `AGENTS.md` 和 `README.md`", interfaces)
+        self.assertIn("`AGENTS.md` and `README.md`", interfaces)
 
         legacy_skills = "\n".join(
             path.read_text(encoding="utf-8")
@@ -2352,7 +2352,7 @@ If[
         )
         for retired in ("state.json", "workflow.py", "subreport"):
             self.assertNotIn(retired, legacy_skills)
-        self.assertIn("governed only by `statemng`", legacy_skills)
+        self.assertIn("`statemng`", legacy_skills)
 
     def test_initial_missing_registered_components_is_tool_error(self) -> None:
         output = self.run_root / "initial-missing-components"

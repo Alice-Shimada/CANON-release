@@ -1,38 +1,67 @@
 ---
 name: canon-libra-structured-repair
-description: 对显式满足 REPAIR_WITH_LIBRA 路由的精确单变量 1x1 已接受前缀与 2x2 尾部直和系统运行有界 Libra 尾部内部修复，并只发布与冻结前缀兼容的临时候选。
+description: Run bounded Libra repair inside the 2x2 tail of an exact single-variable direct sum with a frozen accepted 1x1 prefix, given an explicit REPAIR_WITH_LIBRA route, and publish only compatible provisional candidates.
 ---
 
-# Libra 结构化修复
+# Libra structured repair
 
-本卡是 `methods/libra` 的 `SEARCH_CORE` 之外的独立能力。它只接受已经通过
-`canon-neu/prepared-basis/v1` 校验、路线决策恰为 `REPAIR_WITH_LIBRA`、且有搜索完整候选池
-耗尽（剩余替代项为零且所有已声明候选均已尝试）证据的
-`canon-neu/libra-structured-repair-input/v1`。平台期只能作为诊断元数据，不能授权修复。
+## Trigger and prerequisites
 
-使用已安装的 WolframKernel，以 `-noinit -noprompt -script` 运行
-`run.wls <input.json> <fresh-output-dir>`。调用方通过
-`method_options.package_entry` 注入只读 Libra 主文件；运行器记录实际加载的版本身份、
-禁用 Fermatica，并仅运行
-`NewDSystem`、`Fuchsify`、`Transform`、`FactorOut`、`OverallTransformation` 与 `EFormQ`。
-输出目录必须不存在，且必须由调用方拥有。卡不调用其他求解提供者，也没有回退。
+Use only when the task explicitly requests this opt-in repair contract.
+This is separate from `methods/libra`'s `SEARCH_CORE` and the general
+`mma/SolveTail.wls` route. It requires a validated `canon-neu/prepared-basis/v1`,
+a route decision exactly equal to `REPAIR_WITH_LIBRA`, and a
+`canon-neu/libra-structured-repair-input/v1` request with complete pool-exhaustion
+evidence: no alternatives remain and every declared candidate was attempted.
+A plateau is diagnostic metadata only and does not authorize repair. The
+current general prepared-basis router does not emit `REPAIR_WITH_LIBRA`;
+this card retains a separately scoped explicit-input contract. General studies
+start at the [workflow entry](../../skills/canon-workflow/SKILL.md).
 
-当前 v1 范围严格限于：一个精确有理变量、`parameters -> {}`、一个已接受的典范 `1x1`
-前缀与一个 `2x2` 当前尾部的直和、两个交叉块均为零且禁止混合，以及尾部内部
-`current-current` ε 因子分解缺陷。已接受前缀必须在预检中精确通过平坦性、ε 因子分解、
-除正则化参数后无残余依赖及声明的 dlog 字母表；预备的 `(row,column)` 必须精确映射为
-`full_entry = 1 + {row,column}`；这不是一般非对角/完整前缀修复。多变量或非局部问题返回
-`INCONCLUSIVE/OUT_OF_SCOPE`；无效或非平坦完整系统返回
-`ERROR/INVALID_DIFFERENTIAL_SYSTEM`；有界阶段未生成满足冻结前缀身份与禁止混合块零值的
-矩阵候选时返回 `INCONCLUSIVE/METHOD_EXHAUSTED`。
+## Inputs and command
 
-成功只返回 `PROVISIONAL/CANDIDATE_TRANSFORMATION`，并写出版本化
-`canon-neu/libra-structured-repair-candidate/v1`：原始完整矩阵、变换后矩阵、完整变换、
-前缀顺序与维数、局部目标特征、Libra 身份/哈希/选项/阶段和非权威提供者证据都在产物中。
-科学接受只能由 `mma/CheckStructuredRepair.wls` 完成。提供者发布门只检查形状、声明的精确
-系数语法、可逆性、前缀身份与禁止混合；不计算最终典范形式、ε 因子分解、dlog 或目标判定。
+Use an installed WolframKernel with `-noinit -noprompt -script` to run
+`run.wls <input.json> <fresh-output-dir>`. Inject a read-only Libra entry through
+`method_options.package_entry`. The runner records the loaded version identity,
+disables Fermatica, and uses only `NewDSystem`, `Fuchsify`, `Transform`,
+`FactorOut`, `OverallTransformation`, and `EFormQ`. The caller must own the new
+output directory, which must not already exist. No other solver or fallback
+is invoked.
 
-检查器输入必须通过 `checker_options` 独立注入权威 Libra 身份、入口与 SHA-256。检查器只
-进行路径规范化、读取文件状态并计算该只读入口的哈希，绝不求值软件包或修改任何 Libra 上下文状态；
-它逐项比对提供者来源信息，使用自己实现的完整科学判据，并把认证后的
-入口/哈希/选项/阶段/运行时保留在已验证产物中。
+The v1 scope is one exact rational variable, `parameters -> {}`, and the
+direct sum of an accepted canonical `1x1` prefix and a `2x2` current tail.
+Both cross blocks must be zero and transformation mixing is forbidden. The
+defect must be an epsilon-factorization failure inside the `current-current`
+tail, with failed test `REGULATOR_INDEPENDENT_TERM`. Preflight checks the accepted prefix exactly for flatness, epsilon
+factorization, regulator independence after division, and the declared dlog
+alphabet. The prepared `(row,column)` must map exactly to
+`full_entry = 1 + {row,column}`. This contract does not cover general
+off-diagonal or full-prefix repair.
+
+Multivariable or nonlocal problems return `INCONCLUSIVE/OUT_OF_SCOPE`;
+invalid or nonflat full systems return `ERROR/INVALID_DIFFERENTIAL_SYSTEM`.
+If bounded stages produce no matrix candidate preserving the prefix identity
+and zero forbidden mixing blocks, the result is
+`INCONCLUSIVE/METHOD_EXHAUSTED`, without a nonexistence claim.
+
+## Result and next action
+
+Success is only `PROVISIONAL/CANDIDATE_TRANSFORMATION` with
+`canon-neu/libra-structured-repair-candidate/v1`: original and transformed full
+matrices, full transformation, prefix order and dimension, local target
+signature, Libra identity/hash/options/stages, and nonauthoritative evidence.
+The publication gate checks shape, declared exact coefficient syntax,
+invertibility, prefix identity, and forbidden mixing. It does not apply the
+final canonical-form, epsilon-factorization, dlog, or target-acceptance tests.
+
+Only `mma/CheckStructuredRepair.wls` can accept the scientific result. Its
+`checker_options` must independently supply the authoritative Libra identity,
+entry, and SHA-256. The checker normalizes the path, reads file metadata, and
+hashes the read-only entry; it never evaluates the package or changes Libra
+context state. It checks provider provenance field by field, applies its own
+full scientific criteria (including the full gauge relation, flatness, epsilon
+factorization, declared dlog alphabet, target removal, and preservation of all
+accepted blocks), and retains authenticated entry/hash/options/stages/runtime
+in the verified artifact. Only the checker can return
+`PASS/VERIFIED_STRUCTURED_REPAIR`; forged provider `PASS` fields are rejected
+with `FAIL/STRUCTURED_REPAIR_REJECTED`.

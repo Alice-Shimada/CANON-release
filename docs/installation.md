@@ -17,7 +17,7 @@ is not required for every task.
 | Transform a supplied rational DE, or solve its off-diagonal tail | Wolfram Language and [CANONICA](../external/CANONICA/README), entry `external/CANONICA/src/CANONICA.m` |
 | Use the single-variable Libra methods | Wolfram Language and [Libra](../external/Libra/Readme.md), entry `external/Libra/Source/Libra.m`; the current CANON providers use its Wolfram backend |
 | Produce IBP reductions | An installed [Kira](../external/Kira/README.rst) executable and its selected backend dependencies; configure Fermat when required by that installation |
-| Generate integral candidates | [DlogBasis-refine](../external/DlogBasis-refine/README.md), entry `external/DlogBasis-refine/DlogBasis.wl`, and a working [FiniteFlow](../external/FiniteFlow/README.md) Wolfram interface and native library; install [Singular](../external/Singular/README.md) when selecting its backend |
+| Generate integral candidates | [DlogBasis-refine](../external/DlogBasis-refine/README.md), entry `external/DlogBasis-refine/DlogBasis.wl`, a working [FiniteFlow](../external/FiniteFlow/README.md) Wolfram interface and native library, and [Singular](../external/Singular/README.md) for the module-lift step; all must be available where the Wolfram kernel executes |
 | Use Fermat-assisted exact algebra | [Fermatica](../external/Fermatica/README.md) and an installed [Fermat](../external/Fermat/README.md); provide `FERMATPATH` |
 | Use the fixed INITIAL reference method | [INITIAL](../external/INITIAL/README.md), FiniteFlow, and the explicit reference/configuration files described in [external dependencies](../external/README.md) |
 
@@ -85,6 +85,12 @@ The generic MCP server does not enforce worker roles by itself. The host must
 provide that separation. A host that only launches the server has not yet
 established the full persistent-workflow contract.
 
+The execution host must preserve each scientific process's return code, stdout,
+and stderr, including partial output on timeout. For a bridged execution, propagate
+cancellation to the corresponding host job. If a tool is missing from a container
+shell, check the actual Wolfram execution host before concluding that the tool is
+unavailable there.
+
 ## Generic stdio MCP registration
 
 For a host adapter, register the existing server as a local stdio process. This is
@@ -127,5 +133,5 @@ launcher enables its host-specific guard and binds the correct checkout. Do not
 use the generic process configuration to bypass that adapter's requirements.
 
 The original design documents are available for adapter developers:
-[state-management architecture](state-management/跨通用%20Agent%20的持续研究状态管理基础设施设计方案.md)
-and [agent integration](state-management/持续研究状态管理的%20Agent%20接入补充方案.md).
+[state-management architecture](state-management/state-management-design.md)
+and [agent integration](state-management/agent-integration-design.md).

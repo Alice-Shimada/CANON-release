@@ -38,7 +38,7 @@ If[MissingQ[accepted],
         "repair_eligible" -> poolExhausted,
         "repair_invoked" -> False,
         "attempts" -> (public /@ checks),
-        "preferred_next_route" -> "FIND_RATIONAL_CANONICAL_WITH_CANONICA"|>
+        "preferred_next_route" -> "SELECT_CORE_METHOD"|>
   ];
   Quit[0]
 ];

@@ -50,7 +50,7 @@ tests = {
   VerificationTest[short["reduced_rank"] === 1 && short["candidates"] === {}, True,
     TestID -> "insufficient-IBP-span-does-not-produce-a-square-basis"],
   VerificationTest[rejected["summary", "preferred_next_route"],
-    "FIND_RATIONAL_CANONICAL_WITH_CANONICA", TestID -> "DE-search-is-available-without-a-complete-LS-basis"]
+    "SELECT_CORE_METHOD", TestID -> "rank-shortage-returns-to-domain-aware-core-selection"]
 };
 report=TestReport[tests];
 Print[InputForm[<|"total"->Length[tests],"succeeded"->report["TestsSucceededCount"],"failed"->report["TestsFailedCount"]|>]];

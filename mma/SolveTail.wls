@@ -24,6 +24,8 @@ regulatorFactor[expression_] := Times @@ (#[[1]]^#[[2]] & /@
 commonTailScale[entries_] := With[{nonzero = DeleteCases[Flatten[entries], 0]},
   Together[(PolynomialGCD @@ (regulatorFactor[Numerator[#]] & /@ nonzero))/
     (PolynomialLCM @@ (regulatorFactor[Denominator[#]] & /@ nonzero))]];
+affineEpsilonQ[value_] := And @@ (PolynomialQ[#, regulator] &&
+  Exponent[#, regulator] <= 1 & /@ Flatten[value]);
 
 If[!CanonMethodCard`EpsilonFactorizedQ[matrices, regulator],
   tailEntries = matrices[[All, lowerDimension + 1 ;; dimension, 1 ;; lowerDimension]];
@@ -34,10 +36,73 @@ If[!CanonMethodCard`EpsilonFactorizedQ[matrices, regulator],
   matrices = CanonMethodCard`GaugeTransform[matrices, variables, normalization];
 ];
 
+(* Resum a scalar affine primitive at a quadratic-root pole. A nonaffine
+   input may first use the same cut normalization with a neutral lower lift. *)
+scalarRootPrimitive[] := Module[
+  {trialT = transformation, trial = matrices, neutral, scale, normalization,
+   roots, radicand, primitive, p, q, coordinate, marker, equations, solutions,
+   c, change, trialAlphabet},
+  If[dimension - lowerDimension =!= 1 || lowerDimension === 0, Return[$Failed]];
+  roots = DeleteDuplicates @ Cases[trial,
+    Power[b_, exponent_Rational] /; Denominator[exponent] === 2 &&
+      !FreeQ[b, Alternatives @@ variables] :> Factor[b], Infinity];
+  If[Length[roots] =!= 1, Return[$Failed]];
+  trialAlphabet = DeleteDuplicates @ Join[alphabet,
+    CanonMethodCard`QuadraticRootLetters[trial, variables]];
+  If[CanonMethodCard`DLogConnectionQ[trial, variables, regulator, trialAlphabet],
+    Return[{trialT, trial, trialAlphabet, method}]];
+  neutral = !affineEpsilonQ[trial];
+  If[neutral,
+    trialT[[dimension, 1 ;; lowerDimension]] = ConstantArray[0, lowerDimension];
+    trial = CanonMethodCard`GaugeTransform[fullDE["source_matrices"], variables, trialT]];
+  If[CanonMethodCard`ZeroMatrixQ[{trial[[All, dimension, 1 ;; lowerDimension]]}],
+    Return[$Failed]];
+  scale = commonTailScale[trial[[All, dimension, 1 ;; lowerDimension]]];
+  normalization = DiagonalMatrix[Join[ConstantArray[1, lowerDimension], {scale}]];
+  trialT = Map[Factor, trialT.normalization, {2}];
+  trial[[All, dimension, 1 ;; lowerDimension]] =
+    Map[Together, trial[[All, dimension, 1 ;; lowerDimension]]/scale, {2}];
+  If[!affineEpsilonQ[trial], Return[$Failed]];
+  primitive = Table[CanonMethodCard`AlgebraicPrimitive[
+    trial[[All, dimension, j]] /. regulator -> 0, variables], {j, lowerDimension}];
+  If[!FreeQ[primitive, $Failed], Return[$Failed]];
+  radicand = First[roots];
+  p = Map[Together, trial[[All, 1 ;; lowerDimension, 1 ;; lowerDimension]]/regulator, {3}];
+  q = Together /@ (trial[[All, dimension, dimension]]/regulator);
+  coordinate = SelectFirst[Range[Length[variables]], D[radicand, variables[[#]]] =!= 0 &];
+  marker = Unique["residue$"];
+  equations = Last /@ CoefficientRules[Numerator[Together[PolynomialRemainder[
+    Numerator[Together[q[[coordinate]] -
+      marker D[radicand, variables[[coordinate]]]/radicand]],
+    radicand, variables[[coordinate]]]]], variables];
+  solutions = Solve[Thread[equations == 0], marker];
+  If[solutions === {}, Return[$Failed]];
+  c = marker /. First[solutions];
+  If[!NumberQ[c], Return[$Failed]];
+  change = IdentityMatrix[dimension];
+  change[[dimension, 1 ;; lowerDimension]] = primitive/(1 + 2 c regulator);
+  change[[dimension, dimension]] = 1/(1 + 2 c regulator);
+  trial[[All, dimension, 1 ;; lowerDimension]] = Table[Factor /@ (
+    (1 + 2 c regulator) trial[[v, dimension, 1 ;; lowerDimension]] +
+    regulator (q[[v]] primitive - primitive.p[[v]]) - D[primitive, variables[[v]]]),
+    {v, Length[variables]}];
+  trialT = Map[Factor, trialT.change, {2}];
+  trialAlphabet = DeleteDuplicates @ Join[alphabet,
+    CanonMethodCard`DLogAlphabet[trial, variables, regulator],
+    CanonMethodCard`QuadraticRootLetters[trial, variables]];
+  If[CanonMethodCard`DLogConnectionQ[trial, variables, regulator, trialAlphabet],
+    {trialT, trial, trialAlphabet,
+      If[neutral, "scalar-cut-root-primitive", "scalar-root-primitive"]}, $Failed]
+];
+
+tailSolved = False;
+completion = scalarRootPrimitive[];
+If[completion =!= $Failed,
+  {transformation, matrices, alphabet, method} = completion; tailSolved = True];
+
 (* arXiv:2206.04609, Eq. (78), in the convention old = T.new. *)
 If[!CanonMethodCard`EpsilonFactorizedQ[matrices, regulator] &&
-    And @@ (PolynomialQ[#, regulator] && Exponent[#, regulator] <= 1 & /@
-      Flatten[matrices]),
+    affineEpsilonQ[matrices],
   primitive[components_] := primitive[components] =
     CanonMethodCard`AlgebraicPrimitive[components, variables];
   correction = Table[primitive[matrices[[All, i, j]] /. regulator -> 0],
@@ -97,7 +162,13 @@ firstDerivativeCompletion[] := Module[
     {trialT, trial, trialAlphabet}, $Failed]
 ];
 
-tailSolved = CanonMethodCard`DLogConnectionQ[matrices, variables, regulator, alphabet];
+If[!tailSolved,
+  tailSolved = CanonMethodCard`DLogConnectionQ[matrices, variables, regulator, alphabet]];
+If[!tailSolved && CanonMethodCard`EpsilonFactorizedQ[matrices, regulator],
+  alphabet = DeleteDuplicates @ Join[alphabet,
+    CanonMethodCard`QuadraticRootLetters[matrices, variables]];
+  tailSolved = CanonMethodCard`DLogConnectionQ[matrices, variables, regulator, alphabet]
+];
 If[!tailSolved,
   completion = firstDerivativeCompletion[];
   If[completion =!= $Failed,
@@ -105,11 +176,20 @@ If[!tailSolved,
     method = "scalar-first-derivative-completion"; tailSolved = True]
 ];
 
-unsolved[] := (CanonMethodCard`WriteResult[task, outputDir,
+unsolved[reason_:"backend_no_transformation"] := (CanonMethodCard`WriteResult[task, outputDir,
   "INCONCLUSIVE", "TAIL_UNSOLVED", <||>,
-  <|"candidate_id" -> core["candidate_id"], "method" -> method|>]; Quit[0]);
+  <|"candidate_id" -> core["candidate_id"], "method" -> method,
+    "reason" -> reason,
+    "diagnostics" -> <|"current_master_count" -> dimension - lowerDimension,
+      "epsilon_factorized" -> CanonMethodCard`EpsilonFactorizedQ[matrices, regulator],
+      "affine_in_epsilon" -> affineEpsilonQ[matrices],
+      "rational_coefficients" -> And @@
+        (CanonMethodCard`ExactRationalExpressionQ /@ Flatten[matrices]),
+      "alphabet_candidate_count" -> Length[alphabet]|>|>]; Quit[0]);
 
 If[!tailSolved,
+  If[!And @@ (CanonMethodCard`ExactRationalExpressionQ /@ Flatten[matrices]),
+    unsolved["remaining_algebraic_tail_outside_rational_CANONICA_domain"]];
   method = "canonica-off-diagonal";
   package = CanonMethodCard`ResolveMethodPackage[task, inputPath, "CANONICA`"];
   Get[package["entry"]];

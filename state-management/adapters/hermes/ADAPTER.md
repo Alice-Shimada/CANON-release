@@ -1,7 +1,15 @@
 # Hermes Adapter
 
-主 Agent 使用 Hermes 当前会话提供的原生 subagent 机制创建 subagent，只传入总体任务名、内部任务 ID 和 `statemng` 协议。subagent 启动后依次执行 `task claim` 与 `task show`，结束前执行 `task submit`、`task block` 或 `task fail`。
+The main agent creates subagents through the native mechanism supplied by the
+current Hermes session, passing only the overall task name, internal task ID, and
+`statemng` protocol. Each subagent calls `task claim` and then `task show` after
+starting, and finishes with `task submit`, `task block`, or `task fail`.
 
-并行任务由主 Agent 分别创建 subagent；同时运行数不得超过当前 Hermes 会话的原生并发限制。主 Agent 等待各 subagent 结束，并检查对应任务状态。若 subagent 异常退出且任务仍为 `running`，主 Agent 检查 workspace 和 artifact 后，通过 `task fail --retryable true` 或 `task block` 记录决定。
+The main agent creates a separate subagent for each parallel task. The number
+running concurrently must not exceed the native limit of the current Hermes
+session. The main agent waits for subagents to finish and checks the corresponding
+task states. If a subagent exits abnormally while its task remains `running`, the
+main agent inspects the workspace and artifacts, then records its decision through
+`task fail --retryable true` or `task block`.
 
-Adapter 不保存状态，也不启动 Hermes 之外的 Agent 进程。
+The adapter stores no state and starts no agent processes outside Hermes.
