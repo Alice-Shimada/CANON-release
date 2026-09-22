@@ -1,88 +1,108 @@
-# Libra 有理微分系统候选路线（当前自动实现：单变量）
+---
+name: canon-libra-core
+description: Propose a core transformation for a small exact rational one-variable cut DE using bounded Libra Fuchsify and FactorOut stages.
+---
 
-## 目的
+# Libra rational-DE candidates: current automatic scope is one variable
 
-使用调用方注入并实际加载的 Libra，为有理当前扇区割系统提出 ε 形式变换。Libra 本身可以保存
-并同步变换多变量微分系统；当前 `run.wls` 只实现并
-验收了小型单变量自动路线。CANON 不负责安装或登记 Libra，也不依赖某个工具工作区的
-目录布局。
+## Trigger and scope
 
-## 适用范围
+Use the caller's supplied, loaded Libra package to propose an epsilon-form
+transformation for a rational current-sector cut system. Libra itself can
+store and transform multivariable DEs; this runner implements and has been
+validated only for small single-variable automatic problems. CANON does not
+install or register Libra and assumes no particular tool workspace layout.
 
-- 恰好一个运动学变量；
-- 有理方阵微分方程；
-- 只使用 Mathematica，并设置 `Libra`$LibraUseFermat = False`；
-- 系统足够小，可使用无前端的 `Fuchsify` 后接 `FactorOut` 路线。
+The supported input has exactly one kinematic variable and a rational square
+DE matrix small enough for headless `Fuchsify` followed by `FactorOut`.
+The runner uses Mathematica with ``Libra`$LibraUseFermat = False``.
+Fermatica, `BirkhoffGrothendieck`, interactive visual operations, algebraic
+roots, and physical boundary conditions are outside this card's scope.
+For defined-family UT or canonical integral-basis discovery, respect the bounded
+[workflow entry](../../skills/canon-workflow/SKILL.md); an available rational
+DE alone is not a reason to skip integral candidates.
 
-Fermatica、`BirkhoffGrothendieck`、交互式可视操作、代数根和物理边界条件不属于
-本卡范围。
+## Multivariable capabilities and the runner's limit
 
-## Libra 的多变量能力与本卡边界
+Libra's `NewDSystem[ds,{x->Mx,y->My,...}]` stores a multivariable connection.
+`Transform[ds,t]` updates every direction with its corresponding derivative
+term, and `EFormQ[ds,eps]` checks all directions. The one-variable restriction
+belongs to this runner, not to Libra as a whole.
 
-Libra 的 `NewDSystem[ds,{x->Mx,y->My,...}]` 以变量到连接矩阵的关联保存
-多变量系统；`Transform[ds,t]` 会对每个变量方向使用相应导数项同步更新连接矩阵，
-`EFormQ[ds,eps]` 也会检查全部变量方向。因此，“当前卡只接受一个变量”不是 Libra
-本身的能力限制。
+`Fuchsify[ds,x]`, `FactorOut[ds,x,eps,mu]`, and visual balancing first construct
+a transformation from the selected direction `ds[x]`. The bundled two-variable
+tutorial applies `Fuchsify[ds,x]` and `Fuchsify[ds,y]` as needed, each followed
+by `Transform[ds,t]` on the full system. It then combines samples of all
+directions at common exact kinematic points for `FactorDependence` to find a
+shared epsilon-factorization transformation. The bundled three-variable
+presentation combines directional `VisBalancing`, single-direction `FactorOut`,
+and `BlockTriangularToFuchsian`, then partially specializes each matrix only
+in its own differential variable before `FactorDependence`. These examples
+demonstrate multivariable use of the components; the presentation also lists
+more systematic multivariable treatment as future work.
 
-但 `Fuchsify[ds,x]`、`FactorOut[ds,x,eps,mu]` 和可视平衡接口都先从指定方向
-`ds[x]` 构造变换。随包教程的二维例子在需要时依次执行
-`Fuchsify[ds,x]`、`Fuchsify[ds,y]`，每次都用 `Transform[ds,t]` 作用于完整系统；随后
-把所有变量方向在共同精确运动学点的样本合并，交给 `FactorDependence` 寻找一个共同的
-ε 因子分解变换。随包演示文稿的三变量例子则混合使用逐方向
-`VisBalancing`、单方向 `FactorOut`、`BlockTriangularToFuchsian`，并在
-`FactorDependence` 前只对各矩阵对应的微分变量作部分特化。两份材料都证明这些组件能
-用于多变量系统，但演示文稿同时把“更系统的多变量处理”列为待开发能力。
+A noninteractive sequence of directional `Fuchsify` calls would therefore be
+a bounded design based on those APIs, not an already validated capability of
+this card. Such an implementation would need explicit variable traversal and
+revisit rules, deterministic nonsingular sample choices, and saved samples.
+Partial or full specialization can propose candidates but cannot certify them.
+Acceptance still requires joint exact gauge, directional Fuchsianity, flatness,
+and epsilon-factorization checks on the unspecialized full symbolic system.
+Until that loop is implemented and validated, the runner returns
+`INCONCLUSIVE/OUT_OF_SCOPE` for multivariable input, without a mathematical
+rejection of the candidate.
 
-CANON 若采用非交互的逐变量 `Fuchsify`，它只是基于现有接口和教程提出的有界设计，尚未
-通过本卡的多变量内核验收。实现时必须明确变量遍历/回访和确定性取值策略，避开奇点并
-保存取值；部分或完整特化都只能帮助构造候选，不能作接受证据。结束时仍须对未
-取值的完整符号系统联合检查
-精确规范关系、各方向弗克斯性、平坦性与 ε 因子分解。完成这一闭环前，多变量输入
-仍由当前运行器明确返回 `INCONCLUSIVE/OUT_OF_SCOPE`，而不是被
-描述为 Libra 不支持，也不会把尚未实现的卡范围
-解释为候选的数学失败。
+`EFormQ[ds,eps]` only checks that dividing each connection matrix by `eps`
+removes its `eps` dependence. It does not establish membership in a dlog
+alphabet. Multivariable canonical acceptance also needs CANON's independent
+multivariable dlog decomposition checks.
 
-还要注意，Libra 的 `EFormQ[ds,eps]` 只判定每个连接矩阵除以 `eps` 后是否不再含
-`eps`；它不证明连接属于某个 dlog 字母表。多变量典范形式的接受因而还需要 CANON 独立实现并
-验收多变量 dlog 分解，不能只依赖提供者的 `EFormQ`。
+## Inputs, invocation, and dependent rows
 
-## 调用要求
+From `project_root`, run
+`wolframscript -file methods/libra/run.wls INPUT.json OUTPUT_DIR`
+with standard `SEARCH_CORE` input,
+`sector_basis`, `sector_cut_de`, and an available Wolfram kernel.
+Supply `method_options.package_entry`, relative
+to `input.json` if not absolute, or install the `Libra` context on Wolfram
+`$Path` for `FindFile["Libra`"]`. The card records the entry, SHA-256,
+resolution source, reported Libra version, and Wolfram `$Version`/`$SystemID`.
+It does not read hep-tools machine state.
 
-使用标准 `SEARCH_CORE` 任务输入和输出目录运行 `run.wls`。调用环境必须提供可执行的
-Wolfram 内核，并以以下二选一方式提供 Libra：
+When `method_options.dependent_row_strategy` is omitted or `automatic`, the
+card keeps Libra's single automatic `FactorOut` call. For `sector-de-closure`,
+provide a `canon-neu/libra-dependent-row-hierarchy/v1` artifact in `payload`.
+Its `sector_hierarchy` is an `n×n` binary relation mask in the cut basis order,
+not a row list. Its diagonal must be all ones; cycles are allowed. It must
+bind sector/family/basis IDs and the complete basis order, with ordered
+`master_sector_labels`, `producer`/`tool_revision`, `MappedSectors=False`,
+source artifact/hash, and a positive integer `max_mask_nonzeros`.
 
-1. 在 `method_options.package_entry` 中给出 Libra 主文件路径；相对路径以
-   `input.json` 所在目录为基准；
-2. 将 `Libra`` 安装到标准 Wolfram `$Path`，由卡使用 `FindFile["Libra`"]` 解析。
+The explicit route derives `hde` from the actual post-Fuchsify residue matrices
+with the semantics of Libra's automatic call and computes
+`TClosure[hsector+hde]`. The budget counts mask ones after closure. If exceeded,
+the card neither truncates nor uses `All`, retries, or calls `FactorOut`.
+Within budget it calls `FactorOut[...,DependentRowIndices->combinedMask]`
+once. Invalid schema, identity/order, mask, provenance, or budget is rejected
+before searching.
 
-卡会记录实际解析入口、入口 SHA-256、解析方式、Libra 报告的版本以及 Wolfram
-`$Version`/`$SystemID`，但不读取 hep-tools 的机器状态。
+## Result and next action
 
-`method_options.dependent_row_strategy` 未给出或为 `automatic` 时，卡保持 Libra
-原有的单次 `FactorOut` 自动调用。调用方也可显式选择 `sector-de-closure`，并在 `payload`
-提供 `canon-neu/libra-dependent-row-hierarchy/v1` 产物。该产物的 `sector_hierarchy` 是与割中
-有序基同序的 `n×n` 0/1 关系掩码，不是行列表；对角必须全为 1，环路合法。它还必须精确
-绑定扇区/族/基 ID 与完整基顺序，记录每个主积分的有序扇区标签、`producer`/`tool_revision`、
-`MappedSectors=False`、源产物/哈希和正整数 `max_mask_nonzeros`。
+The card records the loaded Libra identity, exact transformation, transformed
+matrix, and provider `EFormQ`, without a literal version-equality gate.
+Until `mma/CheckSectorCore.wls` independently checks it, output is only
+`PROVISIONAL/CANDIDATE_TRANSFORMATION`; the provider never returns `PASS` or
+a mathematical `FAIL`. The explicit hierarchy route also records the strategy,
+artifact identity/hash, `MappedSectors` mode, stage, dimension,
+`hsector`/`hde`/combined-mask counts, budget, and deterministic `C[*] -> 1`
+specialization. After `CHECK_CORE` passes, continue with `BUILD_FULL_DE`,
+`SOLVE_TAIL`, and `CHECK_CANONICAL`; use `FINAL_CHECK` when the stated scope is
+complete.
 
-显式路线只从实际 Fuchsify 后矩阵的留数构造与 Libra 自动调用同语义的 `hde`，计算
-`TClosure[hsector+hde]`。闭包后按掩码中 1 的个数检查预算；超限不截断、
-不用 `All`、不重试，也不调用 `FactorOut`。预算内只调用一次
-`FactorOut[...,DependentRowIndices->combinedMask]`。产物模式、身份/顺序、掩码、来源信息或
-预算无效时，在搜索前以失败封闭方式拒绝。
-
-## 结果与证据
-
-本卡记录实际加载的 Libra 版本身份、精确变换、变换后矩阵和 Libra `EFormQ` 结果，不设置
-字面版本等值门。
-在 `mma/CheckSectorCore.wls` 独立验证前，提供者输出始终只是
-`PROVISIONAL/CANDIDATE_TRANSFORMATION`，不能返回 `PASS` 或数学拒绝 `FAIL`。
-显式层级路线还记录策略、产物身份/哈希、`MappedSectors` 模式、阶段、维数、
-`hsector`/`hde`/组合掩码非零数、预算以及确定性的 `C[*] -> 1` 特化。
-
-## 边界
-
-本卡是有界自动或调用方显式层级路线。若 `Fuchsify` 或 `FactorOut` 无法给出结论，则返回
-`INCONCLUSIVE/METHOD_EXHAUSTED`；非法或非平坦系统返回
-`ERROR/INVALID_DIFFERENTIAL_SYSTEM`。不得静默回退到 `Rookie`、交互式操作、
-Fermatica、CANONICA、INITIAL 或低扇区重写。
+Unresolved `Fuchsify` or `FactorOut` stages return
+`INCONCLUSIVE/METHOD_EXHAUSTED`; invalid or nonflat input returns
+`ERROR/INVALID_DIFFERENTIAL_SYSTEM`. Exhaustion applies to this bounded route,
+not to the existence of a canonical basis. There is no silent fallback to
+`Rookie`, interactive operations, Fermatica, CANONICA, INITIAL, or rewriting
+the lower-sector basis. Return the stopped stage and its evidence to the
+workflow entry.

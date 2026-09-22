@@ -77,6 +77,20 @@ incoming=Normal[SparseArray[{{2,1}->1},{3,3}]];
 incomingCase=runCase["incoming-normalization",{(eps incoming+eps^2 n1)/x,0 n1},
  {eps incoming[[1;;2,1;;2]]/x,ConstantArray[0,{2,2}]},None];
 
+oddLetter=(x+Sqrt[x^2+y])/(x-Sqrt[x^2+y]);
+oddCanonical=(eps n1 Together[D[oddLetter,#]/oddLetter] & /@ {x,y});
+oddRaw=MapThread[Map[Together,(D[knownT,#2]+knownT.#1).Inverse[knownT],{2}]&,
+ {oddCanonical,{x,y}}];
+oddAlphabetCase=runCase["algebraic-letter-discovery",oddRaw,
+ ConstantArray[ConstantArray[0,{2,2}],2],oddCanonical];
+
+polePolynomial=x^2+y;
+poleDiagonal=DiagonalMatrix[{0,0,1}];
+poleRaw=(eps (poleDiagonal/polePolynomial+n1/polePolynomial^(3/2))
+ D[polePolynomial,#] & /@ {x,y});
+rootPoleCase=runCase["algebraic-root-pole",poleRaw,
+ ConstantArray[ConstantArray[0,{2,2}],2],None];
+
 
 runDerivativeCase[name_, diagonal_:False] := Module[
  {q, mix, known, canonical, raw, selected, full, core, tail, check},
@@ -112,7 +126,34 @@ runDerivativeCase[name_, diagonal_:False] := Module[
 coupledDerivative=runDerivativeCase["coupled-derivative"];
 insufficientDerivative=runDerivativeCase["insufficient-derivative",True];
 
+(* An unsupported algebraic tail must return useful evidence without loading
+   the rational backend. The deliberately absent entry makes that observable. *)
+unsupportedRaw={eps {{0,0},{1/Sqrt[1+x+x^3],0}}};
+unsupportedFull=<|"family_id"->family,"sector"->sector,
+ "current_basis_id"->"cubic-root","accepted_prefix_id"->"unit-lower",
+ "source_basis"->{l1,j},"source_matrices"->unsupportedRaw,
+ "variables"->{x},"regulator"->eps,"alphabet"->{},
+ "convention"->"old=T.new",
+ "block_boundaries"-><|"lower_dimension"->1,"current_dimension"->1|>,
+ "candidates"->{<|"candidate_id"->"cubic-root",
+   "full_transformation"->IdentityMatrix[2],"transformed_matrices"->unsupportedRaw|>}|>;
+unsupportedTail=invoke["unsupported-root-tail","mma/SolveTail.wls","SOLVE_TAIL",sector,
+ <|"full_sector_de"->put["unsupported-root-full",unsupportedFull],
+   "core_transform"->put["unsupported-root-core",<|"candidate_id"->"cubic-root"|>],
+   "method_options"-><|"package_entry"->temporary<>"/absent-CANONICA.m"|>|>];
+
 tests={
+ VerificationTest[{
+   unsupportedTail["process","ExitCode"],unsupportedTail["result","code"],
+   unsupportedTail["result","summary","reason"],
+   Lookup[unsupportedTail["result","summary","diagnostics"],
+     {"current_master_count","epsilon_factorized","affine_in_epsilon","rational_coefficients"}]},
+  {0,"TAIL_UNSOLVED","remaining_algebraic_tail_outside_rational_CANONICA_domain",
+   {1,True,True,False}},TestID->"unsupported-root-returns-diagnostics-without-rational-backend"],
+ VerificationTest[Last[oddAlphabetCase["runs"]]["result","code"],"ALL_PASS",
+  TestID->"root-odd-letter-is-discovered-without-declared-alphabet"],
+ VerificationTest[Last[rootPoleCase["runs"]]["result","code"],"ALL_PASS",
+  TestID->"regulator-rational-shear-removes-nonlogarithmic-root-pole"],
  VerificationTest[coupledDerivative["tail","result","summary","method"],
   "scalar-first-derivative-completion",TestID->"coupled-current-block-uses-one-simple-seed"],
  VerificationTest[coupledDerivative["check","result","code"],"CANONICAL_PASS",

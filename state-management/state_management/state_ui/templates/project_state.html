@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -11,25 +11,25 @@
   <header class="project-header">
     <div class="project-summary">
       <div>
-        <div class="eyebrow">总体任务</div>
+        <div class="eyebrow">Overall task</div>
         <h1>{{TASK_NAME}}</h1>
       </div>
-      <div class="summary-stats" aria-label="任务状态统计">{{STATUS_STATS}}</div>
+      <div class="summary-stats" aria-label="Task state counts">{{STATUS_STATS}}</div>
     </div>
     <details class="project-goal">
-      <summary>总体目标</summary>
+      <summary>Overall goal</summary>
       <div class="goal-copy">{{GOAL}}</div>
     </details>
   </header>
 
   <main class="workspace">
-    <section class="graph-panel" aria-label="任务依赖图">
+    <section class="graph-panel" aria-label="Task dependency graph">
       <div class="graph-toolbar">
         <div>
-          <strong>任务依赖</strong>
-          <span>箭头由前置任务指向后续任务</span>
+          <strong>Task dependencies</strong>
+          <span>Arrows point from prerequisites to dependent tasks</span>
         </div>
-        <span class="drag-hint">节点可临时拖拽 · 刷新后恢复</span>
+        <span class="drag-hint">Drag nodes to move them temporarily · Refresh to reset</span>
       </div>
       <div class="graph-viewport" tabindex="0">
         <div id="graph-canvas" class="graph-canvas" style="width:{{CANVAS_WIDTH}}px;height:{{CANVAS_HEIGHT}}px">
@@ -46,7 +46,7 @@
       </div>
     </section>
 
-    <aside class="detail-panel" aria-label="任务详情">
+    <aside class="detail-panel" aria-label="Task details">
       {{DETAILS}}
     </aside>
   </main>

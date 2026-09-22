@@ -145,9 +145,36 @@ rootRun = runFinal["algebraic-letters", payload[
   put["algebraic-accepted", rootAccepted]]];
 rootCanonical = artifact[rootRun, "canonical_de"];
 
+(* Both directions have constant dlog residues, but their commutator only
+   vanishes at the former fixed sample y=3/5. This is not an integrable DE. *)
+stationaryLetter = 1 + (y - 3/5)^2;
+stationaryMatrices = {
+  eps {{0, 1}, {0, 0}}/x,
+  eps {{0, 0}, {1, 0}} D[stationaryLetter, y]/stationaryLetter
+};
+stationaryOrdered = Join[ordered,
+  <|"variables" -> {x, y}, "matrices" -> stationaryMatrices|>];
+stationaryAccepted = seal @ Join[accepted, <|
+  "variables" -> {x, y}, "matrices" -> stationaryMatrices,
+  "alphabet" -> {x, stationaryLetter}, "transformation" -> IdentityMatrix[2],
+  "basis" -> ordered["basis"]|>];
+stationaryRun = runFinal["nonflat-away-from-sample", payload[
+  sharedPreparedPath, masterPath, manifestPath,
+  put["stationary-ordered", stationaryOrdered],
+  put["stationary-accepted", stationaryAccepted]]];
+
 Get[FileNameJoin[{repoRoot, "mma", "lib", "MethodCardCore.wl"}]];
 
 tests = {
+  VerificationTest[
+    CanonMethodCard`FlatConnectionQ[stationaryMatrices, {x, y}],
+    False, TestID -> "flatness-is-a-symbolic-identity-not-a-fixed-point-test"],
+  VerificationTest[
+    stationaryRun["result", "code"] === "FULL_SYSTEM_FAIL" &&
+      !stationaryRun["result", "summary", "checks", "flat_connection"] &&
+      stationaryRun["result", "summary", "checks", "exact_global_gauge"] &&
+      stationaryRun["result", "summary", "checks", "constant_residue_dlog"],
+    True, TestID -> "noncommuting-dlog-residues-cannot-pass-at-a-stationary-sample"],
   VerificationTest[
     CanonMethodCard`DLogResidues[
       {{{eps (1/x + 2 (x - 2))}}, {{0}}}, {x, y}, eps, {x}],
@@ -190,7 +217,7 @@ tests = {
     sharedCanonicalDE["alphabet"] === {x, y, x + y} &&
     sharedCanonicalDE["residue_matrices"] === {{{1}}, {{2}}, {{3}}} &&
     sharedCanonicalDE["check_scope"] ===
-      "exact-global-gauge-deterministic-exact-rational-point-flatness-multivariable-shared-residue-declared-dlog-span" &&
+      "exact-global-gauge-symbolic-flatness-multivariable-shared-residue-declared-dlog-span" &&
     And @@ Values[sharedCanonicalDE["checks"]],
     True, TestID -> "two-variable-system-uses-one-shared-residue-vector"],
   VerificationTest[

@@ -10,7 +10,7 @@ Run `mma/CheckSectorCore.wls` with `sector_basis`, `sector_cut_de`, and
 
 - reduction-rank invertibility;
 - the exact gauge identity for `old_basis = T . new_basis`;
-- flatness at one deterministic exact-rational point;
+- exact symbolic flatness in every pair of variables;
 - epsilon factorization.
 
 The first passing candidate returns `PASS/CORE_PASS` and `core_transform`; later
@@ -18,7 +18,9 @@ candidates are not checked.  A rejected candidate records its stable ID and exac
 rejection signature.  Exhausting an upstream-complete pool returns
 `FAIL/CORE_FAIL` with `repair_eligible -> True`; exhausting only the current
 budget is `INCONCLUSIVE/CANDIDATE_BUDGET_EXHAUSTED`. Failure publishes
-`preferred_next_route -> "FIND_RATIONAL_CANONICAL_WITH_CANONICA"`; DE search
-is available without exhausting the numerator/dot ansatz. The checker never
-invokes a provider itself. Candidate group exhaustion is scoped to the declared
+`preferred_next_route -> "SELECT_CORE_METHOD"`; follow
+[core selection](../canon-search-core/SKILL.md) using the rejection signature and
+coefficient domain. A failure does not automatically justify a rational backend.
+DE search is available without exhausting the numerator/dot ansatz. The checker
+never invokes a provider itself. Candidate group exhaustion is scoped to the declared
 rank basis and single-row exchanges, not every possible integral representative.

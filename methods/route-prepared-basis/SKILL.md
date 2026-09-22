@@ -1,30 +1,52 @@
-# 预备基确定性路由器
+---
+name: canon-route-prepared-basis
+description: Validate and classify an explicitly supplied prepared-basis artifact without invoking a scientific provider or accepting a result.
+---
 
-## 目的
+# Deterministic prepared-basis router
 
-本方法卡校验一个 `canon-neu/prepared-basis/v1` 产物，并输出一个
-`canon-neu/route-decision/v1` 产物。它只执行确定性编排：不运行提供者、不改变候选、
-不接受科学结论，也不检查提供者安装。
+## Trigger and inputs
 
-使用 `run.wls <input.json> <output_dir>` 运行；输入为
-`canon-neu/script-input/v1` 封装，`step` 是 `ROUTE_PREPARED_BASIS`，`payload` 包含
-`prepared_basis` Mathematica 表达式描述符。结果为 `PROVISIONAL/ROUTE_DECISION`；
-格式错误或自相矛盾的产物返回 `ERROR/INVALID_PREPARED_BASIS`，并包含稳定的 `field`
-与原因。
+Use only when a task explicitly supplies the prepared-basis routing contract.
+The overall study starts at the [workflow entry](../../skills/canon-workflow/SKILL.md).
 
-## 决策及其优先级
+Validate a `canon-neu/prepared-basis/v1` artifact and produce
+`canon-neu/route-decision/v1`. This card only performs deterministic routing:
+it runs no provider, changes no candidate, accepts no scientific conclusion,
+and does not check tool installations.
 
-1. 已经呈 canonical form：`VERIFY_CANONICAL_DE`。
-2. 已选候选可疑且仍有替代项：`REFINE_SECTOR_UT_CANDIDATES`。
-3. core 已 canonical 且缺陷位于 lower-to-current coupling：`SOLVE_TAIL`。
-4. 预期存在有理变换：`FIND_RATIONAL_CANONICAL_WITH_CANONICA`。
-5. 其余：`DIAGNOSE_OR_CHANGE_VARIABLES`。
+## Command and result
 
-后两条求解路线不要求候选池耗尽。`ut_evidence_references` 只记录来源，
-不控制路线。通用 tail 使用 `mma/SolveTail.wls`；旧 Libra 直和切片只保留为
-单独的有界方法，不是通用流程的 tail backend。
+From `project_root`, run
+`wolframscript -file methods/route-prepared-basis/run.wls INPUT.json OUTPUT_DIR`
+with a
+`canon-neu/script-input/v1` envelope, step `ROUTE_PREPARED_BASIS`, and a
+`prepared_basis` Mathematica-expression descriptor in `payload`. Success is
+`PROVISIONAL/ROUTE_DECISION`. Malformed or contradictory artifacts return
+`ERROR/INVALID_PREPARED_BASIS` with a stable `field` and reason.
 
-## 输出边界
+## Decisions in precedence order
 
-路线产物记录预备/族/基身份、已选候选、决策、稳定原因，以及 UT 证据不控制路线这一
-明确事实。路线决策不等于科学接受，因此本卡永远不返回 `PASS` 或 `FAIL`。
+1. Already canonical: `VERIFY_CANONICAL_DE`.
+2. Suspicious selected candidate with alternatives remaining:
+   `REFINE_SECTOR_UT_CANDIDATES`.
+3. Canonical core with a `lower-to-current` coupling defect: `SOLVE_TAIL`.
+4. Rational transformation expected: `FIND_RATIONAL_CANONICAL_WITH_CANONICA`.
+5. Otherwise: `DIAGNOSE_OR_CHANGE_VARIABLES`.
+
+The `SOLVE_TAIL` and CANONICA routes do not require candidate-pool exhaustion.
+`ut_evidence_references` records provenance without controlling the decision.
+General tail solving uses `mma/SolveTail.wls`. The specialized Libra direct-sum repair
+remains a separate bounded method; this router does not select
+`REPAIR_WITH_LIBRA`. For the earlier family-based method choice, follow the
+[workflow entry](../../skills/canon-workflow/SKILL.md).
+
+## Next action and limits
+
+Invoke the selected operation only with its required inputs and within the
+assigned task scope; this card does not execute the decision.
+
+The route artifact records preparation/family/basis identity, the selected
+candidate, decision, stable reason, and the explicit fact that UT evidence does
+not control routing. A route is not scientific acceptance; this card never
+returns `PASS` or `FAIL`.

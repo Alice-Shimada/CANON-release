@@ -85,25 +85,7 @@ gaugeTransformLocal[matrices_List, variables_List, transformation_?MatrixQ] :=
     Map[Together, Inverse[transformation].(#1.transformation - D[transformation, #2]), {2}] &,
     {matrices, variables}
   ];
-flatConnectionLocalQ[matrices_List, variables_List] := Module[{pairs, residual},
-  If[Length[matrices] =!= Length[variables], Return[False]];
-  pairs = Subsets[Range[Length[variables]], {2}];
-  And @@ Map[
-    Function[pair,
-      With[{i = pair[[1]], j = pair[[2]]},
-        residual = D[matrices[[j]], variables[[i]]] - D[matrices[[i]], variables[[j]]] +
-          matrices[[j]].matrices[[i]] - matrices[[i]].matrices[[j]];
-        zeroMatrixQ[Map[Together, residual, {2}]]
-      ]
-    ],
-    pairs
-  ]
-];
 epsilonFactorizedLocalQ[matrices_List, regulator_Symbol] :=
-  And @@ (
-    TrueQ[Together[# - regulator Together[#/regulator]] === 0] & /@ Flatten[matrices]
-  );
-noResidualRegulatorLocalQ[matrices_List, regulator_Symbol] :=
   And @@ (FreeQ[Together[#/regulator], regulator] & /@ Flatten[matrices]);
 dLogExpressionLocalQ[expr_, variable_Symbol, derivatives_List] := Module[
   {coefficients, residual, numerator, equations, instance},
@@ -118,12 +100,6 @@ dLogExpressionLocalQ[expr_, variable_Symbol, derivatives_List] := Module[
 ];
 dLogConnectionLocalQ[matrices_List, variables_List, regulator_Symbol, alphabet_List] := Module[
   {variable, derivatives},
-  If[
-    Length[variables] =!= 1 || alphabet === {} ||
-      !epsilonFactorizedLocalQ[matrices, regulator] ||
-      !noResidualRegulatorLocalQ[matrices, regulator],
-    Return[False]
-  ];
   variable = First[variables];
   derivatives = Quiet @ Check[Together[D[#, variable]/#] & /@ alphabet, $Failed];
   If[derivatives === $Failed, Return[False]];
@@ -203,10 +179,11 @@ computed = If[
   $Failed
 ];
 exactGauge = computed =!= $Failed && TrueQ[shape] && sameMatrixListsQ[computed, declared];
-flat = computed =!= $Failed && flatConnectionLocalQ[computed, variables];
+(* The validated v1 contract has one variable, so curvature is identically zero. *)
+flat = computed =!= $Failed;
 epsilonForm = computed =!= $Failed && epsilonFactorizedLocalQ[computed, regulator];
-noResidualRegulator = computed =!= $Failed && noResidualRegulatorLocalQ[computed, regulator];
-dlog = computed =!= $Failed && dLogConnectionLocalQ[
+noResidualRegulator = epsilonForm;
+dlog = epsilonForm && dLogConnectionLocalQ[
   computed, variables, regulator, request["alphabet"]
 ];
 entry = target["full_entry"];

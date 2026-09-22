@@ -73,13 +73,13 @@ class RendererTests(unittest.TestCase):
             }
         )
         html = render_project_state({"task_name": "x", "goal": "g"}, [task])
-        self.assertIn("当前 run ID", html)
-        self.assertIn("必需 Skills", html)
+        self.assertIn("Current run ID", html)
+        self.assertIn("Required skills", html)
         self.assertIn("methods/libra/SKILL.md", html)
-        self.assertIn("结果摘要", html)
+        self.assertIn("Result summary", html)
         self.assertIn("Artifact ID", html)
-        self.assertIn("完成时间", html)
-        self.assertNotIn("阻塞或失败原因", html)
+        self.assertIn("Completion time", html)
+        self.assertNotIn("Block or failure reason", html)
 
 
 if __name__ == "__main__":

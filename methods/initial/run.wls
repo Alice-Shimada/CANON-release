@@ -4,7 +4,7 @@ repoRoot = DirectoryName[DirectoryName[DirectoryName[ExpandFileName[$InputFileNa
 Get[FileNameJoin[{repoRoot, "mma", "lib", "MethodCardCore.wl"}]];
 
 args = CanonMethodCard`ScriptArguments[];
-If[Length[args] =!= 2, Print["用法：run.wls <input.json> <new-output-dir>"]; Quit[2]];
+If[Length[args] =!= 2, Print["Usage: run.wls <input.json> <new-output-dir>"]; Quit[2]];
 {inputPath, outputDir} = ExpandFileName /@ args;
 task = CanonMethodCard`ReadTask[inputPath, "PROVIDE_UT_EVIDENCE"];
 If[FailureQ[task], Print[InputForm[task]]; Quit[2]];
@@ -49,16 +49,16 @@ writeOutcome[status_String, code_String, reason_String, details_: <||>] := (
 
 candidate = Lookup[task["payload"], "candidate", Missing["candidate"]];
 If[!AssociationQ[candidate],
-  writeOutcome["ERROR", "INVALID_INPUT", "payload.candidate 必须是对象"]
+  writeOutcome["ERROR", "INVALID_INPUT", "payload.candidate must be an object"]
 ];
 scopeKeys = Keys[expectedCandidate];
 If[!And @@ (KeyExistsQ[candidate, #] & /@ scopeKeys),
-  writeOutcome["INCONCLUSIVE", "OUT_OF_SCOPE", "候选范围不完整"]
+  writeOutcome["INCONCLUSIVE", "OUT_OF_SCOPE", "The candidate scope is incomplete"]
 ];
 If[!And @@ (SameQ[Lookup[candidate, #], expectedCandidate[#]] & /@ scopeKeys),
   writeOutcome[
     "INCONCLUSIVE", "OUT_OF_SCOPE",
-    "本卡只覆盖固定归一化的 INITIAL 官方梯图候选",
+    "This card covers only the official INITIAL ladder candidate with its fixed normalization",
     <|"requested_family_id" -> Lookup[candidate, "family_id", None],
       "requested_candidate_id" -> Lookup[candidate, "candidate_id", None]|>
   ]
@@ -66,7 +66,7 @@ If[!And @@ (SameQ[Lookup[candidate, #], expectedCandidate[#]] & /@ scopeKeys),
 
 options = Lookup[task["payload"], "method_options", <||>];
 If[!AssociationQ[options],
-  writeOutcome["ERROR", "TOOL_CONFIGURATION", "method_options 必须是对象"]
+  writeOutcome["ERROR", "TOOL_CONFIGURATION", "method_options must be an object"]
 ];
 componentPaths = Lookup[options, {
   "package_entry", "finite_flow_package_file", "finite_flow_library", "reference_directory"
@@ -75,13 +75,13 @@ initialIdentity = Lookup[options, "initial_identity", Missing["initial_identity"
 finiteFlowIdentity = Lookup[options, "finiteflow_identity", Missing["finiteflow_identity"]];
 If[
   !AllTrue[componentPaths, StringQ[#] && # =!= "" &],
-  writeOutcome["ERROR", "TOOL_CONFIGURATION", "必须指定 INITIAL、FiniteFlow 入口、原生库与参考数据目录"]
+  writeOutcome["ERROR", "TOOL_CONFIGURATION", "Specify the INITIAL and FiniteFlow entries, native library, and reference data directory"]
 ];
 If[initialIdentity =!= expectedInitialIdentity || finiteFlowIdentity =!= expectedFiniteFlowIdentity,
-  writeOutcome["ERROR", "TOOL_IDENTITY_MISMATCH", "声明的 INITIAL 或 FiniteFlow 身份与登记身份不一致"]
+  writeOutcome["ERROR", "TOOL_IDENTITY_MISMATCH", "The declared INITIAL or FiniteFlow identity differs from the registered identity"]
 ];
 If[!MemberQ[$CommandLine, "-noinit"] || !MemberQ[$CommandLine, "-script"],
-  writeOutcome["ERROR", "TOOL_CONFIGURATION", "需要使用带 -noinit -script 的 WolframKernel"]
+  writeOutcome["ERROR", "TOOL_CONFIGURATION", "WolframKernel must be invoked with -noinit -script"]
 ];
 
 insideQ[path_String, root_String] := path === root || StringStartsQ[path, root <> $PathnameSeparator];
@@ -93,30 +93,30 @@ realPath[path_String] := Lookup[
 finiteFlowLibraryDirectory = DirectoryName[finiteFlowLibrary];
 requiredComponents = {initialEntry, finiteFlowEntry, finiteFlowLibrary};
 If[Or @@ (FileType[#] =!= File & /@ requiredComponents),
-  writeOutcome["ERROR", "TOOL_COMPONENT_MISSING", "缺少已登记的 INITIAL 或 FiniteFlow 组件"]
+  writeOutcome["ERROR", "TOOL_COMPONENT_MISSING", "A registered INITIAL or FiniteFlow component is missing"]
 ];
 If[
   FileExistsQ[outputDir] || FileType[DirectoryName[outputDir]] =!= Directory ||
   AnyTrue[DirectoryName /@ requiredComponents, insideQ[outputDir, #] &],
-  writeOutcome["ERROR", "TOOL_CONFIGURATION", "输出目录必须是工具安装目录外由调用方拥有的新目录"]
+  writeOutcome["ERROR", "TOOL_CONFIGURATION", "The output directory must be new, owned by the caller, and outside the tool installation directories"]
 ];
 
 $LibraryPath = Prepend[DeleteCases[$LibraryPath, finiteFlowLibraryDirectory], finiteFlowLibraryDirectory];
 If[Check[Get[finiteFlowEntry], $Failed] === $Failed,
-  writeOutcome["ERROR", "TOOL_LOAD_FAILED", "FiniteFlow 加载失败"]
+  writeOutcome["ERROR", "TOOL_LOAD_FAILED", "FiniteFlow failed to load"]
 ];
 If[realPath[FiniteFlow`Private`fflowlib] =!= realPath[finiteFlowLibrary],
-  writeOutcome["ERROR", "TOOL_COMPONENT_MISMATCH", "FiniteFlow 加载了非预期库"]
+  writeOutcome["ERROR", "TOOL_COMPONENT_MISMATCH", "FiniteFlow loaded an unexpected library"]
 ];
 If[Check[Get[initialEntry], $Failed] === $Failed,
-  writeOutcome["ERROR", "TOOL_LOAD_FAILED", "INITIAL 加载失败"]
+  writeOutcome["ERROR", "TOOL_LOAD_FAILED", "INITIAL failed to load"]
 ];
 
 amatrixPath = FileNameJoin[{exampleRoot, "AMatrix_ladder.m"}];
 basisPath = FileNameJoin[{exampleRoot, "initial_basis_ladder.m"}];
 referencePath = FileNameJoin[{exampleRoot, "TMatrix_ladder_to_UT.m"}];
 If[Or @@ (FileType[#] =!= File & /@ {amatrixPath, basisPath, referencePath}),
-  writeOutcome["ERROR", "TOOL_COMPONENT_MISSING", "缺少官方梯图 A、基或参考"]
+  writeOutcome["ERROR", "TOOL_COMPONENT_MISSING", "The official ladder A matrix, basis, or reference is missing"]
 ];
 
 amatrix = Together[Get[amatrixPath]];
@@ -127,16 +127,16 @@ ansatzFunctions = {1/x, 1/(1 + x)};
 takeRow = 1;
 nThreads = Lookup[options, "threads", 1];
 If[!IntegerQ[nThreads] || nThreads < 1,
-  writeOutcome["ERROR", "TOOL_CONFIGURATION", "threads 必须是正整数"]
+  writeOutcome["ERROR", "TOOL_CONFIGURATION", "threads must be a positive integer"]
 ];
 If[
   Dimensions[amatrix] =!= {26, 26} || Length[initialBasis] =!= 26 ||
   First[initialBasis] =!= utSeed || Dimensions[referenceTransformation] =!= {26, 26},
-  writeOutcome["ERROR", "TOOL_REFERENCE_MISMATCH", "官方梯图 A、基、种子或参考已改变"]
+  writeOutcome["ERROR", "TOOL_REFERENCE_MISMATCH", "The official ladder A matrix, basis, seed, or reference has changed"]
 ];
 
 If[Quiet @ Check[CreateDirectory[outputDir]; SetDirectory[outputDir]; True, False] =!= True,
-  writeOutcome["ERROR", "TOOL_CONFIGURATION", "无法创建并进入新的输出目录"]
+  writeOutcome["ERROR", "TOOL_CONFIGURATION", "Cannot create and enter the new output directory"]
 ];
 FiniteFlow`FFNThreads = nThreads;
 {elapsedSeconds, transformation} = AbsoluteTiming[
@@ -149,17 +149,17 @@ FiniteFlow`FFNThreads = nThreads;
   ]
 ];
 If[transformation === $Failed || !MatrixQ[transformation],
-  writeOutcome["ERROR", "TOOL_COMPUTATION_FAILED", "INITIAL TCalc 失败"]
+  writeOutcome["ERROR", "TOOL_COMPUTATION_FAILED", "INITIAL TCalc failed"]
 ];
 If[!SameQ[transformation, referenceTransformation],
   writeOutcome[
     "INCONCLUSIVE", "METHOD_EXHAUSTED",
-    "计算得到的变换与官方参考不同"
+    "The computed transformation differs from the official reference"
   ]
 ];
 transformedMatrix = Quiet @ Check[basisChange[amatrix, transformation, x, "NThreads" -> nThreads], $Failed];
 If[transformedMatrix === $Failed || Dimensions[transformedMatrix] =!= {26, 26},
-  writeOutcome["ERROR", "TOOL_COMPUTATION_FAILED", "INITIAL basisChange 失败"]
+  writeOutcome["ERROR", "TOOL_COMPUTATION_FAILED", "INITIAL basisChange failed"]
 ];
 
 exactGauge = CanonMethodCard`ZeroMatrixQ[
@@ -170,7 +170,7 @@ declaredDLog = officialLadderDLogQ[transformedMatrix];
 If[!TrueQ[exactGauge && epsilonIndependent && declaredDLog],
   writeOutcome[
     "INCONCLUSIVE", "METHOD_EXHAUSTED",
-    "提供者结果未通过精确规范检查、ε 因子分解与声明的 dlog 检查"
+    "The provider result did not pass all exact gauge, epsilon-factorization, and declared dlog checks"
   ]
 ];
 
@@ -224,7 +224,7 @@ evidence = <|
 
 artifactPath = CanonMethodCard`WriteWLArtifact[evidence, outputDir, "ut-evidence.wl"];
 If[artifactPath === $Failed,
-  writeOutcome["ERROR", "OUTPUT_ERROR", "无法写入 UT 证据产物"]
+  writeOutcome["ERROR", "OUTPUT_ERROR", "Cannot write the UT-evidence artifact"]
 ];
 resultPath = CanonMethodCard`WriteProviderResult[
   task, outputDir, "PROVISIONAL", "EVIDENCE_AWAITING_VERIFICATION",
@@ -241,5 +241,5 @@ resultPath = CanonMethodCard`WriteProviderResult[
     "workflow_action" -> "none"
   |>
 ];
-If[resultPath === $Failed, Print["写入 result.json 失败"]; Quit[1]];
+If[resultPath === $Failed, Print["Failed to write result.json"]; Quit[1]];
 Quit[0];

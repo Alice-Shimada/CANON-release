@@ -4,7 +4,7 @@ repoRoot = DirectoryName[DirectoryName[DirectoryName[ExpandFileName[$InputFileNa
 Get[FileNameJoin[{repoRoot, "mma", "lib", "MethodCardCore.wl"}]];
 
 args = CanonMethodCard`ScriptArguments[];
-If[Length[args] =!= 2, Print["用法：run.wls <input.json> <output_dir>"]; Quit[2]];
+If[Length[args] =!= 2, Print["Usage: run.wls <input.json> <output_dir>"]; Quit[2]];
 {inputPath, outputDir} = ExpandFileName /@ args;
 task = CanonMethodCard`ReadTask[inputPath, "ROUTE_PREPARED_BASIS"];
 If[FailureQ[task], Print[InputForm[task]]; Quit[2]];
@@ -23,19 +23,14 @@ writeFailure[reason_String, field_] := (
 
 prepared = CanonMethodCard`LoadArtifact[task, inputPath, "prepared_basis"];
 If[FailureQ[prepared],
-  writeFailure["无法加载 prepared_basis 产物", "prepared_basis"]
+  writeFailure["Cannot load the prepared_basis artifact", "prepared_basis"]
 ];
-validated = CanonMethodCard`ValidatePreparedBasis[prepared];
-If[FailureQ[validated],
-  writeFailure[
-    Lookup[validated[[2]], "Message", "prepared_basis 校验失败"],
-    Lookup[validated[[2]], "Field", "prepared_basis"]
-  ]
-];
-
-decision = CanonMethodCard`PreparedBasisRoute[validated];
+decision = CanonMethodCard`PreparedBasisRoute[prepared];
 If[FailureQ[decision],
-  writeFailure["prepared_basis 路线构造失败", "prepared_basis"]
+  writeFailure[
+    Lookup[decision[[2]], "Message", "prepared_basis validation failed"],
+    Lookup[decision[[2]], "Field", "prepared_basis"]
+  ]
 ];
 artifactPath = CanonMethodCard`WriteWLArtifact[
   decision,
@@ -45,7 +40,7 @@ artifactPath = CanonMethodCard`WriteWLArtifact[
 If[artifactPath === $Failed,
   CanonMethodCard`WriteResult[
     task, outputDir, "ERROR", "OUTPUT_ERROR", <||>,
-    <|"reason" -> "无法写入路线决策产物"|>
+    <|"reason" -> "Cannot write the route-decision artifact"|>
   ];
   Quit[1]
 ];
@@ -68,5 +63,5 @@ resultPath = CanonMethodCard`WriteResult[
     "initial_evidence_controls_route" -> False
   |>
 ];
-If[resultPath === $Failed, Print["写入 result.json 失败"]; Quit[1]];
+If[resultPath === $Failed, Print["Failed to write result.json"]; Quit[1]];
 Quit[0];

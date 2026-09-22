@@ -12,7 +12,6 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[2]
-BASE_DESIGN = ROOT / "docs" / "state-management" / "跨通用 Agent 的持续研究状态管理基础设施设计方案.md"
 INSTALLER = ROOT / "state-management" / "adapters" / "codex" / "install_launcher.py"
 LAUNCHER_ARGUMENTS = ["-c", 'exec "$HOME/.codex/statemng/CANON/mcp"']
 
@@ -20,27 +19,11 @@ sys.path.insert(0, str(ROOT / "state-management"))
 from codex_thread_guard import WORKER_TOOLS  # noqa: E402
 
 
-def architecture_section(text: str) -> str:
-    start = text.index("## 四、整体架构")
-    end = text.find("## 五、主要组件", start)
-    if end == -1:
-        end = len(text)
-    return text[start:end]
-
-
 def configured_server(path: Path) -> dict:
     return tomllib.loads(path.read_text(encoding="utf-8"))["mcp_servers"]["statemng"]
 
 
 class CodexAdapterTests(unittest.TestCase):
-    def test_agents_contains_the_exact_base_architecture_section(self) -> None:
-        source = BASE_DESIGN.read_text(encoding="utf-8")
-        agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
-        self.assertEqual(
-            architecture_section(agents).rstrip("\n"),
-            architecture_section(source).rstrip("\n"),
-        )
-
     def test_public_skill_has_the_required_exact_frontmatter(self) -> None:
         skill = (
             ROOT / ".agents" / "skills" / "persistent-scientific-research" / "SKILL.md"
@@ -187,13 +170,14 @@ class CodexAdapterTests(unittest.TestCase):
     def test_readme_documents_codex_setup_and_agent_facing_entry(self) -> None:
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
         self.assertNotIn("workflow.py", readme)
-        self.assertIn("用户不需要了解或调用状态管理 CLI", readme)
-        self.assertIn("install_launcher.py --check", readme)
-        self.assertIn("statemng_project_list", readme)
-        self.assertIn("Local", readme)
-        self.assertIn("MCP tool surface 在会话初始化时确定", readme)
-        self.assertIn("跨通用 Agent 的持续研究状态管理基础设施设计方案", readme)
-        self.assertIn("持续研究状态管理的 Agent 接入补充方案", readme)
+        for path in ("docs/agent-workflow.md", "docs/installation.md", "docs/hosts/codex.md"):
+            self.assertIn(path, readme)
+            self.assertTrue((ROOT / path).is_file())
+        codex_setup = (ROOT / "docs" / "hosts" / "codex.md").read_text(encoding="utf-8")
+        self.assertIn("install_launcher.py --check", codex_setup)
+        self.assertIn("statemng_project_list", codex_setup)
+        self.assertIn("Local", codex_setup)
+        self.assertIn("persistent_research_worker", codex_setup)
 
 
 if __name__ == "__main__":

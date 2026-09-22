@@ -1,0 +1,91 @@
+{
+  "source_run": "runs/2l5p-complete-20260905-grs_ynfi/final",
+  "packaging_date": "2026-09-20",
+  "scientific_checks_rerun": false,
+  "copy_policy": "Original file bytes retained. Absolute paths inside historical metadata are inert provenance, not dependencies of the saved-result reader.",
+  "files": [
+    {
+      "path": "canonical-basis.wl",
+      "bytes": 14814179,
+      "sha256": "1995539de758509cf99e2734eedc9ee5c94dbd0d5cd1c9a207b28da06c3be7b5"
+    },
+    {
+      "path": "canonical-de.wl",
+      "bytes": 3870042,
+      "sha256": "6f15b5512606b826e3d75cb2b7f522b50512f49c1c395f465498d6d1a7386c2e"
+    },
+    {
+      "path": "result.json",
+      "bytes": 825,
+      "sha256": "67d691150450ef0e51b64c398731d5216d373354cf4d2541c14bb0a9974db569"
+    },
+    {
+      "path": "historical-evidence/global-gauge-identity.wl",
+      "bytes": 31,
+      "sha256": "1241d010fbb750d92b2a46abb913885bcea200946497a5bda17aa9b1a38117f0"
+    },
+    {
+      "path": "historical-evidence/fermat-gauge-identity.wl",
+      "bytes": 122,
+      "sha256": "c81c41ef7b3974a09fdf5dc5bc22681766240468f5299a26c1f44db231a6c7ae"
+    }
+  ],
+  "original_source": {
+    "created_at": "2026-09-05T15:40:27.668973+00:00",
+    "head": "ae980a0aaa999383211cf7dd69958228f340dd34",
+    "branch": "IBP",
+    "python_for_reporting": "3.12.9 | packaged by Anaconda, Inc. | (main, Feb  6 2025, 18:56:27) [GCC 11.2.0]",
+    "files": {
+      "mma/lib/MethodCardCore.wl": {
+        "bytes": 49906,
+        "sha256": "4eef947079c07280897e2afab11bf3c20478cf8f33ec73b9622e4bebe109d345"
+      },
+      "mma/BuildFullSectorDE.wls": {
+        "bytes": 4717,
+        "sha256": "067f72d8343f41872dee8d5b2be4bbc7ec86ae455f96abe6cbe76d07f096158c"
+      },
+      "mma/SolveTail.wls": {
+        "bytes": 5621,
+        "sha256": "5f3baee9402701e1d13cafdbe9d1f70209eb986e470edb6bad1d03ffe8043441"
+      },
+      "mma/CheckFullSystem.wls": {
+        "bytes": 5630,
+        "sha256": "4d01563841e3e45e1c31b8efeb5b785c13528df5302c718f667c5e4af73edc5c"
+      },
+      "mma/CheckCanonical.wls": {
+        "bytes": 3641,
+        "sha256": "b5097b74b4b8abc197ef419b1ce72125c43fc72aa7e0a4de892998d0e534ce73"
+      },
+      "mma/CommitSector.wls": {
+        "bytes": 3175,
+        "sha256": "836f9735746bde9bd065f7c35b11bb94025f3d5931235cde5650d2536ec3725b"
+      },
+      "methods/epsilon-zero/run.wls": {
+        "bytes": 6129,
+        "sha256": "5114ac2cbd8912f450b19f4a11247b23010a9287399fc98dc029bacdec065f57"
+      },
+      "methods/epsilon-zero/SKILL.md": {
+        "bytes": 1455,
+        "sha256": "6b4e86d75367d1afb799fddf87d56c7db4eb9621b01fb4af4dc7bc2f563547d2"
+      },
+      "tests/RunFullSystemUnitTests.wls": {
+        "bytes": 12806,
+        "sha256": "cc90985d196d951ada09ba5e989dcf978477d15b79f1c5fd1ebff622deb5e056"
+      },
+      "tests/RunFullSectorTailUnitTests.wls": {
+        "bytes": 7653,
+        "sha256": "8669e7c1ee9ae6bf7eb5ff2e757f25e14371f4bd7bd2b62c1454dea7f857a982"
+      },
+      "tests/RunEpsilonZeroUnitTests.wls": {
+        "bytes": 3098,
+        "sha256": "fa8512fe73f1de214faf3280d71098e5eaa9a93dfa201886eadb34f4b7ef1345"
+      },
+      "tests/RunFermatGaugeUnitTests.wls": {
+        "bytes": 1260,
+        "sha256": "d31d0a029aaca247162ddb81a92c96db35b08c17c6a86caa75e724428ef9d892"
+      }
+    }
+  },
+  "original_result_date": "2026-09-05",
+  "original_check_scope": "exact-global-gauge-deterministic-exact-rational-point-flatness-multivariable-shared-residue-declared-dlog-span"
+}

@@ -1,200 +1,196 @@
 # CANON Agent Rules
 
-## 持续研究接入规则
+CANON's scientific interfaces and method cards are independent of the agent host
+and model. Start with [canon-workflow](skills/canon-workflow/SKILL.md) to choose
+the next scientific action. Use [docs/agent-workflow.md](docs/agent-workflow.md)
+for input preparation and [docs/installation.md](docs/installation.md) for the host capability
+contract. Codex-specific setup is in [docs/hosts/codex.md](docs/hosts/codex.md).
+Documentation and packaging of selected historical examples do not initiate new
+scientific research or require replay.
 
-1. 多步骤科研任务必须加载 `persistent-scientific-research` Skill。
-2. 用户只与主 Agent 交互；不得要求用户执行内部 CLI。
-3. 所有状态操作必须通过项目提供的 `statemng` MCP tools 完成。
-4. `statemng_task_accept` 和 `statemng_task_unblock` 只允许主 Agent 调用，subagent 不得调用。
-5. 主 Agent 派发持续研究任务时必须使用 Codex 项目专用的 `persistent_research_worker` custom agent，不得改用未限制 tools 的内置 worker；宿主侧配置必须将其限制为六项 worker tools。受 Codex role-MCP 回归影响而无法物理过滤时，只有 launcher runtime guard 已经由主 Agent 的 `init/resume` 绑定且 worker 在 `task_show` 中验证为受限角色后才可继续。
-6. `statemng` tools 不可用时，停止研究并报告接入错误；不得绕过状态管理继续研究。
-7. 不得使用已经删除的 `workflow.py`。
-8. Codex 初版只允许在 Local 会话中执行持续研究；Worktree 会话必须停止持续研究并报告接入错误，不得操作另一 checkout 的状态目录。
-9. Codex 主 Agent 在首次状态调用前必须自行运行 `state-management/adapters/codex/install_launcher.py --check`。校验失败时，由主 Agent 重新安装入口并停止当前持续研究，待全新 Local 会话加载 MCP；不得继续使用可能指向其他 checkout 的 tools，也不得要求用户执行安装命令。校验通过后，主 Agent 必须在创建任何 worker 前先成功调用 `init` 或 `resume`，原子绑定当前总体任务的 coordinator。
+For integral-basis discovery from a defined family (UT or canonical), run a
+bounded DlogBasis-refine candidate search first on unresolved sectors, following
+the exact exceptions in [core selection](skills/canon-search-core/SKILL.md).
+The proposal requires family and provider inputs. Candidate derivative data,
+including `exact_strategy`, are prepared for the subsequent IBP bridge. This
+priority also applies when a rational DE is available. The user's scope and
+current evidence govern method selection across worker assignments; finite
+search bounds are sufficient.
 
-## 分发与路径配置
+Check completion before selecting methods or creating workers. Matching
+FINAL_CHECK `PASS/ALL_PASS` ends scientific work for that scope: submit, review,
+accept and deliver. Further scientific work requires an unresolved requested
+scope or changed inputs. See the scope and handoff rules in the workflow entry.
 
-按当前 checkout 定位仓库脚本与 `external/` 源码；工具安装路径、可执行文件、线程数
-从任务参数、环境或 Wolfram 全局配置取得，不写入个人目录或机器平台常量。
-具体字段与安装说明见 `README.md` 和 `external/README.md`。DlogBasis 候选只使用
-`external/DlogBasis-refine` 或调用方声明的同名安装；包版本来自显式声明与源码清单，
-不把外层 CANON Git HEAD 当作包版本。
+## Persistent research access
 
-外部程序源码逐包存放，保留来源提交和许可证，供用户自行编译、安装。分发准备不编译
-依赖，不复制本机二进制、基础库、研究运行输出或机器本地 launcher。任务描述应明确
-所需入口、资源预算和输入路径基准，worker 直接使用提供的安装配置。
+1. Load `persistent-scientific-research` for multi-step scientific research.
+2. The user interacts with the main agent. Never ask the user to operate the
+   internal state CLI.
+3. Use the project's `statemng` MCP tools for every state operation.
+4. Only the main agent may call `statemng_task_accept` or `statemng_task_unblock`.
+5. In Codex, dispatch persistent research only through the project's
+   `persistent_research_worker` custom agent, restricted to the six worker tools.
+   When host-side tool filtering is unavailable, the launcher
+   runtime guard must already be bound by the main agent's `init` or `resume`,
+   and the worker must verify its restricted role in `task_show` before research.
+   Other hosts use native subagents with the same six-tool state boundary; they
+   need neither the Codex role name nor its authorization fields.
+6. If `statemng` tools are unavailable, stop research and report the integration
+   error. Do not bypass state management.
+7. Do not use the removed `workflow.py`.
+8. The current Codex adapter supports Local sessions. In a Worktree session,
+   stop persistent research and report the integration error; do not operate
+   another checkout's state directory.
+9. Before its first state call, the Codex main agent must run
+   `state-management/adapters/codex/install_launcher.py --check`. If it fails,
+   install the launcher internally and stop the current research until a new
+   Local session loads the MCP configuration. Do not use tools that may point
+   to another checkout or ask the user to install it. After a successful check,
+   call `init` or `resume` before creating workers to bind the coordinator.
 
-## 四、整体架构
+## Distribution and paths
 
-初版只有一个本地 CLI 和按总体任务分隔的状态目录。主 Agent 与原生 subagent 通过 CLI 读写明确指定的总体任务；subagent 的创建和研究过程仍由宿主 Agent 负责，不进入状态管理程序。完整工作流如下：
+Resolve repository scripts and `external/` source from the current checkout.
+Read installed tool entries, executables and thread budgets from task parameters,
+the environment or Wolfram configuration. Do not hardcode personal directories
+or platform constants. See [README.md](README.md) and
+[external/README.md](external/README.md) for configuration fields.
+
+Use `external/DlogBasis-refine` or the caller's declared installation of that
+package. Record its declared revision and source hash; the outer CANON Git HEAD
+is not the dependency revision.
+
+Distribute external packages as separate source snapshots with their provenance
+and licenses. Distribution preparation does not compile dependencies or copy
+local binaries, foundation libraries, research run directories or machine-local
+launchers. Task descriptions give the required entries, resource budget and path
+bases; workers use that installation configuration directly.
+
+## Overall architecture
+
+One local CLI stores independent overall research tasks. The MCP tools expose
+that CLI to the coordinator and workers. The host creates and runs subagents;
+the state manager records work and does not choose scientific methods.
 
 ```mermaid
 flowchart TD
-    U["用户提出总体研究目标"] --> M["主 Agent"]
-    M --> N{"总体任务名是否明确"}
-    N -- "否" --> LIST["statemng project list"]
-    LIST --> CONFIRM["主 Agent 请用户确认总体任务名"]
-    N -- "是" --> I{"总体任务目录是否存在"}
-    CONFIRM --> I
-    I -- "否" --> INIT["statemng init TASK_NAME<br/>--goal-file goal.md"]
-    I -- "是" --> RESUME["statemng project resume<br/>--task-name TASK_NAME"]
-    INIT --> PLAN["根据当前证据创建必要的任务与依赖"]
-    RESUME --> RECOVER{"是否存在未完成运行"}
-    RECOVER -- "否" --> PLAN
-    RECOVER -- "是" --> INSPECT["检查 task JSON、run、workspace 与 artifact"]
-    INSPECT --> DECIDE["主 Agent 决定保留并继续、阻塞、失败或清理当前 run"]
-    DECIDE --> PLAN
-
-    PLAN --> READY["statemng task ready"]
-    READY --> SPAWN["主 Agent 通过 Adapter 创建原生 subagent<br/>传入总体任务名和 task ID"]
-    SPAWN --> CLAIM["subagent: task claim<br/>原子写入 running 并取得 run_id"]
-    CLAIM --> SHOW["subagent: task show<br/>读取目标、依赖结果、验收标准与 workspace"]
-    SHOW --> RESEARCH["subagent 只读使用依赖<br/>在 workspace 中计算和写出新结果"]
-
-    RESEARCH -->|"形成可交付结果"| ART["artifact add<br/>登记本步新产物并记录哈希"]
-    ART --> SUBMIT["task submit<br/>保存 summary 与 artifact ID，状态变为 submitted"]
-    SUBMIT --> REVIEW["主 Agent 审查结果"]
-    REVIEW -->|"存在具体验证缺口"| VERIFY["创建验证 subagent<br/>读取 artifact 并提交验证结果"]
+    U["User supplies the scientific goal"] --> M["Main agent"]
+    M --> N{"Overall task name is clear?"}
+    N -- "No" --> LIST["project list, then ask the user"]
+    LIST --> I{"Task exists?"}
+    N -- "Yes" --> I
+    I -- "No" --> INIT["init with the goal file"]
+    I -- "Yes" --> RESUME["project resume"]
+    INIT --> PLAN["Plan necessary tasks and direct dependencies"]
+    RESUME --> INSPECT["Inspect unfinished runs and retained artifacts"]
+    INSPECT --> PLAN
+    PLAN --> READY["task ready"]
+    READY --> SPAWN["Create a native worker with task name and task ID"]
+    SPAWN --> CLAIM["Worker: claim, then show"]
+    CLAIM --> RESEARCH["Read dependencies; write new results in the workspace"]
+    RESEARCH --> ART["artifact add for each new result"]
+    ART --> SUBMIT["task submit with one entry artifact"]
+    SUBMIT --> REVIEW["Main agent reviews inputs, checks and criteria"]
+    REVIEW -- "Specific verification gap" --> VERIFY["Bounded verification worker"]
     VERIFY --> REVIEW
-    REVIEW -->|"接受"| ACCEPT["task accept<br/>原子写入 completed 与 accepted_run_id"]
-    REVIEW -->|"不接受"| FAIL["task fail"]
-    REVIEW -->|"需要外部条件"| BLOCK["task block"]
-    FAIL --> PLAN
-    BLOCK --> WAIT["等待阻塞条件解除"]
-    WAIT --> REOPEN["主 Agent: task unblock<br/>状态恢复为 ready"]
-    REOPEN --> PLAN
-
-    ACCEPT --> UNLOCK["依据 completed 任务重新计算依赖<br/>后续任务进入 ready"]
-    UNLOCK --> VIEW["重建 PROJECT_STATE.md"]
+    REVIEW -- "Accepted" --> ACCEPT["task accept"]
+    ACCEPT --> VIEW["Unlock dependencies and rebuild the state view"]
     VIEW --> PLAN
-    PLAN -->|"研究目标已经满足"| REPORT["主 Agent 向用户提交阶段或最终结论"]
-
-    RESEARCH -->|"无需等待外部条件的失败"| FAIL
-    RESEARCH -->|"需要外部条件"| BLOCK
-
-    subgraph STORE[".state-management/[TASK_NAME]/"]
-        META["meta.json"]
-        TASKS["tasks/*.json<br/>任务状态事实源"]
-        RUNS["runs/[RUN_ID]/<br/>run.json 与 workspace"]
-        ARTS["artifacts/<br/>不可变正式产物"]
-        VIEWS["views/PROJECT_STATE.md<br/>可重建视图"]
-        LOCKS[".locks/<br/>任务级文件锁"]
-    end
-
-    INIT -. "创建" .-> META
-    PLAN -. "写入" .-> TASKS
-    CLAIM -. "加锁并更新" .-> LOCKS
-    CLAIM -. "写入" .-> TASKS
-    CLAIM -. "创建" .-> RUNS
-    ART -. "写入" .-> ARTS
-    SUBMIT -. "更新" .-> RUNS
-    SUBMIT -. "更新" .-> TASKS
-    ACCEPT -. "最终完成提交点" .-> TASKS
-    REOPEN -. "更新" .-> TASKS
-    VIEW -. "生成" .-> VIEWS
-    RESUME -. "读取" .-> META
-    RESUME -. "读取" .-> TASKS
-    RESUME -. "读取" .-> RUNS
-    RESUME -. "核对" .-> ARTS
+    REVIEW -- "Rejected" --> FAIL["task fail"]
+    RESEARCH -- "Attempt failed" --> FAIL
+    FAIL --> PLAN
+    REVIEW -- "External condition needed" --> BLOCK["task block"]
+    RESEARCH -- "External condition needed" --> BLOCK
+    BLOCK --> WAIT["Wait for the recorded condition"]
+    WAIT --> UNBLOCK["Main agent confirms resolution and unblocks"]
+    UNBLOCK --> PLAN
+    PLAN -- "Goal met" --> REPORT["Report the checked result"]
 ```
 
-图中的实线表示研究与调度流程，虚线表示 CLI 对持久化文件的读写。除 `init` 和 `project list` 外，图中每次 CLI 调用都显式携带同一个 `--task-name`，图内不再重复标注。任务 JSON 中的 `completed` 是完成事实；Markdown 视图和依赖解锁结果均可由 JSON 重建。
+Every task-scoped call carries the same explicit `task_name`. A task JSON status
+of `completed` is the completion fact; dependency readiness and Markdown views
+are derived from it.
 
-### 4.1、持久化目录设计
+### Storage and artifact handoff
 
-项目内部按总体任务维护独立目录：
-
-```
-.state-management/
-├── [TASK_NAME_1]/
-│   ├── meta.json
-│   ├── tasks/
-│   │   ├── T-001.json
-│   │   └── T-002.json
-│   ├── runs/
-│   │   └── R-001/
-│   │       ├── run.json
-│   │       └── workspace/
-│   ├── artifacts/
-│   │   ├── A-001.md
-│   │   └── A-002.json
-│   ├── .locks/
-│   └── views/
-│       └── PROJECT_STATE.md
-└── [TASK_NAME_2]/
-    └── ...
+```text
+.state-management/<task-name>/
+  meta.json                  Overall goal and schema version
+  tasks/T-001.json            Task, dependencies, state and accepted run
+  runs/R-001/run.json         Run identity, timing and result
+  runs/R-001/workspace/       Writable area for that run
+  artifacts/                 Registered immutable result files
+  .locks/                    Task-level locks, not research state
+  views/PROJECT_STATE.md     Rebuildable state summary
 ```
 
-其中：
+An overall task directory is the self-contained unit for recovery or migration.
+Individual runs reuse earlier artifacts by reference. There is no shared mutable
+scientific state across overall task directories.
 
-- `meta.json`：总体任务名称、总体目标的 Markdown 原文和 schema 版本；
-- `tasks/*.json`：内部任务、依赖、当前状态和运行结果，是任务状态的事实源；
-- `runs/[RUN_ID]/run.json`：单次运行的身份、时间和结果记录；
-- `artifacts/`：由 `artifact add` 复制并登记的不可变正式研究产物；
-- `runs/[RUN_ID]/workspace/`：每次运行的隔离工作目录；
-- `.locks/`：CLI 使用的任务级锁文件，不保存研究状态；
-- `views/PROJECT_STATE.md`：由 JSON 生成的当前状态摘要。
+- The workspace limits writes. Read the needed dependency artifacts directly at
+  `project_root / dependencies[].artifacts[].stored_path` from `task_show`.
+  Copy only an input that the tool actually needs to modify.
+- List shared input producers and the latest needed result directly in
+  `depends_on`. A sector task can depend on the original DE/rules producers and
+  the latest accepted prefix; do not pass them through nested historical bundles.
+- Register each new or changed result separately. `task_submit` names one entry
+  artifact, optionally a short index. Keep unchanged DEs, rules, source, tools and
+  historical artifacts under their existing references and registered hashes.
+  Do not copy, repack or rescan whole dependency trees.
+- A new accepted prefix still contains its complete cumulative transformation,
+  basis and matrices, including lower-sector normalization. Do not embed old
+  prefix bundles, run workspaces or dependency archives. Extract only needed
+  members of existing archives. Full archives are for explicit delivery or
+  migration needs.
+- Run the existing necessary scientific gates on changed candidates and
+  prefixes. Main-agent review checks inputs, checker results and acceptance
+  criteria. `CHECK_CORE`, `CHECK_CANONICAL` and `FINAL_CHECK` already provide
+  independent mathematical verification. Additional clean replay, candidate
+  bridging, IBP or family reruns require a concrete failure, changed input or
+  implementation, or a user request.
+- Submit, review and accept when the criteria are met. A further verification
+  task must name a specific unresolved question. Provenance or packaging alone
+  is not a reason to delay accepted scientific progress.
 
-每个 `[TASK_NAME]` 目录都是完整、自包含的状态单元，可以独立复制、归档或恢复。自包含的单位是总体任务目录，不是每个 run 或 sector；后续产物通过引用复用此前的正式产物。`.state-management/` 下不设置跨总体任务共享的可变状态。
+### Coordinator and worker loop
 
-产物交接与验收遵循以下规则：
+1. Determine one overall task name. Reuse the name already selected by the user.
+   If it remains ambiguous, list existing tasks and ask the user to choose.
+   Initialize a new task or resume an existing one, then create necessary work.
+2. Query ready tasks and dispatch native workers with the overall task name and
+   task ID. Supply required skills, input references and the resource budget.
+3. Each worker claims and shows its task, reads dependencies in place and writes
+   new results in its workspace. It registers new artifacts and submits them,
+   or records a concrete failure or external block.
+4. The main agent reviews the result. Use a separate verification worker only
+   for a specific unresolved issue; that worker submits evidence and never
+   accepts the original task.
+5. The main agent accepts a result when its criteria are met. Only a completed
+   task satisfies dependencies.
+6. A blocked task returns to ready only after the main agent confirms the
+   recorded external condition has been resolved and calls `unblock`.
+7. Continue or revise the plan from accepted evidence. A failed method or ansatz
+   is not a proof that the scientific goal is impossible.
 
-- workspace 限制的是写入位置。worker 直接只读使用任务提供的依赖文件；`task_show` 的 `dependencies[].artifacts` 给出已接受 run 的登记记录，路径为 `project_root / stored_path`。若工具确实需要可写输入，只复制本步需要改动的文件。
-- 主 Agent 在 `depends_on` 中直接列明共享输入的生产任务和当前需要的最新结果任务。例如逐 sector 任务依赖原始 DE、pooled rules 的生产任务及最新 accepted prefix，不通过嵌套历史包传递这些输入。
-- 每个新产物文件分别 `artifact add`，`task_submit` 选择一个入口产物；多文件交付的入口可为简短的文件索引。只登记本步新建或改变的结果；已有 DE、rules、源码、工具和历史 artifacts 保留原引用及已登记的 hash，不重新复制、打包或全量扫描依赖树。
-- 新 accepted prefix 仍须保存完整累计变换、basis 和矩阵，包括 lower-sector 归一化；节省存储不改变科学接口。禁止把旧 prefix 的整份产物包、run workspace 或依赖包嵌入新产物。已有压缩依赖只按需提取所需成员；完整归档只用于明确的交付或迁移需求。
-- 对新的候选及 prefix 运行现有必要科学 gates。主审核对本次输入、checker 结果与验收标准；`CHECK_CORE`、`CHECK_CANONICAL`、`FINAL_CHECK` 的独立验算已经属于科学验证。没有具体失败、输入或实现变化、或用户要求时，不增加第二套 clean replay、重复 candidate bridge、重复 IBP 或整族重算。
-- 验收标准满足后即提交、审查和接受。额外验证任务必须指出尚未解决的具体问题；不得仅为 provenance、包装或形式完整性延迟推进。
+### Task states
 
-### 4.2、主 Agent 与 subagent 的协作闭环
-
-初版不预设固定的研究步骤。主 Agent 根据当前证据创建任务和依赖；新的结果可以促使主 Agent 重新规划尚未开展的研究。
-
-一次协作只包含以下步骤：
-
-1. 主 Agent 确定总体任务名；无法唯一确定时，列出已有名称并请用户确认。总体任务不存在时使用总体目标文件初始化，已经存在时直接恢复；随后创建当前确有必要的任务。
-1. 主 Agent 查询 `ready` 任务，创建原生 subagent，并传入总体任务名和内部任务 ID。
-1. subagent 依次执行 `claim` 和 `show`，直接只读使用依赖文件，在独立 workspace 写出新结果；新产物通过 `artifact add` 保存，然后执行 `submit`，或用 `block`、`fail` 说明无法完成。
-1. 主 Agent 读取 summary、checker 结果和 artifact；仅对尚未解决的具体验证问题另行验证。验证 subagent 只提交验证结果，不接受原任务。
-1. 主 Agent 确认结果满足当前任务的验收标准后执行 `accept`。只有进入 `completed` 的任务才能满足后续任务的依赖。
-1. 任务进入 `blocked` 后，主 Agent 等待并确认阻塞条件已经解除，再执行 `unblock` 将任务恢复为 `ready`，随后重新派发；subagent 不得解除阻塞。
-1. 主 Agent 根据已接受的结果决定继续原计划、创建新的后续任务或停止当前路线。
-
-### 4.3、任务状态模型
-
-初版使用以下状态：
-
-```
-pending
-   │
-   │ 依赖满足
-   ▼
- ready
-   │
-   │ subagent claim
-   ▼
- running
-   │
-   │ subagent submit
-   ▼
-submitted
-   │
-   │ main Agent accept
-   ▼
-completed
+```text
+pending -> ready -> running -> submitted -> completed
 ```
 
-`running` 或 `submitted` 也可以转为 `blocked`；阻塞条件解除后，主 Agent 通过 `unblock` 将任务重新转为 `ready`。运行失败时，`retryable: true` 使任务重新转为 `ready`，否则任务进入 `failed`。
+| State | Meaning |
+|---|---|
+| `pending` | Dependencies are not yet completed. |
+| `ready` | A worker can claim the task. |
+| `running` | A worker has claimed the task and owns the current run. |
+| `submitted` | The run awaits main-agent review. |
+| `completed` | The main agent accepted the run and its artifacts. |
+| `blocked` | A recorded external condition must be resolved. |
+| `failed` | The attempt failed without an immediate retry. |
 
-状态含义：
-
-- `pending`：前置依赖尚未完成；
-- `ready`：可以被 subagent 领取；
-- `running`：已经由某个 subagent 领取；
-- `submitted`：subagent 已提交结果，等待主 Agent 验收；
-- `completed`：主 Agent 已接受结果，任务正式完成；
-- `blocked`：需要用户、主 Agent 或外部条件介入；条件解除后由主 Agent 恢复为 `ready`；
-- `failed`：本次执行失败，且没有进入下一次重试；
-
-
-只有 CLI 可以修改任务状态。
+Running or submitted tasks may become blocked. Main-agent `unblock` returns a
+blocked task to ready. A failed run with `retryable: true` makes its task ready;
+otherwise the task becomes failed. Only the state tools, through the CLI, change
+these states.
