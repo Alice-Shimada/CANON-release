@@ -1,63 +1,70 @@
 ---
-name: canon-initial-official-ladder-evidence
-description: Produce UT evidence awaiting independent verification for the fixed INITIAL 2.1 official massless 3L4P ladder candidate, without candidate search, ranking, replacement, or repair.
+name: canon-initial
+description: Use INITIAL as a bounded seeded-core candidate provider; retain explicit official-reference requests only through the compatibility validation contract.
 ---
 
-# INITIAL official ladder UT evidence
+# INITIAL: seeded core interface
 
-## Trigger and fixed scope
+## Active scientific operation
 
-Use this opt-in evidence card only when the task explicitly requests the
-official ladder contract below. It is not a prerequisite for general tail
-solving or canonical acceptance.
+- **Role / stage:** core candidate provider, `SEARCH_CORE`.
+- **Entry:** `methods/initial/run.wls INPUT.json NEW_OUTPUT_DIR`.
+- **Activation:** the coordinator selects INITIAL under
+  [core selection](../../skills/canon-search-core/SKILL.md), with one or a few
+  explicitly normalized UT seeds, a rational one-variable cut, a declared
+  alphabet, and finite resource/derivative bounds.
+- **Input:** matching `sector_basis`, `sector_cut_de`, `seed_request`, and either
+  full `seed_rows` or an existing `candidate_ibp_bridge` plus `prepared_family`.
+- **Output:** `PROVISIONAL/CANDIDATE_TRANSFORMATION`, standard `core_candidates`;
+  independent CHECK_CORE, BUILD_FULL_DE, SOLVE_TAIL, CHECK_CANONICAL and FINAL_CHECK
+  establish their respective claims.
 
-This card accepts only the INITIAL 2.1 official `massless_3L4P` planar
-three-loop four-point ladder: the official 26-element basis order, first UT seed
-`G[2,{1,1,1,1,1,1,1,1,1,1,-1,0,0,0,0}]`, `D=4-2 eps`, `x=t/s`, alphabet
-`{x,1+x}`, and `TakeRow -> 1`. Any change to the family, candidate, basis,
-order, normalization, reference, seed, or alphabet returns
-`INCONCLUSIVE/OUT_OF_SCOPE` before calling the tool or triggering another
-workflow action.
+Read the complete [seed, normalization, algebra and budget contract](../initial-core/SKILL.md)
+before execution. The active interface does not require official ladder IDs,
+26-dimensional input, a fixed basis order, an official T matrix, or exact
+reference equality. Its installed package and host must support the requested
+operation; the generic interface does not widen a machine's validated capability.
 
-## Inputs and command
-
-Supply `method_options.package_entry` (INITIAL.m), `finite_flow_package_file`
-(FiniteFlow.m), `finite_flow_library` (the locally built fflowmlink native
-library), and `reference_directory` (official `examples/massless_3L4P`), plus
-the exact identities `INITIAL 2.1; 63d8f813ac415f82f7ef945ee7e3f78a242fae49`
-and `FiniteFlow; 278344c169010b74e791af8c5604c8cb9cd8df11`. Relative paths
-resolve from the input JSON directory. Use a WolframKernel compatible with
-the installed native library:
-
-```bash
-"${CANON_WOLFRAM_KERNEL:-WolframKernel}" \
-  -noinit -noprompt -script methods/initial/run.wls input.json NEW_OUTPUT_DIR
+```text
+WolframKernel -noinit -noprompt -script methods/initial/run.wls INPUT.json NEW_OUTPUT_DIR
 ```
 
-`NEW_OUTPUT_DIR` must not exist; its parent must exist and be writable, and
-the output must be outside the tool component directories. The caller may
-supply a positive integer `threads` (default 1). The runner explicitly loads
-the declared FiniteFlow native library and INITIAL entry, then runs the
-official template's `TCalc` and `basisChange`. It does not call Libra, CANONICA,
-or candidate search, ranking, replacement, repair, or routing logic.
+The step is explicit; a missing or unsupported step is rejected before output
+creation. No scientific fallback occurs inside this entry. A failed core attempt
+returns its bounded result to the coordinator; it never launches official ladder
+validation or treats the seed as proved non-UT. The direct
+`methods/initial-core/run.wls` address remains usable with the same SEARCH_CORE
+contract and results.
 
-## Result and next action
+Both provider implementations share the read-only
+[INITIAL runtime loader](../../mma/lib/InitialRuntime.wl). It adapts the known
+INITIAL 2.1 empty-training rank defect only for the exact source hash specified
+in [INTERFACES](../../INTERFACES.md); other packages retain file-loading semantics.
+The original source and CANON adapter hashes, with an `applied` flag, are recorded
+in result/artifact provenance. Caller threads and finite bounds are passed
+unchanged, with no automatic retry. Native official regressions run with one
+thread through this loader and retain their independent checkers.
 
-Successful computation returns only `PROVISIONAL/EVIDENCE_AWAITING_VERIFICATION`
-with a `canon-neu/ut-evidence/v1` artifact. Provider reference, gauge,
-epsilon-form, or dlog checks are not final acceptance. Only an independent
-`mma/CheckUTEvidence.wls` run that rereads the official A, basis, and reference
-and recomputes every exact condition can return `PASS/VERIFIED_EVIDENCE`.
+## Official reference compatibility
 
-The checker accepts the same `package_entry`, `finite_flow_package_file`, and
-`reference_directory` in `checker_options`; it does not load the native library.
-Source is distributed in `external/INITIAL` and `external/FiniteFlow`; see
-[installation instructions](../../external/README.md).
+The original fixed 26-element official ladder implementation lives in
+[the official validation example](../../examples/initial-official-ladder/README.md).
+It is a reference regression and normalization benchmark, not a selectable
+SEARCH_CORE method or a prerequisite for independent core/full-system checks.
 
-Keep result categories distinct. Unsupported scope returns
-`INCONCLUSIVE/OUT_OF_SCOPE`. Configuration, component, identity, loading, or
-computation errors return a specific `ERROR/TOOL_*`. Unestablished provider
-reference, gauge, epsilon, or dlog evidence returns
-`INCONCLUSIVE/METHOD_EXHAUSTED`. The provider never writes `PASS` or `FAIL`;
-only the independent checker issues `PASS/VERIFIED_EVIDENCE` or
-`FAIL/EVIDENCE_REJECTED`.
+Existing explicit requests remain compatible:
+
+| Existing step / address | Preserved result | Scope |
+|---|---|---|
+| `PROVIDE_UT_EVIDENCE` at `methods/initial/run.wls` | `ut_evidence`, provisional evidence | Fixed official ladder representation |
+| `CHECK_UT_EVIDENCE` at `mma/CheckUTEvidence.wls` | `verified_ut_evidence`, independently verified reference evidence | That same fixed representation and normalization |
+
+These are compatibility entries. They retain existing schemas, IDs, reference
+requirements and scientific checks. Their result and artifact `interface` metadata
+records `lifecycle="compatibility"`, `core_selection_eligible=false`,
+`workflow_action="none"`, and the fixed official verification scope.
+A `VERIFIED_EVIDENCE` result is agreement with the declared official normalized
+reference, not a general UT proof, a core pass, a full-prefix pass, or a route
+selection. There is no automatic promotion of that artifact to a new seed's
+normalization premise. Explicitly bind the applicable source and full seed row
+when supplying normalization evidence to the active interface.

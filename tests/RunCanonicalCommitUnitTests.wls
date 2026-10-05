@@ -158,19 +158,27 @@ ordered2 = <|"schema" -> "canon-neu/ordered-master-de/v1",
   "family_id" -> family, "basis_id" -> "fixture/raw-order",
   "coefficient_domain" -> "exact-rational-functions", "basis" -> {l0, j0, k0},
   "variables" -> {x}, "regulator" -> eps, "matrices" -> {raw2}|>;
-coreCandidates2 = <|"source_basis" -> {l0, j0, k0},
+coreCandidates2 = Join[KeyDrop[cut2, {"schema", "matrices", "sector_boundaries"}],
+  <|"schema" -> "canon-neu/core-candidates/v1", "source_basis" -> {l0, j0, k0},
+  "convention" -> "old_basis = transformation . new_basis", "method" -> <|"id" -> "fixture"|>,
+  "candidate_group_pool" -> <|"declared" -> 1, "eligible" -> 1, "remaining" -> 0,
+    "unconsumed_candidates" -> 0, "pool_exhausted" -> True|>,
   "candidates" -> {<|"candidate_id" -> "third",
     "member_candidate_ids" -> {"third-member"},
     "construction_rejection" -> None,
-    "full_new_basis_rows" -> {{0, 0, 1}}|>}|>;
-coreTransform2 = <|"candidate_id" -> "third"|>;
+    "full_new_basis_rows" -> {{0, 0, 1}}, "transformation" -> {{1}},
+    "transformed_matrices" -> cut2["matrices"]|>}|>];
 alphabet2 = <|"schema" -> "canon-neu/declared-alphabet/v1",
   "letters" -> {x, 1 - x, 1 + x}|>;
 basis2Path = put["basis-2", basis2];
 cut2Path = put["cut-2", cut2];
 ordered2Path = put["ordered-2", ordered2];
 coreCandidates2Path = put["core-candidates-2", coreCandidates2];
-coreTransform2Path = put["core-transform-2", coreTransform2];
+coreCheck2 = runStep["core-check-2", "CheckSectorCore.wls", "CHECK_CORE", sector2,
+  <|"sector_basis" -> descriptor[basis2Path], "sector_cut_de" -> descriptor[cut2Path],
+    "core_candidates" -> descriptor[coreCandidates2Path]|>];
+coreTransform2Path = FileNameJoin[{coreCheck2["output"],
+  coreCheck2["result", "artifacts", "core_transform", "path"]}];
 alphabet2Path = put["alphabet-2", alphabet2];
 build2 = runStep["build-2", "BuildFullSectorDE.wls", "BUILD_FULL_DE", sector2,
   <|"ordered_master_de" -> descriptor[ordered2Path],

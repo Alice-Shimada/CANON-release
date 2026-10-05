@@ -27,6 +27,7 @@ QuadraticRootLetters::usage = "QuadraticRootLetters[matrices, variables] propose
 AlgebraicPrimitive::usage = "AlgebraicPrimitive[components, variables] solves a polynomial-over-poles primitive in the algebraic components of an exact one-form.";
 DLogConnectionQ::usage = "DLogConnectionQ[matrices, variables, eps, alphabet] tests the exact shared-residue dlog form across all directions.";
 ExactRationalExpressionQ::usage = "ExactRationalExpressionQ[expr] accepts only finite exact rational functions.";
+ExactAlgebraicExpressionQ::usage = "ExactAlgebraicExpressionQ[expr] accepts finite exact rational functions, algebraic numbers, radicals and polynomial Root functions.";
 ValidateStructuredRepairInput::usage = "ValidateStructuredRepairInput[prepared, route, request] validates the frozen-prefix Libra repair contract.";
 DeclaredCoefficientDomainQ::usage = "DeclaredCoefficientDomainQ[expr, symbols] checks exact rational syntax and rejects undeclared coefficient symbols.";
 StructuredRepairPublicationGate::usage = "StructuredRepairPublicationGate[request, candidate] applies only the provider's minimal structural publication gate.";
@@ -214,6 +215,34 @@ ExactRationalExpressionQ[expr_] := Module[{value, variables, numerator, denomina
   denominator = Denominator[value];
   rationalPolynomialSyntaxQ[numerator] && rationalPolynomialSyntaxQ[denominator] &&
     PolynomialQ[numerator, variables] && PolynomialQ[denominator, variables] && denominator =!= 0
+];
+
+(* Check the expression tree, rather than treating every exact expression as
+   algebraic. In particular, a symbolic exponent or Exp/Log is outside this
+   field. Parameters remain symbolic and no branch-changing rewrite is used. *)
+ExactAlgebraicExpressionQ[expr_] := Which[
+  IntegerQ[expr] || Head[expr] === Rational, True,
+  MatchQ[expr, _Symbol], Context[expr] =!= "System`",
+  Head[expr] === Complex,
+    ExactAlgebraicExpressionQ[Re[expr]] && ExactAlgebraicExpressionQ[Im[expr]],
+  Head[expr] === Plus || Head[expr] === Times,
+    And @@ (ExactAlgebraicExpressionQ /@ List @@ expr),
+  Head[expr] === Power,
+    (IntegerQ[Last[expr]] || Head[Last[expr]] === Rational) &&
+      ExactAlgebraicExpressionQ[First[expr]],
+  Head[expr] === AlgebraicNumber, TrueQ[Element[expr, Algebraics]],
+  Head[expr] === Root, algebraicRootQ[expr],
+  True, False
+];
+
+algebraicRootQ[expr_] := Module[{variable = Unique["root$"], polynomial, degree},
+  If[!MemberQ[{2, 3}, Length[expr]] || Head[First[expr]] =!= Function ||
+      !IntegerQ[expr[[2]]] || expr[[2]] < 1, Return[False]];
+  polynomial = Quiet @ Check[First[expr][variable], $Failed];
+  If[polynomial === $Failed || !PolynomialQ[polynomial, variable], Return[False]];
+  degree = Exponent[polynomial, variable];
+  IntegerQ[degree] && 1 <= expr[[2]] <= degree &&
+    And @@ (ExactAlgebraicExpressionQ /@ CoefficientList[polynomial, variable])
 ];
 
 DeclaredCoefficientDomainQ[expr_, allowedSymbols_List] :=
@@ -554,10 +583,12 @@ CheckCoreCandidate[
   matrices_List,
   variables_List,
   regulator_Symbol,
-  index_Integer
+  index_Integer,
+  inverseProposal_:Automatic
 ] := Module[
   {candidateID, construction, transformation, declared, computed, residuals,
-    invertible, exactGauge, flat, epsilonForm, reasons},
+    invertible, exactGauge, flat, epsilonForm, reasons, certifiedInverse,
+    inverseVerification = "symbolic_inverse"},
   candidateID = candidate["candidate_id"];
   construction = candidate["construction_rejection"];
   If[StringQ[construction], Return[<|
@@ -565,13 +596,30 @@ CheckCoreCandidate[
     "invertible" -> False, "rejection_signature" -> {construction}|>]];
   transformation = candidate["transformation"];
   declared = candidate["transformed_matrices"];
-  invertible = TrueQ[Together[Det[transformation]] =!= 0];
+  (* A supplied row matrix is only a proposal. Both exact inverse identities
+     must hold before it replaces symbolic determinant/inverse construction. *)
+  certifiedInverse = MatrixQ[inverseProposal] &&
+    Dimensions[inverseProposal] === Dimensions[transformation] &&
+    ZeroMatrixQ[transformation.inverseProposal - IdentityMatrix[Length[transformation]]] &&
+    ZeroMatrixQ[inverseProposal.transformation - IdentityMatrix[Length[transformation]]];
+  invertible = TrueQ[certifiedInverse] || TrueQ[Together[Det[transformation]] =!= 0];
   If[!invertible, Return[<|
     "candidate_id" -> candidateID, "index" -> index, "pass" -> False,
     "invertible" -> False, "rejection_signature" -> {"singular_transformation"}|>]];
-  computed = GaugeTransform[matrices, variables, transformation];
-  residuals = MapThread[Map[Together, #1 - #2, {2}] &, {computed, declared}];
-  exactGauge = And @@ (ZeroMatrixQ /@ residuals);
+  If[TrueQ[certifiedInverse],
+    inverseVerification = "two_sided_exact_identity";
+    residuals = MapThread[#1.transformation - D[transformation, #2] -
+      transformation.#3 &, {matrices, variables, declared}];
+    exactGauge = And @@ (ZeroMatrixQ /@ residuals);
+    (* The independently verified invertibility and exact source equation
+       uniquely determine B. No provider flag or numerical test is trusted. *)
+    computed = If[exactGauge, declared, MapThread[
+      Map[Together, inverseProposal.(#1.transformation - D[transformation, #2]), {2}] &,
+      {matrices, variables}]],
+    computed = GaugeTransform[matrices, variables, transformation];
+    residuals = MapThread[Map[Together, #1 - #2, {2}] &, {computed, declared}];
+    exactGauge = And @@ (ZeroMatrixQ /@ residuals)
+  ];
   flat = FlatConnectionQ[computed, variables];
   epsilonForm = EpsilonFactorizedQ[computed, regulator];
   reasons = Pick[
@@ -580,6 +628,7 @@ CheckCoreCandidate[
   <|
     "candidate_id" -> candidateID, "index" -> index, "pass" -> (reasons === {}),
     "invertible" -> invertible,
+    "inverse_verification" -> inverseVerification,
     "exact_gauge" -> exactGauge,
     "flat_connection" -> flat,
     "epsilon_factorized" -> epsilonForm,

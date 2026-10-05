@@ -88,7 +88,7 @@ positional commands in the IBP skill and inspect the returned WL artifact.
 ## 4. Core selection
 
 Follow [canon-search-core](../canon-search-core/SKILL.md), which defines the
-ordered method choices and their input requirements. Its default for a defined
+method choices and their input requirements. Its default for a defined
 family and UT/canonical integral-basis search is one bounded DlogBasis-refine
 search, followed by candidate IBP reduction and CHECK_CORE. An attempt consists
 of a `DlogBasisSearch` call with declared finite bounds. Package loading and family
@@ -100,6 +100,15 @@ core-selection skill defines direct-DE exceptions. The method catalog provides
 capabilities and contracts; exhaustive provider or numerator/dot enumeration is
 not required. Method choices follow the overall goal and current evidence
 throughout worker handoffs.
+
+After a direct-DE exception applies, a small explicitly normalized UT seed set
+can select INITIAL's seeded core card alongside the other SEARCH_CORE providers.
+Use `methods/initial/run.wls` with explicit `SEARCH_CORE`. The legacy official
+ladder evidence steps are reference validation only; they cannot satisfy
+CORE_PASS, select a method, or run automatically after a failed core attempt.
+Libra's bounded normalization and CANONICA's finite block ansatz extend this same
+node. CANONICA's subsector D solving and checkpoints extend SOLVE_TAIL. Every
+proposal retains the existing independent checks and forward-routing order.
 
 ## 5. Result routing
 

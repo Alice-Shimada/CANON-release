@@ -10,7 +10,7 @@
 | CANONICA | 有理 DE 与 tail；`src/CANONICA.m` | [README](CANONICA/README)，Wolfram 源码直接加载 |
 | Libra | DE 变换与结构修复；`Source/Libra.m` | [Readme](Libra/Readme.md)、[INSTALL](Libra/INSTALL) |
 | Fermatica | Fermat 的 Wolfram 接口；`source/Fermatica.wl` | [README](Fermatica/README.md)，先安装 Fermat，再设置 `FERMATPATH` |
-| INITIAL | 官方固定梯图证据；`INITIAL.m` | [README](INITIAL/README.md)，先安装 FiniteFlow |
+| INITIAL | 有界可信 seed 核心候选及官方固定梯图证据；`INITIAL.m` | [README](INITIAL/README.md)，先安装 FiniteFlow |
 | FiniteFlow | 有限域计算；`mathlink/FiniteFlow.m` | [README](FiniteFlow/README.md)，用 CMake 编译与本机 Wolfram 匹配的原生库 |
 | Kira | IBP 约化；安装后的 `kira` | [README](Kira/README.rst)、[meson.build](Kira/meson.build)；本快照为 3.1，README 中部分说明仍沿用 2.x |
 | Singular | DlogBasis-refine 候选组合的模块求解；安装后的 `Singular` | [README](Singular/README.md) 中的官方源码安装指南；快照为 `Release-4-2-1p2` |
@@ -53,7 +53,8 @@ gfanlib 等组成部分按原树保留；Kira 原树中的 sqlite3 等内嵌源�
 
 ## INITIAL 独立组件配置
 
-INITIAL 固定卡的 `method_options` 需要以下路径和身份，原生库文件名按本机平台填写。
+INITIAL [官方参考验证兼容接口](../examples/initial-official-ladder/README.md) 的
+`method_options` 需要以下路径和身份，原生库文件名按本机平台填写。
 相对路径从实际输入 JSON 目录计算，下面展示字段，不规定安装目录布局：
 
 ```json
@@ -71,11 +72,20 @@ INITIAL 固定卡的 `method_options` 需要以下路径和身份，原生库文
 `CANON_TEST_INITIAL_CONFIG` 可指向含这四个组件路径及可选 `threads` 的 JSON，供真实
 INITIAL 测试读取；该文件内的相对路径以配置文件自身为基准。独立 checker 只需要
 `package_entry`、`finite_flow_package_file`、`reference_directory`，不加载原生库。
-固定身份属于该证据卡的科学范围；运行平台、安装目录与线程数由调用方决定。
+固定身份属于该参考验证的科学范围；运行平台、安装目录与线程数由调用方决定。
+
+常规 [INITIAL seed 核心接口](../methods/initial/SKILL.md) 使用同样的三个组件
+路径与声明身份，但不需要 `reference_directory`。它需要明确的 `threads`、
+`timeout_seconds`、`max_iterations`、`max_degree` 和 `max_primes`，以及 seed 行、
+归一化证据、字母表和导数分配。它输出普通 `core_candidates`，交给 CHECK_CORE；
+稳定入口为 `methods/initial/run.wls`，请求须明确 `step="SEARCH_CORE"`。
+本机工具能力仍须由调用方核验，通用接口的存在不扩大任何机器的已验收运行范围。
 
 其他真实 provider 测试接受 `CANON_TEST_CANONICA_ENTRY`、`CANON_TEST_LIBRA_ENTRY`、
 `CANON_TEST_DLOGBASIS_REFINE_ENTRY`、`CANON_TEST_FINITEFLOW_ENTRY`；DlogBasis 的声明
 版本可用 `CANON_TEST_DLOGBASIS_REVISION` 传入。未配置的真实 provider 测试会显式跳过。
+`CANON_TEST_SINGULAR_ENTRY` 可为真实 DlogBasis 回归指定 Singular 的绝对入口，
+避免依赖测试进程的 `PATH`。
 
 原始仓库中的历史 notebook 输出、生成器注释、平台 help 配置及示例文件可能包含作者当时
 的路径；Singular 的旧 openmath/python 演示脚本和示例 Makefile 也保留上游路径，

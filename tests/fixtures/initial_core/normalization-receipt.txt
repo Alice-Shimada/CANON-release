@@ -1,0 +1,2 @@
+Algebra fixture only: normalized-seed has full row {1/(1+x),x,1}.
+This file binds test provenance, not physical UT evidence or a package capability.

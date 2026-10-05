@@ -3,8 +3,20 @@
 $HistoryLength = 0;
 repoRoot = DirectoryName[DirectoryName[ExpandFileName[$InputFileName]]];
 Get[FileNameJoin[{repoRoot, "mma", "lib", "MethodCardCore.wl"}]];
+Get[FileNameJoin[{repoRoot, "mma", "lib", "CanonicaTailControl.wl"}]];
+Get[FileNameJoin[{repoRoot, "methods", "canonica", "Control.wl"}]];
 {inputPath, outputDir} = ExpandFileName /@ CanonMethodCard`ScriptArguments[];
 task = CanonMethodCard`ReadTask[inputPath, "SOLVE_TAIL"];
+If[AnyTrue[{"result.json", "canonica-tail-messages.log"},
+    FileExistsQ[FileNameJoin[{outputDir, #}]] &],
+  Print["OUTPUT_ERROR: output directory already contains a result or CANONICA tail message log."];
+  Quit[1]];
+tailOptions = CanonTailControl`ReadOptions[task];
+If[FailureQ[tailOptions],
+  CanonMethodCard`WriteResult[task, outputDir, "ERROR", "INVALID_OPTIONS", <||>,
+    <|"reason" -> ToString[tailOptions, InputForm]|>]; Quit[1]];
+backendEvidence = <||>;
+backendArtifacts = <||>;
 fullDE = CanonMethodCard`LoadArtifact[task, inputPath, "full_sector_de"];
 core = CanonMethodCard`LoadArtifact[task, inputPath, "core_transform"];
 selected = SelectFirst[fullDE["candidates"], #1["candidate_id"] === core["candidate_id"] &];
@@ -176,8 +188,8 @@ If[!tailSolved,
     method = "scalar-first-derivative-completion"; tailSolved = True]
 ];
 
-unsolved[reason_:"backend_no_transformation"] := (CanonMethodCard`WriteResult[task, outputDir,
-  "INCONCLUSIVE", "TAIL_UNSOLVED", <||>,
+unsolved[reason_:"backend_no_transformation", artifacts_:<||>] := (CanonMethodCard`WriteResult[task, outputDir,
+  "INCONCLUSIVE", "TAIL_UNSOLVED", Join[backendArtifacts, artifacts],
   <|"candidate_id" -> core["candidate_id"], "method" -> method,
     "reason" -> reason,
     "diagnostics" -> <|"current_master_count" -> dimension - lowerDimension,
@@ -185,42 +197,46 @@ unsolved[reason_:"backend_no_transformation"] := (CanonMethodCard`WriteResult[ta
       "affine_in_epsilon" -> affineEpsilonQ[matrices],
       "rational_coefficients" -> And @@
         (CanonMethodCard`ExactRationalExpressionQ /@ Flatten[matrices]),
-      "alphabet_candidate_count" -> Length[alphabet]|>|>]; Quit[0]);
+      "alphabet_candidate_count" -> Length[alphabet]|>,
+    "backend" -> backendEvidence|>]; Quit[0]);
 
-If[!tailSolved,
+If[!tailSolved || KeyExistsQ[task["payload"], "tail_checkpoint"] ||
+    KeyExistsQ[task["payload"], "d_ansatz"],
   If[!And @@ (CanonMethodCard`ExactRationalExpressionQ /@ Flatten[matrices]),
     unsolved["remaining_algebraic_tail_outside_rational_CANONICA_domain"]];
   method = "canonica-off-diagonal";
-  package = CanonMethodCard`ResolveMethodPackage[task, inputPath, "CANONICA`"];
-  Get[package["entry"]];
-  dependencies = Table[Union @@ (Flatten[Position[#[[i]],
-      x_ /; x =!= 0, {1}, Heads -> False]] & /@ matrices), {i, dimension}];
-  active = FixedPoint[Union[#, Flatten[dependencies[[#]]]] &,
-    Range[lowerDimension + 1, dimension]];
-  activeLower = Count[active, i_ /; i <= lowerDimension];
-  boundaries = If[activeLower === 0, {{1, Length[active]}},
-    {{1, activeLower}, {activeLower + 1, Length[active]}}];
-  backendMatrices = matrices[[All, active, active]];
-  result = CANONICA`TransformOffDiagonalBlock[
-    variables, boundaries, IdentityMatrix[Length[active]],
-    backendMatrices /. regulator -> CANONICA`eps, CANONICA`VerbosityLevel -> 0];
-  If[!MatrixQ[result[[1]]], unsolved[]];
-  embedding = IdentityMatrix[dimension][[active]];
-  lifted = IdentityMatrix[dimension] +
-    Transpose[embedding].(result[[1]] - IdentityMatrix[Length[active]]).embedding;
-  backendMatrices = matrices /. regulator -> CANONICA`eps;
-  boundaries = If[lowerDimension === 0, {{1, dimension}},
-    {{1, lowerDimension}, {lowerDimension + 1, dimension}}];
-  result = CANONICA`TransformDlogToEpsForm[
-    variables, boundaries, lifted,
-    CanonMethodCard`GaugeTransform[backendMatrices, variables, lifted],
-    CANONICA`VerbosityLevel -> 0];
-  If[!MatrixQ[result[[1]]], unsolved[]];
-  backendTransformation = result[[1]] /. CANONICA`eps -> regulator;
+  If[!DirectoryQ[outputDir], CreateDirectory[outputDir, CreateIntermediateDirectories -> True]];
+  messageStream = OpenWrite[FileNameJoin[{outputDir, "canonica-tail-messages.log"}]];
+  initialKernels = Kernels[];
+  backend = Block[{$Messages = Append[$Messages, messageStream]},
+    CanonTailControl`RunBackend[task, inputPath, fullDE, core,
+      transformation, matrices, tailOptions]];
+  createdKernels = Complement[Kernels[], initialKernels];
+  If[createdKernels =!= {}, CloseKernels[createdKernels]];
+  Close[messageStream];
+  backendArtifacts = <|"method_messages" -> <|"type" -> "text",
+    "path" -> "canonica-tail-messages.log"|>|>;
+  backendEvidence = KeyDrop[backend, {"backend_transformation", "checkpoint"}];
+  If[!TrueQ[backend["success"]],
+    If[TrueQ[backend["input_error"]],
+      CanonMethodCard`WriteResult[task, outputDir, "ERROR", "INVALID_INPUT", backendArtifacts,
+        <|"reason" -> backend["reason"], "backend" -> backendEvidence|>]; Quit[1]];
+    checkpointArtifacts = <||>;
+    If[KeyExistsQ[backend, "checkpoint"],
+      checkpointPath = CanonMethodCard`WriteWLArtifact[backend["checkpoint"], outputDir,
+        "tail-checkpoint.wl"];
+      checkpointArtifacts = <|"tail_checkpoint" -> <|"type" -> "mathematica-expression",
+        "path" -> FileNameTake[checkpointPath],
+        "sha256" -> FileHash[checkpointPath, "SHA256", "HexString"]|>|>];
+    unsolved[backend["reason"], checkpointArtifacts]
+  ];
+  backendTransformation = backend["backend_transformation"];
   transformation = Map[Together, transformation.backendTransformation, {2}];
   matrices = CanonMethodCard`GaugeTransform[fullDE["source_matrices"], variables, transformation];
   alphabet = DeleteDuplicates @ Join[fullDE["alphabet"],
     CanonMethodCard`DLogAlphabet[matrices, variables, regulator]];
+  If[!CanonMethodCard`DLogConnectionQ[matrices, variables, regulator, alphabet],
+    unsolved["backend_final_epsilon_or_dlog_check_failed"]];
 ];
 
 value = <|"schema" -> "canon-neu/sector-transform/v1",
@@ -233,9 +249,10 @@ value = <|"schema" -> "canon-neu/sector-transform/v1",
   "convention" -> fullDE["convention"], "candidate_id" -> core["candidate_id"],
   "member_candidate_ids" -> selected["member_candidate_ids"],
   "transformation" -> transformation, "transformed_matrices" -> matrices,
-  "method" -> method|>;
+  "method" -> method, "backend" -> backendEvidence|>;
 path = CanonMethodCard`WriteWLArtifact[value, outputDir, "sector-transform.wl"];
 CanonMethodCard`WriteResult[task, outputDir, "PASS", "TAIL_READY",
-  <|"sector_transform" -> <|"type" -> "mathematica-expression",
-    "path" -> FileNameTake[path]|>|>,
-  <|"candidate_id" -> core["candidate_id"], "method" -> method|>];
+  Join[backendArtifacts, <|"sector_transform" -> <|"type" -> "mathematica-expression",
+    "path" -> FileNameTake[path]|>|>],
+  <|"candidate_id" -> core["candidate_id"], "method" -> method,
+    "backend" -> backendEvidence|>];

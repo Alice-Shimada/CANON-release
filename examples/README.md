@@ -21,3 +21,11 @@ For a new calculation, use the [agent guide](../docs/agent-workflow.md) and
 [installation guide](../docs/installation.md). These saved examples do not run
 automatically as tests, and success with a historical workflow does not establish
 that the current version reproduces it without further work.
+
+## Reference validation
+
+[INITIAL official ladder](initial-official-ladder/README.md) contains an opt-in
+reference provider/checker and their compatibility contract, rather than saved
+full-family results. Executing it needs the declared INITIAL/FiniteFlow runtime;
+reading it does not execute anything. Ordinary INITIAL core search uses the
+[main interface](../methods/initial/SKILL.md).

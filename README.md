@@ -69,7 +69,14 @@ For integral-basis discovery from a family (UT or canonical), prioritize a bound
 candidate search, followed by candidate IBP reduction and the existing checks.
 CANONICA supplies rational DE transformations and Libra the implemented
 single-variable route when a direct-DE approach is justified. A supplied-DE-only
-task can start there. The [routing skill](skills/canon-workflow/SKILL.md) explains when
+task can start there. With explicitly normalized UT seeds, a declared alphabet
+and a rational one-variable cut, [INITIAL](methods/initial/SKILL.md) also supplies
+a bounded core candidate through `methods/initial/run.wls` with explicit
+`SEARCH_CORE`. Its original fixed official ladder flow is retained as
+[reference validation and compatibility](examples/initial-official-ladder/README.md).
+Optional Libra normalization and CANONICA finite T/D ansatz controls extend the
+existing core/tail nodes; subsector tail checkpoints can resume bounded work.
+The [routing skill](skills/canon-workflow/SKILL.md) explains when
 to change routes; an exhaustive numerator/dot search is not required. The
 [method cards](methods/README.md) describe their actual scopes.
 

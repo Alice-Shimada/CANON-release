@@ -1,9 +1,21 @@
 ---
 name: canon-libra-core
-description: Propose a core transformation for a small exact rational one-variable cut DE using bounded Libra Fuchsify and FactorOut stages.
+description: Propose a core transformation for a small exact rational one-variable cut DE, with optional bounded normalization before Libra Fuchsify and FactorOut.
 ---
 
 # Libra rational-DE candidates: current automatic scope is one variable
+
+## Routing contract
+
+- **Role / stage:** transformation provider, `SEARCH_CORE`.
+- **Activation:** a main direct-DE method selected under
+  [core selection](../../skills/canon-search-core/SKILL.md).
+- **Boundary:** read the ordered current-sector cut; propose its rational
+  gauge transformation without changing the lower-sector basis.
+- **Attempt:** optional bounded normalization, then `Fuchsify` and one `FactorOut` call using the selected
+  dependent-row strategy and the task's execution budget.
+- **Handoff:** provisional `core_candidates` to `CHECK_CORE`; return the stopped
+  stage and evidence when the bounded route is exhausted.
 
 ## Trigger and scope
 
@@ -22,40 +34,11 @@ For defined-family UT or canonical integral-basis discovery, respect the bounded
 [workflow entry](../../skills/canon-workflow/SKILL.md); an available rational
 DE alone is not a reason to skip integral candidates.
 
-## Multivariable capabilities and the runner's limit
-
-Libra's `NewDSystem[ds,{x->Mx,y->My,...}]` stores a multivariable connection.
-`Transform[ds,t]` updates every direction with its corresponding derivative
-term, and `EFormQ[ds,eps]` checks all directions. The one-variable restriction
-belongs to this runner, not to Libra as a whole.
-
-`Fuchsify[ds,x]`, `FactorOut[ds,x,eps,mu]`, and visual balancing first construct
-a transformation from the selected direction `ds[x]`. The bundled two-variable
-tutorial applies `Fuchsify[ds,x]` and `Fuchsify[ds,y]` as needed, each followed
-by `Transform[ds,t]` on the full system. It then combines samples of all
-directions at common exact kinematic points for `FactorDependence` to find a
-shared epsilon-factorization transformation. The bundled three-variable
-presentation combines directional `VisBalancing`, single-direction `FactorOut`,
-and `BlockTriangularToFuchsian`, then partially specializes each matrix only
-in its own differential variable before `FactorDependence`. These examples
-demonstrate multivariable use of the components; the presentation also lists
-more systematic multivariable treatment as future work.
-
-A noninteractive sequence of directional `Fuchsify` calls would therefore be
-a bounded design based on those APIs, not an already validated capability of
-this card. Such an implementation would need explicit variable traversal and
-revisit rules, deterministic nonsingular sample choices, and saved samples.
-Partial or full specialization can propose candidates but cannot certify them.
-Acceptance still requires joint exact gauge, directional Fuchsianity, flatness,
-and epsilon-factorization checks on the unspecialized full symbolic system.
-Until that loop is implemented and validated, the runner returns
-`INCONCLUSIVE/OUT_OF_SCOPE` for multivariable input, without a mathematical
-rejection of the candidate.
-
-`EFormQ[ds,eps]` only checks that dividing each connection matrix by `eps`
-removes its `eps` dependence. It does not establish membership in a dlog
-alphabet. Multivariable canonical acceptance also needs CANON's independent
-multivariable dlog decomposition checks.
+Multivariable input returns `INCONCLUSIVE/OUT_OF_SCOPE`. For work on extending
+the adapter, read [multivariable capabilities and limits](references/multivariable.md);
+those package capabilities are not implemented by this runner. `EFormQ` checks
+epsilon factorization, not dlog alphabet membership. The independent canonical
+checks remain necessary.
 
 ## Inputs, invocation, and dependent rows
 
@@ -106,3 +89,77 @@ not to the existence of a canonical basis. There is no silent fallback to
 `Rookie`, interactive operations, Fermatica, CANONICA, INITIAL, or rewriting
 the lower-sector basis. Return the stopped stage and its evidence to the
 workflow entry.
+
+## Explicit bounded normalization within SEARCH_CORE
+
+`method_options.normalization_strategy` is `none` by default. This preserves the
+existing six-symbol provider contract and the original Fuchsify/FactorOut route.
+Select `bounded` explicitly to normalize integer residue offsets before those
+same stages. This is an option inside the Libra SEARCH_CORE node; it neither
+changes the core-selection order nor starts a separate scientific workflow.
+It additionally requires public `GetSubspaces`, `Projector`, and `Balance`.
+
+The optional budgets below are positive integers. They are valid only with
+`normalization_strategy=bounded`; unknown options, invalid strategies, and
+noninteger/nonpositive budgets return `ERROR/INVALID_OPTIONS` before package
+loading. Omitted bounded budgets use the fixed defaults below.
+
+| Option | Default | Bound |
+|---|---:|---|
+| `normalization_max_steps` | 8 | Accepted balance steps |
+| `normalization_max_projectors` | 64 | Projector constructions, accumulated across all steps |
+| `normalization_max_dimension` | 8 | Cut matrix dimension, checked before subspace construction |
+| `normalization_max_seconds` | 30 | Total normalization stage time, including analysis and public primitive calls |
+
+The existing task execution budget still applies to Fuchsify, FactorOut, and
+the remaining runner. The normalization timer does not grant extra time to
+those stages. Exhaustion never enlarges a budget, truncates a projector,
+retries another strategy, or silently falls back to the `none` route.
+
+The bounded domain is one exact rational variable with analyzable linear pole
+factors and Infinity. Pole positions must be independent of epsilon. The
+connection at epsilon zero must be defined and Fuchsian at every singularity;
+this is distinct from requiring the generic-epsilon connection to be Fuchsian.
+Existing generic-epsilon irregularities are allowed only while their pole
+ranks do not increase under a proposed balance. Generic residue eigenvalues
+must be exact rational expressions whose epsilon-zero intercepts can be
+proved to be integers. Nonlinear/algebraic pole factors, moving epsilon poles,
+undefined epsilon-zero limits, irregular epsilon-zero connections, noninteger
+intercepts, or parameter-dependent undecidable intercepts return a specific
+`INCONCLUSIVE/OUT_OF_SCOPE` limit. No parameter or regulator specialization is
+used to make an undecidable intercept pass.
+
+At each finite step, the adapter calls `GetSubspaces` on the generic-epsilon
+matrix with `All->False` and `UseFermat->False`. It considers individual Jordan
+tower prefixes and prefixes of the returned ordered tower list. It pairs
+equal-dimensional left/right subspaces at distinct singularities, up to the
+global projector budget. It does not enumerate arbitrary tower subsets or
+call `Rookie`, and it never constructs Jordan data first at epsilon zero.
+
+Each proposed projector must have the expected rank and satisfy `P.P=P`.
+Each balance must be exact rational and invertible. The adapter verifies both
+the local and cumulative source identity `A.T-D[T,x]-T.B=0`, recomputes all
+singularities (including Infinity), checks that no generic pole rank increases,
+and requires the sum of absolute integer residue intercepts over all
+singularities to decrease strictly. Rejected candidates remain in the trace.
+Only a zero final deviation completes normalization; lack of a progressing
+candidate or a budget limit returns `INCONCLUSIVE/METHOD_EXHAUSTED`.
+
+For `A=(1+eps)/x`, Libra's ordered balance endpoints
+`Balance[{{1}},{x,Infinity,0}]` produce `T=x` and `B=eps/x`. For
+`A={{(1+eps)/x,eps},{0,eps/x}}`, the corresponding rank-one projector produces
+`T=DiagonalMatrix[{x,1}]` and `B=eps {{1,1},{0,1}}/x`. Libra's reversed endpoint
+order `{x,0,Infinity}` produces `1/x`; the adapter preserves the package's
+actual convention. The second source has a generic rank-one irregularity at
+Infinity, although its epsilon-zero connection is Fuchsian; the accepted
+balance removes that irregularity and preserves the final generic Jordan
+connection. These examples remain provisional until independent CHECK_CORE.
+
+Successful output remains the standard `core_candidates` artifact with the
+complete cumulative transformation and source basis order. Candidate
+`provider_evidence.normalization` and `result.summary.normalization` record the
+strategy, actual budgets, dimension, elapsed time, steps/projector count,
+initial/final singularity data, rejected and accepted attempts, exact balance
+matrices, cumulative transformation, and individual verification outcomes.
+Limits also record `limit_code`, `stopped_stage`, and available partial
+transformation history. The lower-sector prefix is never changed.

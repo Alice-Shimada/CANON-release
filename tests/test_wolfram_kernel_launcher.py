@@ -19,6 +19,14 @@ class WolframKernelLauncherTest(unittest.TestCase):
         shm_unlink = libc.shm_unlink
         shm_unlink.argtypes = [ctypes.c_char_p]
         shm_unlink.restype = ctypes.c_int
+        # PID reuse may leave exactly the stale object the launcher handles.
+        # Prepare our own PID only before constructing the controlled fixture.
+        try:
+            unlink_stale_libomp_registration(pid)
+        except OSError as exc:
+            if exc.errno == errno.EACCES:
+                self.skipTest("sandbox does not permit caller-owned POSIX SHM")
+            raise
         fd = shm_open(name, os.O_CREAT | os.O_EXCL | os.O_RDWR, 0o600)
         if fd == -1:
             error = ctypes.get_errno()

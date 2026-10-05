@@ -28,3 +28,13 @@ boundaries, and one completion for every declared core group. Use
 inference in SOLVE_TAIL, or
 supply a `canon-neu/declared-alphabet/v1` artifact with exact rational or
 algebraic letters.  This step makes no canonical or tail-solvability claim.
+
+The checked core must identify one candidate and bind the same cut identities.
+Full rows must have the declared source dimensions and their current-sector
+projection must be the exact inverse of that candidate's transformation.
+Malformed unused proposals retain their IDs as rejected completion records
+with `full_transformation -> None`; they cannot interrupt a valid selected
+completion. An inconsistent selected row map returns
+`ERROR/INVALID_CORE_COMPLETION` with `preferred_next_route="FIX_INPUT"`.
+CHECK_CORE's symbolic-inverse fallback verifies the mathematical core only;
+it does not repair an inconsistent full integral-row definition.

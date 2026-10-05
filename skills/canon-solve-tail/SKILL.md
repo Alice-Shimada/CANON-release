@@ -29,6 +29,51 @@ The returned transform is the complete prefix map, including any changed lower
 normalization. Carry it and its alphabet together into CHECK_CANONICAL and
 COMMIT_SECTOR. Do not splice in only the current-sector diagonal block.
 
+## Bounded CANONICA controls and continuation
+
+The legacy backend uses `tail_strategy="monolithic"` by default. Core-card
+options do not configure this node. Its separate `method_options` contract is:
+
+| Option | Default | Meaning |
+|---|---:|---|
+| `package_entry` | Wolfram package lookup | CANONICA entry for a needed backend call |
+| `tail_strategy` | `monolithic` | `monolithic` or explicit `subsector` |
+| `d_delta_numerator_degree` | 0 | Nonnegative integer degree increment for D |
+| `max_wall_seconds` | 60 | Positive shared time limit for backend D stages and epsilon normalization |
+| `max_subsector_steps` | 64 | Positive per-attempt step budget; explicit option requires `subsector` |
+| `max_ansatz_terms` | 256 | Positive integer limit for a supplied finite D ansatz |
+
+Unknown options and invalid budgets return `ERROR/INVALID_OPTIONS`. Built-in
+algebraic and affine proposals run as before. If their rational remainder needs
+the backend, `subsector` infers contiguous blocks from the actual transformed
+active lower DE using CANONICA's public sector API, checks their triangularity,
+and calls `CalculateNextSubsectorD` once per remaining lower block. Trace entry
+counts are not matrix widths. The completed D is lifted into the full prefix,
+then full-prefix epsilon normalization runs. Stage messages, block bounds,
+timing, attempted ansatz and stopped reason are retained in `summary.backend`.
+
+For a directed attempt, provide `payload.d_ansatz`, a SHA-256 descriptor for
+`canon-neu/canonica-rational-ansatz/v1`, with `kind -> "D"`. Its `identity`
+binds `sector`, `family_id`, `current_basis_id`, `accepted_prefix_id`,
+`candidate_id`, `source_basis`, `regulator`, and `source_de_sha256` (the input
+full-DE file's byte hash). Its `scope` is
+`<|"block_bounds" -> {activeLowerDimension+1,activeDimension}|>`, its
+`variables` match the full DE, and its nonempty `terms` contain only exact
+rational functions of those kinematic variables. Regulator-dependent terms,
+roots, unknown symbols, wrong source/block, or too many terms are rejected.
+The artifact is a rational-function basis for each D solve, not a matrix of
+preselected coefficients. Explicit D input requires `subsector`.
+
+When a bounded subsector attempt stops, `TAIL_UNSOLVED` can include a hashed
+`tail_checkpoint` artifact. Pass that descriptor as `payload.tail_checkpoint`
+with `tail_strategy="subsector"` to continue the remaining blocks. Validation
+binds the complete source, selected candidate, base transformation, active rows,
+partition and package entry hash; it also checks the partial D's shape and
+rational domain. Changed sources or malformed checkpoints return input errors.
+Checkpoint progress establishes no canonical claim. A resumed complete result
+still goes through CHECK_CANONICAL and FINAL_CHECK. The step budget is local to
+the new attempt; no automatic resume or budget increase occurs.
+
 ## What the script tries automatically
 
 The script applies the following proposals to matching input structures.
@@ -68,6 +113,9 @@ the coordinator distinguish the following cases without repeating the same run.
 | Epsilon factorization passes, dlog fitting fails | Inspect both the letter span and pole orders on the algebraic cover. Root-odd terms need suitable algebraic letters; `dQ/q^3 = 2 dq/q^2` needs a basis repair before letters can suffice. |
 | `remaining_algebraic_tail_outside_rational_CANONICA_domain` | Built-in proposals did not solve this algebraic input. Use a motivated representative/Gram correction, an explicit algebraic-letter proposal, or a genuine rationalizing chart with its full Jacobian. Do not send the same input to the rational backend with a longer timeout. |
 | `backend_no_transformation` | Inspect the rational backend's retained output and change the failed ansatz or representative within budget. |
+| `subsector_budget_exhausted` with `tail_checkpoint` | Review the completed blocks and budget. Continue the bound checkpoint only when further bounded work is warranted. |
+| `subsector_no_transformation` | Use the recorded failing lower block and package messages to revise the finite D ansatz or full representative. Preserve completed-block evidence. |
+| `epsilon_normalization_no_transformation` | D completion alone is insufficient; inspect the full-prefix epsilon-normalization stage and its messages. |
 
 For a family-based UT/canonical search, reconsider the bounded integral-candidate route
 if it has not supplied the needed full representative. Keep DlogBasis-refine's

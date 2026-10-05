@@ -77,18 +77,35 @@ replacement is a new complete proposal; exhaustive subset search is not required
 
 ## 3. Select a direct-DE method only after section 1 allows it
 
-Take the first applicable untried row for the unchanged input.
+Select one applicable untried method using the current evidence and remaining
+budget. The table gives useful triggers, not a mandatory provider chain. A
+particular method explicitly requested by the user retains priority within its
+contract. Keep section 1's bounded integral-search priority for defined families.
 
 | Condition | Method |
 |---|---|
+| One or a few normalized UT seeds have explicit evidence and full reduced rows, a rational one-variable cut, a declared alphabet, and a finite derivative allocation | [INITIAL](../../methods/initial/SKILL.md), `SEARCH_CORE` at `methods/initial/run.wls`. A small credible seed set makes this a direct candidate alongside CANONICA, Libra and epsilon-zero; it need not wait for CANONICA failure. |
 | A rational-transformation obstruction such as CANONICA `nonrationalinv` is recorded, and the rational DE is regular at epsilon zero | [epsilon-zero](../../methods/epsilon-zero/SKILL.md), with finite polynomial/prefactor bounds |
 | The cut DE is rational and CANONICA has not failed on this input | [CANONICA](../../methods/canonica/SKILL.md) |
-| The rational cut DE has one variable, CANONICA did not produce a checked core, and the implemented Libra route is untried | [Libra](../../methods/libra/SKILL.md) |
+| The rational cut DE has one variable and Libra is applicable and untried | [Libra](../../methods/libra/SKILL.md); explicitly enable bounded normalization when integer residue offsets obstruct epsilon factorization. |
 | The rational cut DE is regular at epsilon zero and epsilon-zero is untried | [epsilon-zero](../../methods/epsilon-zero/SKILL.md) |
 | These choices are exhausted or inapplicable | Return exact failures and remaining scope to the coordinator. Use the [Gram card](../../methods/gram/SKILL.md) only with a concrete new Gram/contact-term or dimensional-extension hypothesis. |
 
 A direct-DE provider returns `core_candidates`; run CHECK_CORE directly, without
-an integral-candidate IBP bridge. A rational DE may require an algebraic
+an additional integral-candidate IBP bridge. INITIAL consumes already reduced
+seed rows or an existing bridge; preserve their full lower-sector coefficients.
+An unnormalized candidate, numerical match or finite-cut rank alone is not a
+credible UT seed. Prepare missing seed evidence or choose another applicable
+method rather than silently declaring it established. INITIAL's fixed official
+reference validation is a compatibility/example contract outside core selection.
+Its `VERIFIED_EVIDENCE` is not a general UT proof or an automatic normalization
+promotion for another seed. A core provider failure does not call that validator;
+return the failed hypothesis and budget to the coordinator.
+
+CANONICA can target one declared block with a hashed finite T ansatz, recording
+the failed stage and messages. Changing a diagnosed finite ansatz is a new
+bounded attempt; increasing time without changing a refuted hypothesis is not.
+A rational DE may require an algebraic
 transformation; see [normalization and tails](references/normalization-and-tails.md).
 Do not repeat a refuted rational transformation or reinstall a working provider
 because its scientific ansatz failed.

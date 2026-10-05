@@ -76,7 +76,7 @@ nor automatically advances the scientific stage graph based on their codes.
 | `BUILD_CUT_DE` | `canon-build-cut-de` | `mma/BuildSectorCutDE.wls` | `prepared_family`, `master_basis`, `sector_manifest`, `ibp_reduction` | `sector_basis`, `sector_cut_de`, `ordered_master_de` |
 | `SLICE_CUT_DE` | `canon-build-cut-de` | `mma/SliceSectorCutDE.wls` | `ordered_master_de`, `sector_manifest` | `sector_basis`, `sector_cut_de` |
 | `ROUTE_CORE_CANDIDATES` | `canon-search-core` | `mma/RouteCoreCandidates.wls` | `prepared_family`, `sector_basis`, `sector_cut_de`, `candidate_ibp_bridge` | `core_candidates` |
-| `SEARCH_CORE` | `canon-search-core` | `methods/*/run.wls` | `prepared_family`, `sector_basis`, `sector_cut_de`, `method_options` | `core_candidates` |
+| `SEARCH_CORE` | `canon-search-core` | Selected direct-DE card's `run.wls` | `sector_cut_de`; `sector_basis` for CANONICA/Libra/INITIAL; card-specific `method_options` and optional artifacts | `core_candidates` |
 | `CHECK_CORE` | `canon-check-core` | `mma/CheckSectorCore.wls` | `sector_basis`, `sector_cut_de`, `core_candidates` | `core_transform` |
 | `BUILD_FULL_DE` | `canon-build-full-de` | `mma/BuildFullSectorDE.wls` | `ordered_master_de`, `sector_cut_de`, `core_candidates`, `core_transform`, `declared_alphabet`, `accepted_prefix` | `full_sector_de` |
 | `SOLVE_TAIL` | `canon-solve-tail` | `mma/SolveTail.wls` | `full_sector_de`, `core_transform`, `method_options` | `sector_transform` |
@@ -92,6 +92,193 @@ Historical steps that remain unimplemented must not be treated as complete merel
 because the table contains placeholder interfaces for them.
 
 For the first sector, `accepted_prefix` or `previous_accepted_prefix` is `null`.
+
+### Specialized method-card handoffs
+
+These operations retain their opt-in scopes in [the method catalog](methods/README.md).
+They are not additional mandatory stages of the canonical workflow. Each input
+artifact uses the common `mathematica-expression` descriptor. Package options
+are per card; options for one use of a package do not configure another operation.
+
+| step | script | payload keys | successful artifact and authority |
+|---|---|---|---|
+| `ROUTE_PREPARED_BASIS` | `methods/route-prepared-basis/run.wls` | `prepared_basis` | `route_decision`; `PROVISIONAL/ROUTE_DECISION`, no solver invocation |
+| `SCREEN_TAIL` | `methods/full-prefix-tail-screen/run.wls` | `sector_basis`, `sector_cut_de`, `core_candidates`, `accepted_prefix`, `full_prefix_candidates`, optional `screen_options` | `screened_candidate`; `PASS/TAIL_SCREEN_PASS` within the declared pool and frozen-prefix scope |
+| `REPAIR_WITH_LIBRA` | `methods/libra-structured-repair/run.wls` | `prepared_basis`, `route_decision`, `repair_request`, `method_options` | `repair_candidate`; `PROVISIONAL/CANDIDATE_TRANSFORMATION` |
+| `CHECK_STRUCTURED_REPAIR` | `mma/CheckStructuredRepair.wls` | `prepared_basis`, `route_decision`, `repair_request`, `repair_candidate`, `checker_options` | `verified_structured_repair`; `PASS/VERIFIED_STRUCTURED_REPAIR` |
+
+The checker options supply authoritative component paths/identity independently
+of the proposal; they are not inferred from a provider's success claim. INITIAL's
+fixed reference request is documented separately below. For repair, use the
+[request artifact](tests/fixtures/method_cards/structured-repair-input.wl) and
+[repair contract](methods/libra-structured-repair/SKILL.md). A specialized check
+does not replace `CHECK_CANONICAL` or `FINAL_CHECK` for a full-family claim.
+
+### Official validation compatibility
+
+The original INITIAL official ladder flow is outside the selectable method
+catalog. Its implementation is the
+[reference validation example](examples/initial-official-ladder/README.md).
+Existing clients retain these explicit contracts and all v1 artifact schemas:
+
+| Step | Compatibility address → implementation | Required payload | Output / scope |
+|---|---|---|---|
+| `PROVIDE_UT_EVIDENCE` | `methods/initial/run.wls` → `examples/initial-official-ladder/run.wls` | Fixed `candidate`, `method_options` | Provisional `ut_evidence`; fixed official reference only |
+| `CHECK_UT_EVIDENCE` | `mma/CheckUTEvidence.wls` → `examples/initial-official-ladder/check.wls` | Fixed `candidate`, `provider_task_id`, `ut_evidence`, `checker_options` | `PASS/VERIFIED_EVIDENCE` or scoped rejection; `verified_ut_evidence` |
+
+The [existing request fixture](tests/fixtures/method_cards/initial-evidence-input.json)
+retains fixed basis/seed/normalization/alphabet and declared tool identities.
+Result summaries and new artifacts have `interface` metadata identifying the
+compatibility lifecycle, fixed official verification scope,
+`core_selection_eligible=false` and `workflow_action="none"`. Existing artifacts
+without this metadata remain readable. The checker derives its scope from
+validated inputs and exact reference checks, not an artifact's policy flags.
+
+Strict reference equality detects changes to that fixture; a different constant
+gauge or basis permutation can fail this test while remaining a valid candidate.
+`VERIFIED_EVIDENCE` is agreement with the official normalized reference, not a
+general UT proof, CORE_PASS, CANONICAL_PASS or an automatic route selection.
+Referencing a receipt cannot automatically establish another seed's normalization.
+
+### Direct-DE options and CHECK_CORE boundary
+
+CANONICA, Libra and seeded INITIAL need matching task sector, family/basis
+identities and basis order in `sector_basis` and `sector_cut_de`. CANONICA and
+Libra do not need `prepared_family`; INITIAL needs it only for the bridge seed
+source described below.
+For CANONICA, `method_options` accepts `package_entry` and optional nonnegative
+integer `t_delta_numerator_degree`, `t_delta_denominator_degree`, and
+`d_delta_numerator_degree`. Each defaults to zero and configures one recursive
+attempt. `max_wall_seconds` defaults to 60 and `max_ansatz_terms` to 256;
+they require a positive time and positive integer term limit. The effective values are recorded as `ansatz_options` in the candidate's
+method provenance and result summary, including unsuccessful attempts after
+option validation. Optional `payload.t_ansatz` selects one directed diagonal
+block instead of the default recursive attempt, with the hashed finite artifact
+contract below. Diagnostics retain message tags, requested/failed stages, block,
+timing, timeout/abort flags and attempted ansatz, with raw package messages and
+the complete attempt list. They do not change `SOLVE_TAIL` options.
+
+Libra retains `package_entry` and `dependent_row_strategy`; its explicit
+hierarchy input is described in [the card](methods/libra/SKILL.md). Explicit
+`normalization_strategy="bounded"` adds finite public subspace/projector/balance
+normalization before Fuchsify/FactorOut. The default `none` preserves the legacy
+route. Positive integer budgets `normalization_max_steps`,
+`normalization_max_projectors`, `normalization_max_dimension`, and
+`normalization_max_seconds` default to 8, 64, 8, and 30 and are valid only with
+`bounded`. The epsilon-zero connection must be Fuchsian with decidable integer
+residue intercepts and regulator-independent linear poles. Each candidate must
+preserve the exact source gauge, avoid increasing generic pole ranks and
+strictly decrease total integer offsets. Its trace, bounds and stopped stage
+describe that finite route; they never certify all possible bases.
+
+Unknown options in these core cards and the official compatibility provider return
+`ERROR/INVALID_OPTIONS`; they are not silently ignored. The official provider
+validates positive integer `threads` (legacy default 1) before loading components.
+Requests to write INITIAL
+output into an existing directory, a component/reference directory, or beneath
+a missing parent exit without writing there, including an error result.
+Configured component parent directories and reference locations remain protected
+when a component is missing; both declared paths and existing symlink targets are
+covered.
+
+### INITIAL seeded SEARCH_CORE
+
+`methods/initial/run.wls` is the stable INITIAL entry. Explicit `SEARCH_CORE`
+delegates to `methods/initial-core/run.wls`, whose direct address remains usable
+with identical scientific semantics. Explicit `PROVIDE_UT_EVIDENCE` delegates
+only to official compatibility validation. Malformed envelopes or other steps
+exit before output creation. Input `step` selects a contract, not a scientific
+fallback; a core failure never invokes official validation. The active core
+interface accepts a rational one-variable cut,
+`seed_request`, and exactly one source: `seed_rows`, or
+`candidate_ibp_bridge` together with `prepared_family`. Descriptors can declare
+hashes, which are checked; actual hashes and complete source rows are retained.
+
+`canon-neu/initial-seed-request/v1` binds `sector`, `family_id`, `basis_id`,
+`basis`, `variables`, and `regulator`. It declares unique `seed_ids`, positive
+`derivative_counts` summing to the cut dimension, and `letters` (or instead a
+`payload.declared_alphabet` descriptor). `canon-neu/initial-seed-rows/v1` has
+the same identity/order fields, `source_basis`, and `seeds` records with `id`,
+`full_new_basis_row`, and `normalization_evidence`. The bridge alternative uses
+`prepared_family.dimension_rule` and keeps all lower-sector coefficients.
+
+Each selected normalization record requires `status="established"`, a statement,
+one of `official-reference`, `integrand-dlog-leading-singularities`,
+`independent-initial-picard-fuchs`, or `weight-graded-boundary-lower-sector`, and
+an evidence source path with SHA-256. This is an explicit input premise; a
+provisional Dlog candidate or finite-cut rank alone cannot satisfy it.
+
+Required `method_options` are `package_entry`, `finite_flow_package_file`,
+`finite_flow_library`, nonempty `initial_identity` and `finiteflow_identity`,
+and positive integer `threads`, `timeout_seconds`, `max_iterations`,
+`max_degree`, and `max_primes`. There is no implicit thread count, automatic
+retry, seed search or alphabet inference. The adapter binds the native library
+and protects input/component directories from output writes.
+
+Both INITIAL providers use `mma/lib/InitialRuntime.wl`. For the exact INITIAL
+2.1 source SHA-256
+`4b4fe726f45484f31b909dc34eef85d77068b3d6dfaf3404163f8f706fc3888c`,
+the loader assigns zero rank to an empty first training batch in `equStep`.
+The first sample is reserved for validation; a single-thread batch therefore
+needs the existing loop to collect further training rows. The unique source
+fragment is adapted only in memory and loaded expression by expression with
+`Get[stream]`. Other source hashes use ordinary `Get[entry]`. External sources
+and installations remain unchanged; caller threads, bounds, single-attempt
+behavior and independent checkers are preserved.
+
+`initial_runtime` contains the original source `path`/`sha256` and adapter
+`id`/`path`/`sha256`/`applied`. Core candidates retain it in
+`method.initial_runtime` and `method.diagnostics.initial_runtime`;
+provider result diagnostics retain it too. Official evidence retains it in
+`method.initial_runtime` and the provider result summary. These file hashes
+identify the original input and CANON implementation, not a patched upstream
+file. Native official regressions explicitly use one thread.
+
+Seed rows complete an invertible `R_cut`, with corresponding full `R_full`.
+The intermediate source is `(D[R_cut,x]+R_cut.A).Inverse[R_cut]`; INITIAL's
+`TakeRow` is `1` or explicit `{{row,count},...}`. The derivative Psi must have
+full rank. Final `T=Inverse[R_cut].T_initial` and
+`full_new_basis_rows=Inverse[T_initial].R_full` undergo source-gauge,
+invertibility, epsilon and declared-alphabet publication checks. Output remains
+`PROVISIONAL/CANDIDATE_TRANSFORMATION` and goes to CHECK_CORE. Degree,
+reconstruction, rank or time limits are `INCONCLUSIVE/METHOD_EXHAUSTED`, with
+no claim that a seed is non-UT. Its result summaries and method provenance carry
+`interface.role="core-candidate-provider"`, `lifecycle="active"`,
+`next_gate="CHECK_CORE"`, and `reference_equality_required=false`. These fields
+describe the provider's contract; independent checks and applicable normalization
+evidence establish the scientific claims. See [the card](methods/initial-core/SKILL.md).
+
+### Finite CANONICA ansatz artifact
+
+`payload.t_ansatz` (SEARCH_CORE) or `payload.d_ansatz` (subsector SOLVE_TAIL)
+requires a `mathematica-expression` descriptor with a verified byte SHA-256.
+The WL artifact uses schema `canon-neu/canonica-rational-ansatz/v1`, `kind`
+(`"T"` or `"D"`), exact `identity`, `scope`, ordered `variables`, and a
+nonempty finite list of `terms`. Terms are exact rational functions of declared
+kinematic variables only; regulator terms, roots, approximate coefficients and
+undeclared symbols are rejected before solving.
+
+For T, identity contains `sector`, `family_id`, `basis_id`, `source_basis`
+(the cut basis), `regulator`, and `source_de_sha256` (cut file bytes); scope
+contains the explicit `block_index` and its exact `block_bounds`.
+For D, identity contains `sector`, `family_id`, `current_basis_id`,
+`accepted_prefix_id`, `candidate_id`, `source_basis`, `regulator`, and
+`source_de_sha256` (full-DE file bytes); scope is the active current
+`block_bounds`. These artifacts supply finite rational-function bases for a
+bounded solve, not transformation matrices. Core T and tail D contracts and
+budgets remain separate.
+
+`CHECK_CORE` binds the task, basis, cut and candidate identities, ordered basis,
+variable order, regulator and transformation convention before checking the
+mathematics. Candidate IDs and pool counts must describe the supplied ordered
+pool consistently. Incorrect bindings are input errors, not mathematical
+rejections. This boundary preserves the production route's algebraic transforms
+and complete `source_basis` with lower-sector columns; it does not reduce those
+rows to the cut basis or impose the direct-DE providers' rational-only scope.
+The checker may independently certify a supplied inverse by both exact matrix
+identities and use the equivalent exact source equation `A.T-D[T]-T.B=0`.
+Flatness and epsilon checks remain unchanged; the determinant/inverse path is
+retained when no inverse certificate is established.
 
 `DISCOVER/PASS` must also provide:
 
@@ -151,6 +338,65 @@ protocol in `methods/README.md`.
 These codes define only the scientific method-card contract. `statemng` currently
 records explicit research task states; it does not use these codes as transition
 rules for an automatic scientific coordinator.
+
+## `core-candidates/v1`
+
+`CHECK_CORE` consumes a WL Association with the following fields. The production
+IBP router and direct-DE providers share this boundary; their method domains
+remain defined by their individual cards.
+
+| Field | Constraint |
+|---|---|
+| `schema` | `canon-neu/core-candidates/v1` |
+| `sector`, `family_id`, `basis_id`, `basis` | Match the sector cut and sector basis, including basis order; the task sector also matches |
+| `variables`, `regulator` | Match the cut's ordered distinct variables and separate regulator |
+| `coefficient_domain` | `exact-rational-functions` or `exact-algebraic-functions`; legacy v1 may omit it, in which case the checker infers the domain from the attempted candidate's entries |
+| `convention` | `old_basis = transformation . new_basis` |
+| `method` | Association with a nonempty string `id`; retain provider provenance |
+| `source_basis` | Optional complete source-column order, defaulting to `basis`; unique and contains every current master, possibly with lower-sector masters |
+| `candidate_group_pool` | Nonnegative integer `declared`, `eligible`, `remaining`, `unconsumed_candidates`, and Boolean `pool_exhausted` |
+| `candidates` | Ordered list of candidate Associations; an empty list can report a bounded rank shortage |
+
+Every candidate has a unique nonempty string `candidate_id` and
+`construction_rejection -> None` or a nonempty string rejection signature. A rejected
+construction need not provide matrices. Otherwise, `transformation` is an exact
+finite square matrix in cut order and `transformed_matrices` supplies one matrix
+of that size per variable. Optional `new_basis_rows` has the same square shape;
+optional `full_new_basis_rows` has one row per current master and one column per
+`source_basis` entry. Mathematical invertibility, gauge equality, flatness and
+epsilon factorization remain the independent checker's responsibility.
+
+The checker validates matrix shape and coefficient syntax only when it reaches
+that candidate. Exact rational syntax, rational powers, algebraic numbers and
+polynomial `Root` functions are supported; approximate numbers, transcendental
+functions and symbolic exponents are not. A declared rational domain cannot
+contain algebraic-only entries. Legacy domain inference is recorded in the
+result summary and never supplies missing identities, order or pool metadata.
+
+A malformed candidate records `input_valid -> False` and its reason, then the
+checker continues in the same order. A later valid mathematical pass still
+returns `CORE_PASS`; candidates after that pass are untouched. If no candidate
+passes and any attempted candidate has an input error, the result is
+`ERROR/INVALID_INPUT`, with `pool_exhausted -> False`,
+`repair_eligible -> False` and `preferred_next_route -> "FIX_INPUT"`.
+Only a fully valid exhausted pool can establish mathematical `CORE_FAIL` and
+repair eligibility. The result retains invalid candidate IDs even on success.
+
+The optional source fields describe the minimum `CHECK_CORE` input. Continuing
+to `BUILD_FULL_DE` requires explicit `source_basis`, `full_new_basis_rows` and
+`member_candidate_ids` for the selected candidate's full-prefix handoff.
+
+`eligible` equals the supplied list length, and `declared` covers at least
+`eligible + remaining`. `pool_exhausted -> True` requires zero upstream
+`unconsumed_candidates`. That upstream count is distinct from supplied groups
+not yet tested by `CHECK_CORE`: the checker stops at the first mathematical pass
+and accounts for the remaining groups. Exhaustion concerns this bounded pool,
+not the existence of a canonical basis in general.
+
+[The core contract tests](tests/test_core_contract.py) contain a complete input
+fixture and negative cases. The older
+[tail-screen fixture](tests/fixtures/method_cards/tail-core-candidates.wl) omits
+the pool and illustrates only `SCREEN_TAIL`, not a complete `CHECK_CORE` input.
 
 ## `integral-candidates/v1`
 
@@ -342,12 +588,18 @@ remain in `full_new_basis_rows`, whose columns follow the top-level `source_basi
 order. Every group has `T=Inverse[R]` with `old_basis=T.new_basis`. This group pool
 is a bounded selection space; exhausting it does not exhaust all integral representatives.
 
-The direct CANONICA/Libra providers use the same `source_basis`,
+The direct CANONICA/Libra/INITIAL providers use the same `source_basis`,
 `full_new_basis_rows`, and `member_candidate_ids`; their source basis may contain
 only current-sector masters. `BuildFullSectorDE.wls` embeds rows into the raw
 prefix using the explicit source-basis mapping, with zero coefficients for
 missing columns. It reuses the full `ordered_master_de` without repeating IBP or
-DE construction.
+DE construction. The checked core binds the same cut identities and exactly
+one selected candidate. Malformed unused proposals remain rejected completion
+records with their original IDs and `full_transformation -> None`. The selected
+proposal's full current-sector rows must be the exact inverse of its checked
+transformation; an inconsistent row map is `ERROR/INVALID_CORE_COMPLETION`
+and requires input repair. An inverse proposal ignored by CHECK_CORE does not
+override the full integral-row definition.
 
 If `old_lower=Tlower.accepted_lower`, first use `T0=diag(Tlower,I)` to obtain the
 mixed prefix DE. The full candidate rows are
@@ -358,7 +610,7 @@ provide a descriptor or `null`; the latter leaves SOLVE_TAIL to propose pole-fac
 and supported quadratic-root letters. Explicit `letters` may include Wolfram
 radical expressions.
 
-`SolveTail.wls` consumes only `full_sector_de`, `core_transform`, and
+`SolveTail.wls` consumes `full_sector_de`, `core_transform`, and
 `method_options.package_entry` when a CANONICA call is needed. Supported algebraic
 primitives, scalar root repairs and multi-master derivative completions are
 attempted internally. Remaining rational inputs can use `TransformOffDiagonalBlock`
@@ -372,6 +624,27 @@ An unresolved result includes `summary.reason` and `summary.diagnostics`:
 `rational_coefficients`, and `alphabet_candidate_count`. These describe the
 retained attempted matrices, not all possible representatives. Use the
 [tail skill](skills/canon-solve-tail/SKILL.md) to choose the next bounded action.
+
+Tail-specific `method_options` additionally accept `tail_strategy` (default
+`"monolithic"`, optional `"subsector"`), nonnegative integer
+`d_delta_numerator_degree` (0), positive `max_wall_seconds` (60), and positive
+integer `max_subsector_steps` (64) and `max_ansatz_terms` (256). Unknown keys
+are input errors. An explicit step budget, `d_ansatz` or `tail_checkpoint`
+requires subsector strategy. In that strategy, public
+`SectorBoundariesFromDE` partitions the actual active transformed lower matrix;
+`CalculateNextSubsectorD` accumulates D one lower block at a time, then the
+complete lifted transform undergoes full-prefix epsilon normalization.
+
+`TAIL_UNSOLVED` can return a hashed
+`canon-neu/canonica-tail-checkpoint/v1` artifact. It stores `binding`,
+`previous_d`, `completed_lower_blocks`, `attempted_ansatz`, and `diagnostics`.
+Its binding includes exact source identity/byte hash, variable order, package
+entry hash, active rows and boundaries, transformed backend hash and base-map
+hash. Resume with its `payload.tail_checkpoint` descriptor. Hash, source,
+partition, row/column dimensions and rational domain are validated before
+continuation. A different finite D ansatz can address remaining blocks on the
+same source; partial progress has no independent canonical acceptance. The
+complete resumed map still goes to CHECK_CANONICAL and FINAL_CHECK.
 
 `CheckCanonical.wls` recomputes the full gauge transformation from
 `source_matrices` and `sector_transform`, uses `sector_transform["alphabet"]`,
