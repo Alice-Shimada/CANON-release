@@ -13,7 +13,8 @@ fixture = FileNameJoin[{
 output = ExpandFileName[arguments[[2]]];
 threads = If[Length[arguments] === 3, ToExpression[arguments[[3]]], 1];
 requestPath = output <> ".request.json";
-resultPath = output <> ".result.wl";
+resultDir = output <> ".result";
+resultPath = FileNameJoin[{resultDir, "ibp-reduction.wl"}];
 request = <|
   "executable" -> First[arguments],
   "project" -> fixture,
@@ -23,16 +24,17 @@ request = <|
   "output" -> output,
   "options" -> {"--parallel=" <> ToString[threads]}
 |>;
-Export[requestPath, request, "RawJSON"];
-process = RunProcess[{
-  "wolframscript", "-file", FileNameJoin[{repoRoot, "mma", "ReduceIBP.wls"}],
-  requestPath, resultPath
+Export[requestPath, <|"schema" -> "canon-neu/script-input/v1",
+  "task_id" -> "pentabox-ibp-live-test", "step" -> "REDUCE_IBP", "sector" -> Null,
+  "payload" -> <|"reduction" -> request|>|>, "RawJSON"];
+process = RunProcess[{"python3", FileNameJoin[{repoRoot, "run_step.py"}],
+  requestPath, resultDir
 }, All, ProcessDirectory -> repoRoot];
 If[process["ExitCode"] =!= 0 || FileType[resultPath] =!= File,
   Print[InputForm[process]];
   Exit[1]
 ];
-result = Get[resultPath];
+result = Block[{$Context = "CANON`DEData`", $ContextPath = {"System`"}}, Get[resultPath]];
 sourceLines[name_] := Select[
   StringTrim @ StringReplace[
     StringSplit[Import[FileNameJoin[{fixture, name}], "Text"], {"\r\n", "\n", "\r"}],

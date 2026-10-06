@@ -10,7 +10,7 @@ description: Complete a passing sector core, infer supported dlog letters, and d
 After CORE_PASS and BUILD_FULL_DE, invoke:
 
 ```text
-wolframscript -file mma/SolveTail.wls INPUT_JSON OUTPUT_DIRECTORY
+python3 run_step.py INPUT_JSON OUTPUT_DIRECTORY
 ```
 
 Use a `SOLVE_TAIL` envelope with `full_sector_de` and `core_transform` from the
@@ -117,8 +117,21 @@ the coordinator distinguish the following cases without repeating the same run.
 | `subsector_no_transformation` | Use the recorded failing lower block and package messages to revise the finite D ansatz or full representative. Preserve completed-block evidence. |
 | `epsilon_normalization_no_transformation` | D completion alone is insufficient; inspect the full-prefix epsilon-normalization stage and its messages. |
 
+For a backend failure, `summary.backend_stage` is `TransformOffDiagonalBlock`
+(off-diagonal completion on the active closure) or `TransformDlogToEpsForm`
+(full-prefix epsilon normalization). The `backend_failure` descriptor points to
+`backend-failure.wl`, a `canon-neu/tail-backend-failure/v1` Association. It records
+the stage, candidate, resolved package entry, and immediate call context:
+variables, backend regulator, active positions, sector boundaries, initial
+transformation, matrices, and explicit options. `backend_return` contains the
+actual saved return under `HoldComplete`, so loading the artifact keeps that
+return inert. The diagnostic makes no additional backend call. It preserves
+`INCONCLUSIVE/TAIL_UNSOLVED` and the bounded backend failure reason; a returned `False`
+does not identify a finer cause or prove that every ansatz is exhausted.
+Non-backend unsolved results omit these backend-specific fields and artifacts.
+
 For a family-based UT/canonical search, reconsider the bounded integral-candidate route
-if it has not supplied the needed full representative. Keep DlogBasis-refine's
-priority from the [core-selection skill](../canon-search-core/SKILL.md). A passing core
+if it has not supplied the needed full representative. Follow the evidence-based
+choices in the [core-selection skill](../canon-search-core/SKILL.md). A passing core
 only covers the diagonal block. Reuse existing reductions and the accepted lower
 prefix; one unresolved tail does not require rebuilding the whole family.

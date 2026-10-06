@@ -123,7 +123,7 @@ class CANONICAControlTest(unittest.TestCase):
         calls = output.with_suffix(".calls.wl").read_text().splitlines()
         self.assertEqual(len(calls), 3)
         self.assertIn('"TransformNextDiagonalBlock"', calls[0])
-        self.assertIn('"terms" -> {1, x}', calls[0])
+        self.assertIn('"terms" -> {1, CANON`DEData`x}', calls[0])
         self.assertIn('"TransformOffDiagonalBlock"', calls[1])
         self.assertIn('"options" -> {3}', calls[1])
         self.assertIn('"TransformDlogToEpsForm"', calls[2])
@@ -210,7 +210,8 @@ class CANONICAControlTest(unittest.TestCase):
                 self.assertNotIn("family", result["summary"]["reason"].lower())
 
     def test_wall_budget_interrupts_one_attempt_without_retry(self) -> None:
-        path, output = self.task(custom=True, options={"max_wall_seconds": 0.05})
+        # Leave room for wrapper setup before the provider's deliberate delay.
+        path, output = self.task(custom=True, options={"max_wall_seconds": 2})
         result = self.run_script(ROOT / "methods/canonica/run.wls", path, output, mode="slow")
         self.assertEqual(result["code"], "METHOD_EXHAUSTED")
         self.assertTrue(result["summary"]["timed_out"])
@@ -218,7 +219,8 @@ class CANONICAControlTest(unittest.TestCase):
         self.assertEqual(len(output.with_suffix(".calls.wl").read_text().splitlines()), 1)
 
     def test_wall_budget_bounds_full_basis_inverse_before_publication(self) -> None:
-        path, output = self.task(custom=True, options={"max_wall_seconds": 0.5})
+        # The source-gauge gate must finish before exercising the delayed inverse.
+        path, output = self.task(custom=True, options={"max_wall_seconds": 5})
         result = self.run_script(ROOT / "methods/canonica/run.wls", path, output, mode="slow-inverse")
         self.assertEqual((result["status"], result["code"]), ("INCONCLUSIVE", "METHOD_EXHAUSTED"))
         self.assertEqual(result["summary"]["failed_stage"], "full_basis_rows")

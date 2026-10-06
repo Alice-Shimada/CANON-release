@@ -1,0 +1,7 @@
+{
+  "schema": "canon-neu/script-input/v1",
+  "task_id": "collect-synthetic-local-job",
+  "step": "COLLECT_JOB",
+  "sector": null,
+  "payload": {"job": {"path": "../demo-out/submit/job/job.json"}}
+}

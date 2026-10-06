@@ -1,0 +1,11 @@
+{
+  "schema": "canon-neu/script-input/v1",
+  "task_id": "SCALAR-bind-rejected-upstream",
+  "step": "PREPARE_REQUEST",
+  "payload": {
+    "template": {
+      "type": "json",
+      "path": "../templates/rejected-upstream.json"
+    }
+  }
+}

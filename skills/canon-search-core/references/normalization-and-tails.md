@@ -16,6 +16,28 @@ An additional change `new_basis = H . next_basis` gives `T_total = T H`.
 Use this convention when interpreting a provider or deriving a scaling sign.
 Flatness is an integrability condition, not an epsilon-form or UT certificate.
 
+## Keep epsilon-proportional scale dependence
+
+When an overall scale `s` remains a differential variable and
+`s partial_s I = (a + b eps) I`, the allowed prefactor `J = s^(-a) I` gives
+`partial_s J = b eps J/s`. The remaining scale term is already in epsilon form.
+Removing it with `s^(-b eps)` introduces a kinematic power with a variable
+exponent, outside the rational/algebraic transformation field used here.
+Applying such a factor only to the current sector also changes its relative
+normalization against the accepted lower prefix. Keep proposed prefactors in
+the selected coefficient field and check their full-sector couplings.
+
+For raw integral input, derive scale derivatives from a physical external-
+momentum variation with the declared kinematics and measure. A partial derivative
+at fixed loop scalar-product coordinates need not represent that variation.
+For a one-scale family with `L` loop measures of dimension `d`, propagators of
+dimension two and no extra scale-dependent measure prefactor, the input obeys
+`s partial_s I[indices] = (L d/2 - Total[indices]) I[indices]` at fixed
+dimensionless ratios. Use that relation to resolve a named input-consistency
+issue before attributing a core failure to the candidate method. Equivalent
+physical variations may require different reduction targets; reuse available
+rules after the public target/coverage checks establish their applicability.
+
 ## A rational connection can need an algebraic normalization
 
 For a scalar block `A = d log g(x) + eps omega(x)`, choosing `T = g` gives

@@ -6,13 +6,14 @@ it does not define another routing order. The
 [workflow guide](../docs/agent-workflow.md) describes the complete study, and
 [INTERFACES.md](../INTERFACES.md) defines script envelopes and scientific I/O.
 
-For integral-basis discovery from a defined family, whether the request says
-"UT integrals" or "canonical basis", the workflow prioritizes a bounded
-DlogBasis-refine search on the unresolved sector. Package loading or
+For integral-basis discovery from a defined family, choose from its geometry
+and current evidence. Small dot/normalization bundles, Gram constructions and
+bounded DlogBasis-refine searches share the same downstream acceptance gates;
+none is a prerequisite for every sector. The workflow entry also describes
+direct-DE choices. When DlogBasis is selected, package loading or
 `CreateDlogFamily` alone is preparation, not a `DlogBasisSearch` attempt.
-This priority does not require exhausting all numerator/dot ansätze or
-rechecking accepted sectors. The workflow entry states when a direct-DE
-method is appropriate, including DE-only input or an explicit direct-DE request.
+Retain the bounds and results that motivate later choices, and reuse accepted
+sectors.
 
 ## Routing boundary
 
@@ -96,12 +97,14 @@ scientific acceptance. A passing core alone does not certify a full sector.
 
 | Card | Trigger and operation | Required input | Output and next gate |
 |---|---|---|---|
+| [Dot/normalization proposal](../skills/canon-search-core/SKILL.md#2-prepare-and-execute-the-integral-route-in-order) | A small geometry-motivated integral bundle | Exact index order, selected dots, prefactors and epsilon normalization with finite bounds | Manually encoded `integral_candidates`; same IBP/core/full-prefix gates. No standalone runner |
 | [DlogBasis-refine](dlogbasis/SKILL.md) | Defined-family integral proposals; `PROPOSE_INTEGRAL_CANDIDATES` | `prepared_family`, family/sector identities, dimension and power-counting policies, budget, normalization, installed tool options | `integral_candidates`; candidate IBP bridge, `RouteCoreCandidates.wls`, then `CHECK_CORE` |
-| [Gram/off-cut guidance](gram/SKILL.md) | Cut/IBP rank mismatch, dimensional continuation, or supported off-cut correction | Actual family geometry, exact failure report, bounded numerator/contact hypothesis | Manually constructed `integral_candidates`; same IBP/core/full-prefix gates. No standalone runner |
+| [Gram/off-cut guidance](gram/SKILL.md) | Supported Gram/numerator construction, cut/IBP rank mismatch, dimensional continuation, or off-cut correction | Actual family geometry, bounded numerator/contact hypothesis, and existing failure report when available | Manually constructed `integral_candidates`; same IBP/core/full-prefix gates. No standalone runner |
 | [CANONICA](canonica/SKILL.md) | Rational core transformation in one or more variables; `SEARCH_CORE` | `sector_basis`, `sector_cut_de`, package entry or Wolfram installation | `core_candidates`; `CHECK_CORE` |
 | [Libra](libra/SKILL.md) | Small rational one-variable core; `SEARCH_CORE` | `sector_basis`, `sector_cut_de`, package options; optional explicit dependent-row hierarchy | `core_candidates`; `CHECK_CORE` |
 | [INITIAL](initial/SKILL.md) | One or a few normalized UT seeds for a rational one-variable core; `SEARCH_CORE` at `methods/initial/run.wls` | `sector_basis`, `sector_cut_de`, seed request, full seed rows or existing IBP bridge, normalization evidence, alphabet and component/budget options | `core_candidates`; `CHECK_CORE` |
 | [Epsilon-zero polynomial](epsilon-zero/SKILL.md) | Rational core regular at epsilon zero, with the card's finite polynomial ansatz; `SEARCH_CORE` | `sector_cut_de`, optional `declared_alphabet` and reconstruction prime | `core_candidates`; `CHECK_CORE` |
+| [Residue balances](residue-balance/SKILL.md) | One essential rational variable, optionally after exact homogeneous-scale separation; `DIAGNOSE_CORE`, `SEARCH_CORE` | `sector_basis`, `sector_cut_de`, optional finite bounds | Provisional `core_diagnosis` or `core_candidates`; candidates require `CHECK_CORE` |
 
 Every successful proposal is provisional. `CHECK_CORE` verifies the current
 cut's invertibility, exact gauge relation, flatness, and epsilon factorization.
@@ -239,6 +242,11 @@ or mathematical `FAIL`. `OUT_OF_SCOPE` and `METHOD_EXHAUSTED` are inconclusive;
 errors need specific codes, not `ERROR/ERROR`. Provider checks and process exit
 code zero never replace independent scientific gates.
 
+`DIAGNOSE_CORE` returns `PROVISIONAL/CORE_DIAGNOSIS` for structural applicability,
+with `nonexistence_proved: false`. Epsilon-zero residues constrain only gauges
+with the required specialization properties; they cannot alone exclude the
+default epsilon-meromorphic class. See [obstruction scope](../skills/canon-search-core/SKILL.md#scope-of-an-obstruction).
+
 Finite-cut residue rank, d-dimensional IBP rank, full epsilon form,
 dlog/alphabet membership, and UT normalization are separate evidence layers.
 Epsilon form alone cannot fix kinematics-independent normalization, including
@@ -249,7 +257,12 @@ information. Bare numerical agreement is insufficient.
 ## Invocation and dependency provenance
 
 Each runnable card takes an input JSON and a new output directory in the
-assigned workspace. Its card specifies the kernel command and stage.
+assigned workspace. Invoke it through `python3 run_step.py INPUT.json OUTPUT_DIR`
+with the task's `--components` selection. Default `SEARCH_CORE` cards additionally
+use `--method canonica`, `libra`, `initial`, `epsilon-zero` or `residue-balance`. Other cards have distinct step
+names. Use `--describe` to find the selected implementation and its instructions;
+a replacement's method details supersede this catalog's defaults. The
+[component contract](../docs/components.md) describes packaging and composition.
 Keep tool installations read-only. Relative artifact/package paths resolve
 from the declaring JSON; see [external dependencies](../external/README.md).
 Use supplied executable paths and resource budgets, not a personal layout.

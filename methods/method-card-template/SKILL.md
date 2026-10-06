@@ -50,3 +50,11 @@ transformations. A provider cannot publish scientific `PASS` / `FAIL` or accept
 its own proposal. A checker establishes only its named scientific conditions;
 it does not accept a persistent research task. No card owns workflow state or
 scheduling. A method's exhaustion does not establish nonexistence of a basis.
+
+## Package entry
+
+Declare the command and this instruction file in a
+[component manifest](../../docs/components.md). The runner appends `INPUT.json`
+and `OUTPUT_DIR` to the command. Existing scientific gates consume the returned
+artifacts through their published contracts. A package may implement several
+steps; each entry keeps its explicit stage and role.

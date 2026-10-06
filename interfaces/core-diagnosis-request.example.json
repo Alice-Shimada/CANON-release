@@ -1,0 +1,16 @@
+{
+  "schema": "canon-neu/script-input/v1",
+  "task_id": "core-diagnosis-example",
+  "step": "DIAGNOSE_CORE",
+  "sector": {"id": 3, "propagator_count": 2},
+  "payload": {
+    "sector_basis": {
+      "type": "mathematica-expression",
+      "path": "../tests/fixtures/method_cards/sector-basis.wl"
+    },
+    "sector_cut_de": {
+      "type": "mathematica-expression",
+      "path": "../tests/fixtures/method_cards/sector-cut-de.wl"
+    }
+  }
+}

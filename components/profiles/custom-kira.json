@@ -1,0 +1,8 @@
+{
+  "schema": "canon-neu/components/v1",
+  "steps": {
+    "PREPARE": {"from": "../parameterization/components.json"},
+    "DISCOVER": {"from": "../reducers/kira/components.json"},
+    "REDUCE_IBP": {"from": "../reducers/kira/components.json"}
+  }
+}

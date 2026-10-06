@@ -54,7 +54,7 @@ RunBackend[task_, inputPath_, full_, core_, baseT_, matrices_, options_] := Modu
    ansatzInfo = <||>, checkpoint, previousD, columns, completed, stage, result, lifted,
    embedding, fullBounds, normalized, started, seconds, diagnostics = {}, steps = 0,
    checkpointValue, inputContextPath = $ContextPath, failure, record,
-   rationalMatrixQ, checkedResultQ},
+   rationalMatrixQ, checkedResultQ, backendFailure, normalizationMatrices},
   failure[reason_, error_:False, extra_:<||>] := Join[<|"success" -> False,
     "reason" -> reason, "input_error" -> error, "diagnostics" -> diagnostics|>, extra];
   package = CanonMethodCard`ResolveMethodPackage[task, inputPath, "CANONICA`"];
@@ -62,6 +62,16 @@ RunBackend[task_, inputPath_, full_, core_, baseT_, matrices_, options_] := Modu
   entry = package["entry"]; entryHash = FileHash[entry, "SHA256", "HexString"];
   Get[entry];
   variables = full["variables"]; regulator = full["regulator"];
+  backendFailure[reason_, callStage_, initial_, positions_, callBounds_,
+      callMatrices_, callOptions_, heldReturn_] := failure[reason, False, <|
+    "backend_stage" -> callStage,
+    "failure_artifact" -> <|"schema" -> "canon-neu/tail-backend-failure/v1",
+      "stage" -> callStage, "candidate_id" -> core["candidate_id"],
+      "package_entry" -> entry, "backend_return" -> heldReturn,
+      "call" -> <|"variables" -> variables, "regulator" -> CANONICA`eps,
+        "active_positions" -> positions, "sector_boundaries" -> callBounds,
+        "initial_transformation" -> initial, "matrices" -> callMatrices,
+        "options" -> callOptions|>|>|>];
   rationalMatrixQ[value_, expectedDimensions_] := ListQ[value] &&
     Dimensions[value] === expectedDimensions && And @@
       (CanonMethodCard`DeclaredCoefficientDomainQ[#, Append[variables, CANONICA`eps]] & /@
@@ -170,7 +180,11 @@ RunBackend[task_, inputPath_, full_, core_, baseT_, matrices_, options_] := Modu
     If[!ListQ[result] || Length[result] < 2 || First[result] === False ||
         !checkedResultQ[result[[1]], {n, n}, True,
         "off_diagonal_result_check", Last[bounds]],
-      Return[failure["backend_no_transformation"]]];
+      Return[backendFailure["backend_no_transformation", "TransformOffDiagonalBlock",
+        IdentityMatrix[n], active, bounds, backend,
+        {CANONICA`DDeltaNumeratorDegree -> options["d_delta_numerator_degree"],
+          CANONICA`VerbosityLevel -> 1},
+        Extract[OwnValues[result], {1, 2}, HoldComplete]]]];
     lifted = result[[1]]
   ];
   embedding = IdentityMatrix[dim][[active]];
@@ -178,15 +192,20 @@ RunBackend[task_, inputPath_, full_, core_, baseT_, matrices_, options_] := Modu
   If[seconds[] <= 0, Return[failure["epsilon_normalization_budget_exhausted", False,
     If[options["tail_strategy"] === "subsector", <|"checkpoint" -> checkpointValue[]|>, <||>]]]];
   fullBounds = If[lower === 0, {{1, dim}}, {{1, lower}, {lower + 1, dim}}];
+  normalizationMatrices = CanonMethodCard`GaugeTransform[
+    matrices /. regulator -> CANONICA`eps, variables, lifted];
   record = CanonCANONICAControl`CaptureStage[
     CANONICA`TransformDlogToEpsForm[variables, fullBounds, lifted,
-      CanonMethodCard`GaugeTransform[matrices /. regulator -> CANONICA`eps, variables, lifted],
+      normalizationMatrices,
       CANONICA`VerbosityLevel -> 1], "epsilon_normalization", Last[fullBounds], seconds[], ansatzInfo];
   AppendTo[diagnostics, record["diagnostics"]]; normalized = record["result"];
   If[!ListQ[normalized] || Length[normalized] < 2 || First[normalized] === False ||
       !checkedResultQ[normalized[[1]], {dim, dim}, True,
         "epsilon_normalization_result_check", Last[fullBounds]],
-    Return[failure["epsilon_normalization_no_transformation", False,
+    Return[Join[backendFailure["epsilon_normalization_no_transformation",
+      "TransformDlogToEpsForm", lifted, Range[dim], fullBounds, normalizationMatrices,
+      {CANONICA`VerbosityLevel -> 1},
+      Extract[OwnValues[normalized], {1, 2}, HoldComplete]],
       If[options["tail_strategy"] === "subsector", <|"checkpoint" -> checkpointValue[]|>, <||>]]]];
   <|"success" -> True, "backend_transformation" -> (normalized[[1]] /. CANONICA`eps -> regulator),
     "diagnostics" -> diagnostics, "tail_strategy" -> options["tail_strategy"],

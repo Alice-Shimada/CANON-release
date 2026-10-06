@@ -1,0 +1,10 @@
+{
+  "schema": "canon-neu/script-input/v1",
+  "task_id": "BUBBLE-DISCOVER",
+  "step": "DISCOVER",
+  "sector": null,
+  "payload": {
+    "reducer_family": {"path": "reducer-family.json"},
+    "backend": {"path": "backend.json"}
+  }
+}

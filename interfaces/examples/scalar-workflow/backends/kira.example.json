@@ -1,0 +1,14 @@
+{
+  "schema": "canon-neu/kira-backend/v1",
+  "executable": "kira",
+  "options": [
+    "--parallel=1"
+  ],
+  "seed": {
+    "r": 2,
+    "s": 0,
+    "d": 0
+  },
+  "timeout_seconds": 30,
+  "cancel_grace_seconds": 1
+}

@@ -25,8 +25,13 @@ before execution. The active interface does not require official ladder IDs,
 reference equality. Its installed package and host must support the requested
 operation; the generic interface does not widen a machine's validated capability.
 
+## Inputs and command
+
+Use the seed and package configuration declared by the active core contract.
+`CANON_WOLFRAMSCRIPT` selects a Wolfram installation compatible with FiniteFlow.
+
 ```text
-WolframKernel -noinit -noprompt -script methods/initial/run.wls INPUT.json NEW_OUTPUT_DIR
+python3 run_step.py INPUT.json NEW_OUTPUT_DIR --method initial
 ```
 
 The step is explicit; a missing or unsupported step is rejected before output

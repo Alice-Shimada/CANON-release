@@ -50,7 +50,7 @@ LoadFiniteAnsatz[task_Association, inputPath_String, payloadKey_String,
   hash = Quiet @ Check[FileHash[path, "SHA256", "HexString"], $Failed];
   If[!StringQ[hash] || ToLowerCase[declaredHash] =!= ToLowerCase[hash],
     Return[failure["ansatz SHA-256 differs from the declared artifact", payloadKey <> ".sha256"]]];
-  artifact = Quiet @ Check[Get[path], $Failed];
+  artifact = Quiet @ Check[CanonMethodCard`ReadWLData[path], $Failed];
   If[!AssociationQ[artifact] || Lookup[artifact, "schema", None] =!= "canon-neu/canonica-rational-ansatz/v1",
     Return[failure["unexpected finite rational ansatz schema", "schema"]]];
   If[Lookup[artifact, "kind", None] =!= Lookup[expected, "kind", Missing["kind"]],

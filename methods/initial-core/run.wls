@@ -73,7 +73,7 @@ load[name_String] := Module[{descriptor, path, hash, value},
       (!hashQ[descriptor["sha256"]] || ToLowerCase[descriptor["sha256"]] =!= hash),
     finish["ERROR", "INPUT_HASH_MISMATCH", name <> " SHA-256 differs"]];
   provenance[name] = <|"path" -> path, "sha256" -> hash|>;
-  value = Quiet @ Check[Get[path], $Failed];
+  value = Quiet @ Check[CanonMethodCard`ReadWLData[path], $Failed];
   If[!AssociationQ[value], finish["ERROR", "INVALID_INPUT", name <> " must contain an Association"]];
   value];
 validateEvidence[evidence_, declaringPath_String] := Module[{source, path, hash, evidenceRoots},

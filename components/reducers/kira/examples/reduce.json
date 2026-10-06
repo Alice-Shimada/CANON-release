@@ -1,0 +1,12 @@
+{
+  "schema": "canon-neu/script-input/v1",
+  "task_id": "BUBBLE-REDUCE",
+  "step": "REDUCE_IBP",
+  "sector": null,
+  "payload": {
+    "reducer_family": {"path": "reducer-family.json"},
+    "backend": {"path": "backend.json"},
+    "reduction_targets": {"path": "targets.wl"},
+    "master_basis": {"path": "master-basis.wl"}
+  }
+}

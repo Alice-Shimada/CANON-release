@@ -8,14 +8,55 @@ contract. Codex-specific setup is in [docs/hosts/codex.md](docs/hosts/codex.md).
 Documentation and packaging of selected historical examples do not initiate new
 scientific research or require replay.
 
-For integral-basis discovery from a defined family (UT or canonical), run a
-bounded DlogBasis-refine candidate search first on unresolved sectors, following
-the exact exceptions in [core selection](skills/canon-search-core/SKILL.md).
-The proposal requires family and provider inputs. Candidate derivative data,
-including `exact_strategy`, are prepared for the subsequent IBP bridge. This
-priority also applies when a rational DE is available. The user's scope and
-current evidence govern method selection across worker assignments; finite
-search bounds are sufficient.
+Call scientific steps through `python3 run_step.py INPUT.json OUTPUT_DIR`.
+For a new family, generate physical derivative records through
+`PREPARE_DERIVATIVES`, or the parameterization component's automatic `PREPARE`.
+Agents supply geometry and kinematics, not hand-written affine operators or
+task-local derivative programs. Reuse previously validated derivative artifacts
+without replay. A selected replacement provider follows its declared derivative
+contract; an unsupported construction is a scoped capability failure.
+Carry the task's declared `--components` manifest into each worker assignment
+and invocation, and read the selected entry's instructions. See
+[component contracts](docs/components.md). Custom component packages replace
+named steps without changing their outgoing scientific artifact contracts.
+The method choices below describe the default components; an explicitly selected
+replacement follows its own documented method and the same acceptance scope.
+Packages may declare their own workflow instructions and additional steps.
+Read the workflow reported by `--describe` before applying the default route.
+Carry the complete ordered component selection; `--defaults` restores built-ins.
+Per-step `from` bindings select parameterization, discovery, reduction and DE
+providers independently. Native executable/project/export settings belong to
+the selected backend, not the parameterization or candidate bridge.
+Alternative reconstruction checkers retain their declared evidence scope and do
+not inherit the default exact-global-gauge `ALL_PASS` claim.
+
+Use the selected interfaces and existing programs for supported research steps.
+Prepare mathematical inputs and JSON configuration; use `PREPARE_REQUEST` for
+artifact bindings and `PREPARE_REDUCTION_TARGETS` for symbolic master-derivative
+targets. A missing executable capability belongs in a separately scoped component
+development task, with its public contract and tests, rather than a task-local
+scientific glue program. Keep internal routines small and grouped by responsibility.
+Check external inputs at their boundary; avoid repeating checks already guaranteed
+by the same call's checked inputs and construction. Preserve the independent
+scientific acceptance gates.
+
+For integral-basis discovery from a defined family (UT or canonical), choose a
+small, justified proposal from the geometry and current evidence, following
+[core selection](skills/canon-search-core/SKILL.md). Simple sectors may need only
+dots and natural normalization; Gram constructions address supported numerator,
+dimensional or contact-term hypotheses. DlogBasis-refine supplies a general
+bounded search when useful, without being a prerequisite for every sector.
+Candidate derivative data, including `exact_strategy`, are prepared for the
+subsequent IBP bridge. Keep the independent acceptance gates and record which
+rank, core or full-prefix result motivates a changed hypothesis. Reuse tested
+decision rules only within their recorded scope; a failed finite ansatz does
+not exclude other methods.
+
+Before claiming an obstruction, apply the transformation-domain rules in
+[core selection](skills/canon-search-core/SKILL.md#scope-of-an-obstruction).
+The default rational gauge may be singular at epsilon zero. Use the diagnostic
+and bounded residue-balance capability when that failure route applies; do not
+infer missing masters or mathematical nonexistence from a failed finite ansatz.
 
 Check completion before selecting methods or creating workers. Matching
 FINAL_CHECK `PASS/ALL_PASS` ends scientific work for that scope: submit, review,
@@ -176,6 +217,17 @@ scientific state across overall task directories.
    recorded external condition has been resolved and calls `unblock`.
 7. Continue or revise the plan from accepted evidence. A failed method or ansatz
    is not a proof that the scientific goal is impossible.
+
+For a task explicitly using an optional detached execution component, a worker
+may register its immutable job/watch handles and return a `DEFERRED` handoff while
+the task remains `running`. This is a host handoff, not an additional task state
+or a completed result. The coordinator resumes the same worker, or assigns a
+replacement with the existing task ID and run ID after confirming the old worker
+is inactive. A resuming worker calls `task_show` for that run without claiming a
+new one, checks its worker authorization, and collects the saved job. Submission,
+review and acceptance follow only after the requested result is available.
+Completion monitors run declared checks and callbacks; they never modify
+research state or call `task_accept`/`task_unblock`.
 
 ### Task states
 

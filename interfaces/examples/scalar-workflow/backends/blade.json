@@ -1,0 +1,29 @@
+{
+  "schema": "canon-neu/native-backend/v1",
+  "adapter": "blade",
+  "encoding": {
+    "head": "Blade`BL",
+    "layout": "family-list",
+    "family": 7
+  },
+  "masters_format": "integrals",
+  "binding": {
+    "family_ref": "scalar-bubble",
+    "basis_ref": "scalar-bubble-master",
+    "index_order": [
+      "D1",
+      "D2"
+    ],
+    "point": [],
+    "coefficient_domain": "exact-rational-functions"
+  },
+  "operations": {
+    "BUILD_CUT_DE": {
+      "mode": "import",
+      "source_format": "blade-de-triple",
+      "exports": {
+        "de": "../fixtures/blade-de.wl"
+      }
+    }
+  }
+}

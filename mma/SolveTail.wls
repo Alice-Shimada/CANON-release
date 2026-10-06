@@ -188,9 +188,9 @@ If[!tailSolved,
     method = "scalar-first-derivative-completion"; tailSolved = True]
 ];
 
-unsolved[reason_:"backend_no_transformation", artifacts_:<||>] := (CanonMethodCard`WriteResult[task, outputDir,
+unsolved[reason_:"backend_no_transformation", artifacts_:<||>, details_:<||>] := (CanonMethodCard`WriteResult[task, outputDir,
   "INCONCLUSIVE", "TAIL_UNSOLVED", Join[backendArtifacts, artifacts],
-  <|"candidate_id" -> core["candidate_id"], "method" -> method,
+  Join[<|"candidate_id" -> core["candidate_id"], "method" -> method,
     "reason" -> reason,
     "diagnostics" -> <|"current_master_count" -> dimension - lowerDimension,
       "epsilon_factorized" -> CanonMethodCard`EpsilonFactorizedQ[matrices, regulator],
@@ -198,7 +198,7 @@ unsolved[reason_:"backend_no_transformation", artifacts_:<||>] := (CanonMethodCa
       "rational_coefficients" -> And @@
         (CanonMethodCard`ExactRationalExpressionQ /@ Flatten[matrices]),
       "alphabet_candidate_count" -> Length[alphabet]|>,
-    "backend" -> backendEvidence|>]; Quit[0]);
+    "backend" -> backendEvidence|>, details]]; Quit[0]);
 
 If[!tailSolved || KeyExistsQ[task["payload"], "tail_checkpoint"] ||
     KeyExistsQ[task["payload"], "d_ansatz"],
@@ -216,7 +216,7 @@ If[!tailSolved || KeyExistsQ[task["payload"], "tail_checkpoint"] ||
   Close[messageStream];
   backendArtifacts = <|"method_messages" -> <|"type" -> "text",
     "path" -> "canonica-tail-messages.log"|>|>;
-  backendEvidence = KeyDrop[backend, {"backend_transformation", "checkpoint"}];
+  backendEvidence = KeyDrop[backend, {"backend_transformation", "checkpoint", "failure_artifact"}];
   If[!TrueQ[backend["success"]],
     If[TrueQ[backend["input_error"]],
       CanonMethodCard`WriteResult[task, outputDir, "ERROR", "INVALID_INPUT", backendArtifacts,
@@ -228,7 +228,14 @@ If[!tailSolved || KeyExistsQ[task["payload"], "tail_checkpoint"] ||
       checkpointArtifacts = <|"tail_checkpoint" -> <|"type" -> "mathematica-expression",
         "path" -> FileNameTake[checkpointPath],
         "sha256" -> FileHash[checkpointPath, "SHA256", "HexString"]|>|>];
-    unsolved[backend["reason"], checkpointArtifacts]
+    failureDetails = <||>;
+    If[KeyExistsQ[backend, "failure_artifact"],
+      failurePath = CanonMethodCard`WriteWLArtifact[backend["failure_artifact"], outputDir,
+        "backend-failure.wl"];
+      checkpointArtifacts = Join[checkpointArtifacts, <|"backend_failure" -> <|
+        "type" -> "mathematica-expression", "path" -> FileNameTake[failurePath]|>|>];
+      failureDetails = <|"backend_stage" -> backend["backend_stage"]|>];
+    unsolved[backend["reason"], checkpointArtifacts, failureDetails]
   ];
   backendTransformation = backend["backend_transformation"];
   transformation = Map[Together, transformation.backendTransformation, {2}];

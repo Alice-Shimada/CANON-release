@@ -1,0 +1,18 @@
+{
+  "schema": "canon-neu/components/v1",
+  "workflow": "WORKFLOW.md",
+  "steps": {
+    "RECONSTRUCT_DLOG": {
+      "command": ["{wolframscript}", "-file", "{package}/run.wls", "{canon}"],
+      "instructions": "README.md"
+    },
+    "CHECK_RECONSTRUCTION": {
+      "command": ["{wolframscript}", "-file", "{package}/run.wls", "{canon}"],
+      "instructions": "README.md"
+    },
+    "PROPOSE_LETTERS": {
+      "command": ["{wolframscript}", "-file", "{package}/run.wls", "{canon}"],
+      "instructions": "README.md"
+    }
+  }
+}

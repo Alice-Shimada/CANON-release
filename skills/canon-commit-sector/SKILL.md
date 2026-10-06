@@ -5,7 +5,7 @@ description: Append one independently checked sector to the accepted CANON prefi
 
 # Commit one checked sector
 
-Run `mma/CommitSector.wls` only with a `canonical_sector_de` emitted by
+Run `COMMIT_SECTOR` through `python3 run_step.py INPUT.json OUTPUT_DIR` only with a `canonical_sector_de` emitted by
 `CHECK_CANONICAL`.  For `old_lower = Tlower.accepted_lower` and selected
 `mixed_source = Tfull.new_prefix`, the cumulative raw transformation is
 
@@ -23,7 +23,7 @@ Register this new cumulative prefix and this step's other new outputs separately
 Reference the existing ordered DE, reduction rules, and prior artifact records;
 do not embed their files or archives in the new handoff.
 
-After a commit, `mma/NextSector.wls` reads only `sector_manifest` and the
+After a commit, invoke `NEXT_SECTOR` through the same runner. It reads only `sector_manifest` and the
 nullable accepted prefix.  It drops `Length[sector_trace]` entries from the
 resident manifest and publishes the remaining and next sector.  Calling this
 pure artifact step after each commit advances one sector; the main Agent and

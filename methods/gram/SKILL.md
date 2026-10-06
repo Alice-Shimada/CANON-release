@@ -7,13 +7,16 @@ description: Construct bounded Gram-numerator candidates across loop orders, leg
 
 ## Trigger and role
 
-Use when the current report identifies a cut/IBP rank gap, unresolved dimensional
-continuation, or a geometrically supported change to an off-cut representative.
+Use when the family geometry supports a concrete Gram/numerator hypothesis, or
+the current report identifies a cut/IBP rank gap, unresolved dimensional
+continuation, or a supported change to an off-cut representative. A prior
+DlogBasis failure is not required.
 Select the operation through the [workflow entry](../../skills/canon-workflow/SKILL.md).
 
 This card guides **integral construction** at `PROPOSE_INTEGRAL_CANDIDATES`,
 including complete replacement definitions for the current sector. It supplements
-the [DlogBasis-refine card](../dlogbasis/SKILL.md). It introduces no UT acceptance
+the available integral-proposal methods alongside the
+[DlogBasis-refine card](../dlogbasis/SKILL.md). It introduces no UT acceptance
 criterion, post-reduction transformation search, standalone `run.wls`, or
 automatic routing. Construct an [integral-candidates/v1](../../INTERFACES.md#integral-candidatesv1)
 artifact and use the existing IBP, core, and full-prefix checks. Candidates
@@ -153,9 +156,11 @@ kinematics and epsilon cannot turn a nonzero zeroth-order tail block into zero.
 - `CandidateIBPBridge.wl`'s `CompileCandidateIBPTargets` includes candidates and
   derivatives in every direction. Differentiate before fixing kinematics,
   including prefactors, radicals, external bases, and contact coefficients.
-  Check existing reduction coverage first and reuse it with
-  `AttachCandidateIBPReduction`. Add reductions only for missing targets;
-  `ReduceCandidateIBP.wls` launches a reduction, not a read-only coverage check.
+  Supply existing symbolic rules through `REDUCE_CANDIDATE_IBP`'s optional
+  `payload.ibp_reduction` binding. The bridge checks target coverage and attaches
+  complete rules without launching a reducer; incomplete coverage reports the
+  missing targets. Add reductions only for those targets. Omitting the binding
+  selects the normal reduction dispatch.
 - `RouteCoreCandidates.wls` currently selects an independent row basis and
   single-row exchanges. For a hypothesis requiring several simultaneous row
   changes, submit a separate complete ordered bundle of the required rank so
@@ -175,6 +180,12 @@ whole-bundle check scope, and next falsifiable hypothesis. Reuse unchanged raw
 DE and reduction data instead of rebuilding the family DE for each numerator.
 
 ## Evidence limits
+
+Full IBP projection rank establishes a spanning set, not epsilon factorization
+or the absence of useful Gram alternatives. A kinematic- or epsilon-dependent
+change within the same sector span can change the connection. Compare the
+explicit new definitions through the core and full-prefix checks; a rank count
+alone cannot exclude such a change.
 
 Record rank, cut/LS evidence, full epsilon form, dlog/alphabet, and UT
 normalization separately. All-direction checks at fixed kinematic points with

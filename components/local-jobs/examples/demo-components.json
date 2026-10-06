@@ -1,0 +1,9 @@
+{
+  "schema": "canon-neu/components/v1",
+  "steps": {
+    "SYNTHETIC_LOCAL_JOB": {
+      "command": ["{python}", "{package}/synthetic_step.py"],
+      "instructions": "../README.md"
+    }
+  }
+}

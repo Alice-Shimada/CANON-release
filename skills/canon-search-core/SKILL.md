@@ -1,6 +1,6 @@
 ---
 name: canon-search-core
-description: Choose the next unresolved-sector core method, distinguishing DlogBasis search inputs from later candidate-reduction inputs and allowing only evidence-based direct-DE exceptions.
+description: Choose a bounded unresolved-sector proposal from geometry and current evidence, then adapt dots, Gram, DlogBasis or direct-DE methods using independent checks.
 ---
 
 # Select one core method
@@ -9,7 +9,13 @@ First apply the completion rule in [canon-workflow](../canon-workflow/SKILL.md).
 This skill is for an unresolved sector with `sector_basis` and `sector_cut_de`.
 Reuse an untested candidate or a passing core before generating another.
 
-## 1. Decide whether the integral search comes first
+The method choices here describe the default components. Use `run_step.py`
+with the task's component package, and read its selected instruction file before
+choosing an implementation. A user-declared replacement follows its own bounded
+method and the same scientific input/output contract. An unqualified custom
+`SEARCH_CORE` is called without a built-in `--method` choice.
+
+## 1. Choose a bounded hypothesis
 
 Apply this list in order. Stop at the first matching item.
 
@@ -21,16 +27,30 @@ Apply this list in order. Stop at the first matching item.
    physical definition is unavailable. When propagators, momenta, masses and
    kinematic relations are available, generate the required family files from
    those definitions and continue with the integral route.
-3. **A bounded integral route already has an applicable, recorded limitation:**
-   use section 3. Examples are no candidates within the stated search bounds,
-   insufficient reduced rank, rejected cores, or an unresolved bridge
-   construction after a concrete bounded preparation attempt. Retain its input,
-   attempted operation and result. A preparation limitation requires an attempted
-   construction and its specific failure. An absent field identifies preparation
-   to perform.
-4. **Otherwise, run one bounded DlogBasis-refine search for the unresolved
-   sector.** This is also the route when a rational DE is available and when
-   candidate derivative metadata still needs preparation.
+3. **A bounded route already has an applicable, recorded limitation:** retain
+   its input, bounds and actual result, then change the failing hypothesis.
+   Rank shortage can motivate new integral directions; a failed diagonal core
+   calls for different same-sector rows or normalization; a passing core with
+   failed lower couplings calls for a full representative or tail correction.
+   Choose an untried applicable integral proposal below or a direct-DE method
+   in section 3. An absent field identifies preparation to perform. A bridge
+   limitation requires an attempted construction and its specific failure.
+4. **Otherwise, choose the smallest informative proposal supported by the
+   family geometry and available inputs.** Use the choices below. A rational
+   DE does not by itself require or prohibit an integral search.
+
+| Evidence or geometry | Reasonable first proposal |
+|---|---|
+| Simple subloop structure, known scaling, or a small master block suggests a low-cost integral basis | A finite set of undotted integrals, selected dots and natural prefactors; retain exact integral definitions and normalization hypotheses. |
+| Gram geometry, dimensional continuation, numerator directions or contact terms suggest a concrete construction | A small complete bundle using the [Gram card](../../methods/gram/SKILL.md); an earlier DlogBasis failure is not required. |
+| No sufficiently specific small construction is available, or leading-singularity information would guide the next attempt | A bounded search using the [DlogBasis card](../../methods/dlogbasis/SKILL.md). |
+| The goal and available cut DE favor a transformation construction | An applicable direct-DE method in section 3; retain its canonical/UT claim boundary. |
+
+These are selection heuristics, not a fixed ladder or guarantees. Explain the
+chosen construction and its finite bounds before computing. Do not cycle
+through every provider, or infer that a complicated graph always needs Gram.
+DlogBasis-refine is available as a general search, not a prerequisite for dots,
+Gram constructions or every rational-DE calculation.
 
 If the required provider genuinely cannot be made available within the remaining
 resources, record that operational condition and let the coordinator choose an
@@ -43,23 +63,42 @@ Run each operation as soon as its own inputs are ready.
 
 | Current state | Immediate action |
 |---|---|
-| Physical family is defined; `Family` or its kinematic rules need encoding | Prepare that object from the supplied definition using the [DlogBasis card](../../methods/dlogbasis/SKILL.md). |
-| Search inputs and tools are ready, with or without `prepared_derivatives.exact_strategy` | Run `methods/dlogbasis/run.wls` with `PROPOSE_INTEGRAL_CANDIDATES`. The proposal is independent of `exact_strategy`. |
-| Package loading and `CreateDlogFamily` are complete | Run the bounded provider search. |
+| Physical family is defined; the chosen method's family or kinematic inputs need encoding | Prepare those inputs from the supplied definition. Use the [DlogBasis card](../../methods/dlogbasis/SKILL.md) when that provider is selected. |
+| A finite dot/normalization or Gram bundle is specified mathematically | Encode its exact definitions as `integral-candidates/v1` input data; preserve bounds, normalization and actual provenance. This introduces no new solver or acceptance test. |
+| A DlogBasis search is selected and its inputs and tools are ready, with or without `prepared_derivatives.exact_strategy` | Run `PROPOSE_INTEGRAL_CANDIDATES` through `run_step.py`. This proposal is independent of `exact_strategy`. |
+| A DlogBasis search is selected, and package loading and `CreateDlogFamily` are complete | Run the bounded provider search. |
 | Integral candidates exist; derivative/IBP inputs are incomplete | Save the candidates, prepare the missing inputs using the [IBP skill](../canon-reduce-ibp/SKILL.md), then reduce these same candidates. |
-| Candidate bridge exists | Run `mma/RouteCoreCandidates.wls`, then CHECK_CORE. |
-| The bounded route gives no usable core | Record its result and limits; select the next applicable untried method in section 3. |
+| Candidate bridge exists | Run `ROUTE_CORE_CANDIDATES`, then CHECK_CORE, through `run_step.py`. |
+| The bounded route gives no usable core | Record its result and limits; use section 1 to choose a changed integral hypothesis or an applicable direct-DE method. |
 
-Include `methods/dlogbasis/SKILL.md` in the worker's `required_skills`. Declare
-loop order/dimensions, numerator/dot bounds, candidate count and wall time. The
-card invokes `DlogBasisSearch`; loading the package alone is not that invocation.
+Include the chosen method's card in the worker's `required_skills`. For dots,
+declare the selected propagators, added powers, prefactors, epsilon factors and
+candidate count; dimension and singularity counting motivate a proposal but do
+not establish UT. For DlogBasis, declare loop order/dimensions, numerator/dot
+bounds, candidate count and applicable execution budget. Its card invokes
+`DlogBasisSearch`; loading the package alone is not that invocation. Do not
+attribute manually constructed candidates to a search that did not occur.
 
-The candidate chain is:
+For DlogBasis, justify the initial numerator/dot bounds from the sector geometry
+and distinguish the integral lattice and automatic chart work from the cap on
+returned directions. Unless the caller fixed the bounds, start with the smallest
+justified bounds and enlarge one at a time based on saved results. Use the
+[method card's lattice formula and chart semantics](../../methods/dlogbasis/SKILL.md#choose-the-search-cost-before-launch); do not silently
+change the caller's bounds, chart, loop order or dimensions.
+
+After an interrupted search, retain `dlogbasis-progress.jsonl` and distinguish
+entered from returned phases before extending the budget. The public search
+boundary does not locate an internal hotspot, and an absent result or log does
+not establish mathematical exhaustion. Pass that precise operational limit to
+the coordinator together with the unchanged request.
+
+The candidate chain is (explicit dot/Gram input data enter at the first artifact):
 
 ```text
 PROPOSE_INTEGRAL_CANDIDATES
+  -> integral_candidates
   -> prepare any missing candidate derivative/IBP data
-  -> ReduceCandidateIBP.wls
+  -> REDUCE_CANDIDATE_IBP
   -> ROUTE_CORE_CANDIDATES
   -> CHECK_CORE
 ```
@@ -75,7 +114,7 @@ rank is the sector's actual master count. The router selects a rank basis and
 independent single-row exchanges. A geometry-motivated simultaneous row
 replacement is a new complete proposal; exhaustive subset search is not required.
 
-## 3. Select a direct-DE method only after section 1 allows it
+## 3. Select an applicable direct-DE method
 
 Select one applicable untried method using the current evidence and remaining
 budget. The table gives useful triggers, not a mandatory provider chain. A
@@ -85,11 +124,13 @@ contract. Keep section 1's bounded integral-search priority for defined families
 | Condition | Method |
 |---|---|
 | One or a few normalized UT seeds have explicit evidence and full reduced rows, a rational one-variable cut, a declared alphabet, and a finite derivative allocation | [INITIAL](../../methods/initial/SKILL.md), `SEARCH_CORE` at `methods/initial/run.wls`. A small credible seed set makes this a direct candidate alongside CANONICA, Libra and epsilon-zero; it need not wait for CANONICA failure. |
-| A rational-transformation obstruction such as CANONICA `nonrationalinv` is recorded, and the rational DE is regular at epsilon zero | [epsilon-zero](../../methods/epsilon-zero/SKILL.md), with finite polynomial/prefactor bounds |
+| A rational/horizontal method failed, or an argument based on epsilon=0 is being used to exclude an epsilon form; no diagnosis exists for this input | Run `DIAGNOSE_CORE` using the [residue-balance card](../../methods/residue-balance/SKILL.md), then select from its actual result. |
+| Diagnosis identifies one essential variable, possibly after exact homogeneous-scale separation, and residue-balance is untried | [residue-balance](../../methods/residue-balance/SKILL.md); allow regulator-singular transformations and check all original variables. |
+| CANONICA `nonrationalinv` is recorded, residue-balance is exhausted or outside scope, and the DE is regular at epsilon zero | [epsilon-zero](../../methods/epsilon-zero/SKILL.md), with finite polynomial/prefactor bounds |
 | The cut DE is rational and CANONICA has not failed on this input | [CANONICA](../../methods/canonica/SKILL.md) |
 | The rational cut DE has one variable and Libra is applicable and untried | [Libra](../../methods/libra/SKILL.md); explicitly enable bounded normalization when integer residue offsets obstruct epsilon factorization. |
 | The rational cut DE is regular at epsilon zero and epsilon-zero is untried | [epsilon-zero](../../methods/epsilon-zero/SKILL.md) |
-| These choices are exhausted or inapplicable | Return exact failures and remaining scope to the coordinator. Use the [Gram card](../../methods/gram/SKILL.md) only with a concrete new Gram/contact-term or dimensional-extension hypothesis. |
+| These choices are exhausted or inapplicable | Return exact failures and remaining scope to the coordinator; reconsider a changed integral hypothesis under section 1. |
 
 A direct-DE provider returns `core_candidates`; run CHECK_CORE directly, without
 an additional integral-candidate IBP bridge. INITIAL consumes already reduced
@@ -109,6 +150,25 @@ A rational DE may require an algebraic
 transformation; see [normalization and tails](references/normalization-and-tails.md).
 Do not repeat a refuted rational transformation or reinstall a working provider
 because its scientific ansatz failed.
+An epsilon-form transformation alone does not fix kinematics-independent UT
+normalization; preserve the evidence distinctions in the [method catalog](../../methods/README.md#result-meanings).
+
+### Scope of an obstruction
+
+Before treating an argument as a no-go result, state the admissible coefficient
+field and transformation class, its hypotheses and its quantified conclusion.
+The default rational gauge may be meromorphic in epsilon: require `Det[T] != 0`
+as a rational function, not a finite invertible `T(0)`. Nonzero or nilpotent
+epsilon-zero residues, nontrivial monodromy at that specialization, logarithmic
+horizontal solutions, and failure of a finite polynomial ansatz do not by
+themselves exclude that class. See the explicit counterexample in the
+[residue-balance card](../../methods/residue-balance/SKILL.md).
+
+Recomputing a residue or repeating the same IBP rules cannot verify a theorem's
+missing hypothesis. A review must test the claimed implication against the
+allowed transformation class. A matching exact CORE_PASS is a positive witness;
+reuse it and continue the full tail. Keep an unproved obstruction as a scoped
+diagnostic, never a reason to require a different family or extra masters.
 
 ## 4. Continue from the result
 
@@ -128,3 +188,14 @@ Before every new assignment, the coordinator applies the main route to the
 current scope. Reuse accepted sectors. Matching FINAL_CHECK ALL_PASS leads to
 submission, review, acceptance and delivery, then ends scientific work for that
 scope.
+
+## 5. Retain useful method experience
+
+Record a compact decision note with the family/sector and input references,
+geometric reason for the proposal, exact bounds, reduction rank, core/full-prefix
+results, cost, and the next changed hypothesis. Distinguish an input/runtime
+failure from a rejected mathematical ansatz. Reuse successful heuristics for
+comparable geometry while retaining failures and scope limits. A single success
+or failure is evidence for that construction, not a universal selection rule.
+Update workflow guidance when the evidence supports a reusable decision; never
+weaken the acceptance gates to accommodate a preferred method.

@@ -36,8 +36,8 @@ Use the existing [route artifact](../../tests/fixtures/method_cards/structured-r
 and [repair request](../../tests/fixtures/method_cards/structured-repair-input.wl)
 as shape examples; bind their identities and evidence to the actual task.
 
-Use an installed WolframKernel with `-noinit -noprompt -script` to run
-`run.wls <input.json> <fresh-output-dir>`. Inject a read-only Libra entry through
+Run `python3 run_step.py INPUT.json OUTPUT_DIR` with step `REPAIR_WITH_LIBRA`.
+Inject a read-only Libra entry through
 `method_options.package_entry`. The runner records the loaded version identity,
 disables Fermatica, and uses only `NewDSystem`, `Fuchsify`, `Transform`,
 `FactorOut`, `OverallTransformation`, and `EFormQ`. The caller must own the new

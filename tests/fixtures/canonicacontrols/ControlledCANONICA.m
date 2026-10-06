@@ -27,7 +27,7 @@ attempt[a_, vars_] := Module[{t, mode = Environment["CANON_TEST_CANONICA_MODE"]}
     "nonrationalinv", Message[TransformDiagonalBlock::nonrationalinv, "Sqrt[x]"]; Return[{False, {{}, {{}}}}],
     "trace", Message[TransformDiagonalBlock::noepsform]; Return[{False, {{}, {{}}}}],
     "finiteansatzfailed", Message[TransformDiagonalBlock::finiteansatzfailed]; Return[{False, {{}, {{}}}}],
-    "slow", Pause[2],
+    "slow", Pause[10],
     "silent", Return[{False, {{}, {{}}}}],
     "malformed", Return["not-a-provider-pair"]
   ];
@@ -41,7 +41,7 @@ attempt[a_, vars_] := Module[{t, mode = Environment["CANON_TEST_CANONICA_MODE"]}
 installSlowInverse[] := With[{t = fixtureTransformation, inverse = Inverse[fixtureTransformation]},
   (* Install only after provider calculations, and only for its concrete gauge. *)
   Unprotect[Inverse];
-  Inverse[t] := (Pause[2]; inverse);
+  Inverse[t] := (Pause[10]; inverse);
   Protect[Inverse];
 ];
 End[];

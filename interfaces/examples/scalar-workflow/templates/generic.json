@@ -1,0 +1,27 @@
+{
+  "schema": "canon-neu/script-input/v1",
+  "task_id": "SCALAR-generic",
+  "step": "BUILD_CUT_DE",
+  "sector": {
+    "id": 3,
+    "propagator_count": 2
+  },
+  "payload": {
+    "prepared_family": {
+      "from_result": "../outputs/prepare/result.json",
+      "artifact": "prepared_family"
+    },
+    "master_basis": {
+      "from_result": "../outputs/discover/result.json",
+      "artifact": "master_basis"
+    },
+    "sector_manifest": {
+      "from_result": "../outputs/discover/result.json",
+      "artifact": "sector_manifest"
+    },
+    "ibp_reduction": {
+      "from_result": "../outputs/fire/result.json",
+      "artifact": "ibp_reduction"
+    }
+  }
+}

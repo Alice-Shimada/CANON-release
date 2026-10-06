@@ -53,7 +53,7 @@ conditional choices, not an exhaustive fallback sequence.
 ## Inputs and invocation
 
 From `project_root`, run
-`wolframscript -file methods/canonica/run.wls INPUT.json OUTPUT_DIR`
+`python3 run_step.py INPUT.json OUTPUT_DIR --method canonica`
 with the standard `SEARCH_CORE` input,
 `sector_basis`, `sector_cut_de`, and an available Wolfram kernel. Supply CANONICA
 through either:

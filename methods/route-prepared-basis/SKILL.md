@@ -18,7 +18,7 @@ and does not check tool installations.
 ## Command and result
 
 From `project_root`, run
-`wolframscript -file methods/route-prepared-basis/run.wls INPUT.json OUTPUT_DIR`
+`python3 run_step.py INPUT.json OUTPUT_DIR`
 with a
 `canon-neu/script-input/v1` envelope, step `ROUTE_PREPARED_BASIS`, and a
 `prepared_basis` Mathematica-expression descriptor in `payload`. Success is

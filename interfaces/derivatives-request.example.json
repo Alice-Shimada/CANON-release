@@ -1,0 +1,9 @@
+{
+  "schema": "canon-neu/script-input/v1",
+  "task_id": "physical-derivatives",
+  "step": "PREPARE_DERIVATIVES",
+  "sector": null,
+  "payload": {
+    "family_data": {"type": "mathematica-expression", "path": "prepare/family-data.wl"}
+  }
+}

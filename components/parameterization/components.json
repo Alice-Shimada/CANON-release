@@ -1,0 +1,27 @@
+{
+  "schema": "canon-neu/components/v1",
+  "workflow": "WORKFLOW.md",
+  "steps": {
+    "PREPARE": {
+      "command": [
+        "{wolframscript}",
+        "-file",
+        "{package}/Prepare.wls",
+        "{canon}"
+      ],
+      "instructions": "README.md",
+      "interface": {
+        "inputs": [
+          "family_spec"
+        ],
+        "outputs": [
+          "family_data",
+          "reducer_family",
+          "prepared_derivatives",
+          "prepared_family"
+        ],
+        "scope": "User-supplied vector or scalar-product chart; no native backend selection."
+      }
+    }
+  }
+}
