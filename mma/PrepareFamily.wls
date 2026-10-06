@@ -9,12 +9,11 @@ Get[FileNameJoin[{repoRoot, "mma", "lib", "MethodCardCore.wl"}]];
 task = CanonMethodCard`ReadTask[inputPath, "PREPARE"];
 spec = CanonMethodCard`LoadArtifact[task, inputPath, "family_spec"];
 specPath = CanonMethodCard`ResolveInputPath[inputPath, task["payload", "family_spec", "path"]];
-project = CanonMethodCard`ResolveInputPath[specPath, spec["kira", "project"]];
+preparedPath = FileNameJoin[{outputDir, "prepared-family.wl"}];
 source[path_String] := With[{resolved = CanonMethodCard`ResolveInputPath[specPath, path]}, <|
-  "path" -> resolved,
+  "path" -> CanonMethodCard`RelativeArtifactPath[preparedPath, resolved],
   "sha256" -> FileHash[resolved, "SHA256", "HexString"]
 |>];
-kiraSource[path_String] := source[FileNameJoin[{project, path}]];
 
 prepared = <|
   "schema" -> "canon-neu/prepared-family/v1",
@@ -28,8 +27,17 @@ prepared = <|
   "index_order" -> spec["index_order"],
   "propagator_slots" -> spec["propagator_slots"],
   "sector_convention" -> spec["sector_convention"],
-  "kira" -> <|
-    "project" -> project,
+  "family_data" -> source[spec["family_data"]],
+  "prepared_derivatives" -> source[spec["prepared_derivatives"]],
+  "ordered_masters" -> source[spec["ordered_masters"]]
+|>;
+If[KeyExistsQ[spec, "integral_head"], prepared["integral_head"] = spec["integral_head"]];
+(* Legacy Kira provenance is optional; scientific preparation does not require it. *)
+If[KeyExistsQ[spec, "kira"],
+  project = CanonMethodCard`ResolveInputPath[specPath, spec["kira", "project"]];
+  kiraSource[path_String] := source[FileNameJoin[{project, path}]];
+  prepared["kira"] = <|
+    "project" -> CanonMethodCard`RelativeArtifactPath[preparedPath, project],
     "jobs" -> spec["kira", "jobs"],
     "targets" -> spec["kira", "targets"],
     "sources" -> <|
@@ -38,11 +46,8 @@ prepared = <|
       "jobs" -> (kiraSource /@ spec["kira", "jobs"]),
       "targets" -> kiraSource[spec["kira", "targets"]]
     |>
-  |>,
-  "family_data" -> source[spec["family_data"]],
-  "prepared_derivatives" -> source[spec["prepared_derivatives"]],
-  "ordered_masters" -> source[spec["ordered_masters"]]
-|>;
+  |>
+];
 
 artifactPath = CanonMethodCard`WriteWLArtifact[
   prepared, outputDir, "prepared-family.wl"

@@ -191,6 +191,81 @@ class InitializationTests(StateManagementTestCase):
         self.assertEqual(code, 0)
         self.assertEqual(result["task_names"], ["family-a"])
 
+    def test_explicit_project_root_stops_ancestor_lookup(self) -> None:
+        self.initialize("outer-sentinel")
+        inner = self.project / "inner"
+        nested = inner / "some" / "directory"
+        nested.mkdir(parents=True)
+        os.chdir(nested)
+        self.assertEqual(
+            self.invoke("project", "list")[1]["task_names"], ["outer-sentinel"]
+        )
+        bound = ("--project-root", str(inner))
+        code, listed = self.invoke(*bound, "project", "list")
+        self.assertEqual(code, 0, listed)
+        self.assertEqual(listed["task_names"], [])
+        code, missing = self.invoke(
+            *bound, "project", "resume", "--task-name", "outer-sentinel"
+        )
+        self.assertEqual(code, 1, missing)
+        self.assertIn("was not found", missing["error"])
+        self.assertFalse((inner / ".state-management").exists())
+
+        (inner / ".state-management").mkdir()
+        code, absent = self.invoke(
+            *bound, "project", "resume", "--task-name", "outer-sentinel"
+        )
+        self.assertEqual(code, 1, absent)
+        self.assertEqual(absent["error"], "TASK_NOT_FOUND")
+
+    def test_explicit_project_root_initializes_and_resolves_the_same_root(self) -> None:
+        self.initialize("outer-sentinel")
+        inner = self.project / "inner"
+        inner.mkdir()
+        bound = ("--project-root", "inner")
+        code, initialized = self.invoke(
+            *bound, "init", "inner-study", "--goal-file", "goal.md"
+        )
+        self.assertEqual(code, 0, initialized)
+        self.assertEqual(
+            Path(initialized["task_root"]), inner / ".state-management" / "inner-study"
+        )
+        code, resumed = self.invoke(
+            *bound, "project", "resume", "--task-name", "inner-study"
+        )
+        self.assertEqual(code, 0, resumed)
+        self.assertEqual(self.invoke(*bound, "project", "list")[1]["task_names"], ["inner-study"])
+        self.assertEqual(self.invoke("project", "list")[1]["task_names"], ["outer-sentinel"])
+        nested = inner / "subdirectory"
+        nested.mkdir()
+        os.chdir(nested)
+        self.assertEqual(self.invoke("project", "list")[1]["task_names"], ["inner-study"])
+        code, resumed = self.invoke("project", "resume", "--task-name", "inner-study")
+        self.assertEqual(code, 0, resumed)
+
+    def test_explicit_project_root_keeps_state_root_safeguards(self) -> None:
+        self.initialize("outer-sentinel")
+        inner = self.project / "inner"
+        inner.mkdir()
+        state_root = inner / ".state-management"
+        bound = ("--project-root", str(inner))
+        commands = (
+            ("project", "list"),
+            ("project", "resume", "--task-name", "outer-sentinel"),
+            ("init", "inner-study", "--goal-file", "goal.md"),
+        )
+        for kind in ("symbolic link", "not a directory"):
+            if kind == "symbolic link":
+                state_root.symlink_to(self.project / ".state-management", target_is_directory=True)
+            else:
+                state_root.write_text("invalid state root", encoding="utf-8")
+            for command in commands:
+                with self.subTest(kind=kind, command=command):
+                    code, result = self.invoke(*bound, *command)
+                    self.assertEqual(code, 1, result)
+                    self.assertIn(kind, result["error"])
+            state_root.unlink()
+
 
 class TaskLifecycleTests(StateManagementTestCase):
     def setUp(self) -> None:

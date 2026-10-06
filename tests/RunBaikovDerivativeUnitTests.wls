@@ -15,7 +15,24 @@ generators = Append[
   f
 ];
 
+searchCalled = False;
+affineResult = Block[{CANON`BaikovDerivative`Private`findZeroGrowth},
+  CANON`BaikovDerivative`Private`findZeroGrowth[___] := (searchCalled = True; $Failed);
+  CANON`BaikovDerivative`ChooseDerivativeOperator[
+    KeyTake[prepared, {"operators"}], t, "prepared-affine"]
+];
+
 report = TestReport[{
+  VerificationTest[
+    !searchCalled && affineResult === <|"kind" -> "prepared-affine",
+      "operator" -> prepared["operators", t], "enhanced_search_attempted" -> False|>,
+    True, TestID -> "explicit-affine-uses-only-supplied-operator-without-search"],
+  VerificationTest[
+    CANON`BaikovDerivative`ChooseDerivativeOperator[prepared, t, "unknown"][[1]],
+    "DERIVATIVE_OPERATOR_INVALID", TestID -> "unknown-choice-is-an-input-error"],
+  VerificationTest[
+    CANON`BaikovDerivative`ChooseDerivativeOperator[prepared, u, "prepared-affine"][[1]],
+    "DERIVATIVE_OPERATOR_INVALID", TestID -> "explicit-affine-missing-variable-fails"],
   VerificationTest[
     tResult["kind"] === "enhanced-baikov" &&
       Length[tResult["cofactors"]] === Length[z] &&

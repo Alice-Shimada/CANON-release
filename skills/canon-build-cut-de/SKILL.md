@@ -8,12 +8,16 @@ description: Build the exact current-sector quotient basis and cut differential 
 In the assigned run workspace, invoke:
 
 ```text
-wolframscript -file mma/BuildSectorCutDE.wls INPUT.json FRESH_OUTPUT_DIR
+python3 run_step.py INPUT.json FRESH_OUTPUT_DIR
 ```
 
 The `BUILD_CUT_DE` payload contains `prepared_family`, `master_basis`,
 `sector_manifest`, and `ibp_reduction`. The prepared family explicitly
 declares `regulator` and `dimension_rule`; never infer either from a symbol name.
+An optional `prepared_derivatives` descriptor selects a separately stored source,
+resolved from the request. Otherwise use the prepared family's embedded
+descriptor, resolved from that artifact. Target preparation and DE construction
+share this source loading and normalization.
 
 The script converts the accepted affine denominator records to the one
 `DEBuilder` family object and calls `BuildDifferentialEquations` exactly once on
@@ -32,11 +36,12 @@ the strict proper subsectors defining the quotient. This result certifies the ex
 ordered cut block and the recorded DE validity scope; it does not establish a UT
 basis, canonical form, global IBP completeness, or a full-system certificate.
 
-For each later resident sector, invoke `mma/SliceSectorCutDE.wls` with step
+For each later resident sector, use the same runner with step
 `SLICE_CUT_DE`. It consumes only the accepted `ordered_master_de` and
 `sector_manifest`, directly slices the matching rows and columns, and emits only
 `sector_basis` and `sector_cut_de` without rebuilding the differential equation.
 
-For a DE-only route, use ``CANON`CandidateIBPBridge`MasterDerivativeTargets`` to generate targets from the ordered masters
-and prepared derivatives, then run the existing ReduceIBP adapter. No integral
-candidate artifact is needed.
+For a DE-only route, run
+[PREPARE_REDUCTION_TARGETS](../canon-prepare-reduction-targets/SKILL.md) on the
+ordered masters and prepared family, then pass its `reduction_targets` to
+`REDUCE_IBP`. No integral candidate artifact is needed.

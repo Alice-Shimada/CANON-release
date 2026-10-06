@@ -1,0 +1,10 @@
+{
+  "schema": "canon-neu/script-input/v1", "task_id": "SCALAR-BUILD", "step": "BUILD_CUT_DE",
+  "sector": {"id": 3, "propagator_count": 2},
+  "payload": {
+    "prepared_family": {"type": "mathematica-expression", "path": "scalar-prepared/prepared-family.wl"},
+    "master_basis": {"type": "mathematica-expression", "path": "scalar-master-basis.wl"},
+    "sector_manifest": {"type": "mathematica-expression", "path": "scalar-sectors.wl"},
+    "ibp_reduction": {"type": "mathematica-expression", "path": "scalar-reduction.wl"}
+  }
+}

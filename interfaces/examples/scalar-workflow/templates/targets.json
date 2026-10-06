@@ -1,0 +1,16 @@
+{
+  "schema": "canon-neu/script-input/v1",
+  "task_id": "SCALAR-targets",
+  "step": "PREPARE_REDUCTION_TARGETS",
+  "sector": null,
+  "payload": {
+    "prepared_family": {
+      "from_result": "../outputs/prepare/result.json",
+      "artifact": "prepared_family"
+    },
+    "master_basis": {
+      "from_result": "../outputs/discover/result.json",
+      "artifact": "master_basis"
+    }
+  }
+}

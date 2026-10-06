@@ -13,10 +13,10 @@ is not required for every task.
 | Route | Components |
 | --- | --- |
 | Read saved basis and DE files | Mathematica or another licensed Wolfram Language kernel; see [Reading results](results.md) |
-| Run CANON scientific scripts | A Wolfram installation providing `wolframscript` |
+| Run the default scientific components | Python 3.10 or newer for `run_step.py`, and a Wolfram installation providing `wolframscript` |
 | Transform a supplied rational DE, or solve its off-diagonal tail | Wolfram Language and [CANONICA](../external/CANONICA/README), entry `external/CANONICA/src/CANONICA.m` |
 | Use the single-variable Libra methods | Wolfram Language and [Libra](../external/Libra/Readme.md), entry `external/Libra/Source/Libra.m`; the current CANON providers use its Wolfram backend |
-| Produce IBP reductions | An installed [Kira](../external/Kira/README.rst) executable and its selected backend dependencies; configure Fermat when required by that installation |
+| Produce IBP reductions | The selected adapter's installed software and dependencies; the default uses [Kira](../external/Kira/README.rst), with Fermat when required by that installation |
 | Generate integral candidates | [DlogBasis-refine](../external/DlogBasis-refine/README.md), entry `external/DlogBasis-refine/DlogBasis.wl`, a working [FiniteFlow](../external/FiniteFlow/README.md) Wolfram interface and native library, and [Singular](../external/Singular/README.md) for the module-lift step; all must be available where the Wolfram kernel executes |
 | Use Fermat-assisted exact algebra | [Fermatica](../external/Fermatica/README.md) and an installed [Fermat](../external/Fermat/README.md); provide `FERMATPATH` |
 | Use the fixed INITIAL reference method | [INITIAL](../external/INITIAL/README.md), FiniteFlow, and the explicit reference/configuration files described in [external dependencies](../external/README.md) |
@@ -44,6 +44,8 @@ request fields. No personal installation directory is prescribed.
 | Setting | Purpose |
 | --- | --- |
 | `PATH` | Installed commands such as `wolframscript`, `WolframKernel`, `kira`, and `Singular` |
+| `CANON_COMPONENTS` or repeated `run_step.py --components` | Optional [component packages](components.md); environment accepts one path or a JSON array; explicit selection takes precedence, `--defaults` clears it |
+| `CANON_WOLFRAMSCRIPT` | Wolfram script executable used by the default component commands |
 | Wolfram `$Path`, `$LibraryPath` | Package lookup and native-library lookup, respectively |
 | `method_options.package_entry` | Entry file for the selected method |
 | `method_options.finite_flow_package_file` | FiniteFlow's Wolfram entry file |
@@ -61,6 +63,22 @@ for the complete request schemas.
 
 Moving the source checkout does not rewrite absolute paths in old research
 artifacts. Rebind the installation paths for new runs.
+
+Optional packages require no installation or global registry. Select their
+manifest paths, including paths outside CANON, and keep manifest includes and
+artifact references relative to the files declaring them. Point-DE and dlog
+reconstruction use the declared Wolfram runtime. The local-job/notification
+package uses the Python standard library, POSIX process groups and
+`waitid(WNOWAIT)`; callback commands and any host client they invoke are
+caller-provided. No notification
+service, remote execution backend or host socket is installed by loading it.
+
+Parameterization requires only the declared Wolfram runtime. Native reducer
+configuration is separate: select a Kira, Blade, FIRE7, NeatIBP or caller adapter
+per phase and follow that package's setup/export instructions. Adapter interface
+or saved-output tests do not establish that every external version and native
+pipeline has been tested. Installation entries, native jobs, dependent solvers
+and resource budgets remain caller-supplied; loading a profile installs nothing.
 
 ## Agent host requirements
 

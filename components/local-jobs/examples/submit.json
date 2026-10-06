@@ -1,0 +1,11 @@
+{
+  "schema": "canon-neu/script-input/v1",
+  "task_id": "submit-synthetic-local-job",
+  "step": "SUBMIT_JOB",
+  "sector": null,
+  "payload": {
+    "request": {"path": "science.json"},
+    "run_id": "synthetic-demo-run-1",
+    "components": ["demo-components.json"]
+  }
+}

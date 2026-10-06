@@ -5,7 +5,7 @@ description: Independently check the selected full-prefix transformation and cla
 
 # Check the complete canonical prefix
 
-Run `mma/CheckCanonical.wls` with `full_sector_de` and `sector_transform`.  The checker recomputes
+Run `CHECK_CANONICAL` through `python3 run_step.py INPUT.json OUTPUT_DIR` with `full_sector_de` and `sector_transform`.  The checker recomputes
 the full gauge transformation from `source_matrices`; it does not trust the
 declared transformed matrices.
 

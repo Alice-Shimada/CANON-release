@@ -1,0 +1,326 @@
+{
+  "schema": "canon-neu/components/v1",
+  "steps": {
+    "PREPARE_REQUEST": {
+      "command": [
+        "{python}",
+        "{canon}/prepare_request.py"
+      ],
+      "instructions": "../skills/canon-prepare-request/SKILL.md",
+      "interface": {
+        "inputs": [
+          "template"
+        ],
+        "outputs": [
+          "request"
+        ],
+        "scope": "Bind existing artifact descriptors; no scientific execution or acceptance."
+      }
+    },
+    "PREPARE_DERIVATIVES": {
+      "command": ["{wolframscript}", "-file", "{canon}/mma/PrepareDerivatives.wls"],
+      "instructions": "../skills/canon-prepare-derivatives/SKILL.md",
+      "interface": {
+        "inputs": ["family_data"],
+        "outputs": ["prepared_derivatives"],
+        "scope": "Physical kinematic chain rule from symbolic routing and external Gram data."
+      }
+    },
+    "PREPARE_REDUCTION_TARGETS": {
+      "command": [
+        "{wolframscript}",
+        "-file",
+        "{canon}/mma/PrepareReductionTargets.wls"
+      ],
+      "instructions": "../skills/canon-prepare-reduction-targets/SKILL.md",
+      "interface": {
+        "inputs": [
+          "prepared_family",
+          "master_basis"
+        ],
+        "optional_inputs": [
+          "prepared_derivatives"
+        ],
+        "outputs": [
+          "reduction_targets"
+        ],
+        "scope": "Symbolic targets from prepared affine derivatives."
+      }
+    },
+    "PREPARE": {
+      "command": [
+        "{wolframscript}",
+        "-file",
+        "{canon}/mma/PrepareFamily.wls"
+      ],
+      "instructions": "../skills/canon-prepare-family/SKILL.md",
+      "interface": {
+        "inputs": [
+          "family_spec"
+        ],
+        "outputs": [
+          "prepared_family"
+        ],
+        "scope": "Bind supplied typed scientific input files."
+      }
+    },
+    "DISCOVER": {
+      "command": [
+        "{wolframscript}",
+        "-file",
+        "{canon}/mma/DiscoverSectors.wls"
+      ],
+      "instructions": "../skills/canon-discover-sectors/SKILL.md",
+      "interface": {
+        "inputs": [
+          "prepared_family"
+        ],
+        "outputs": [
+          "master_basis",
+          "sector_manifest"
+        ],
+        "scope": "Organize the supplied ordered master list."
+      }
+    },
+    "REDUCE_IBP": {
+      "command": [
+        "{wolframscript}",
+        "-file",
+        "{canon}/mma/ReduceIBP.wls"
+      ],
+      "instructions": "../skills/canon-reduce-ibp/SKILL.md",
+      "interface": {
+        "alternatives": [
+          [
+            "backend"
+          ],
+          [
+            "reduction"
+          ]
+        ],
+        "optional_inputs": [
+          "reduction_targets",
+          "master_basis"
+        ],
+        "outputs": [
+          "ibp_reduction"
+        ],
+        "scope": "Reduce declared targets using the supplied Kira project."
+      }
+    },
+    "REDUCE_CANDIDATE_IBP": {
+      "command": [
+        "{wolframscript}",
+        "-file",
+        "{canon}/mma/ReduceCandidateIBP.wls"
+      ],
+      "instructions": "../skills/canon-reduce-ibp/SKILL.md"
+    },
+    "BUILD_CUT_DE": {
+      "command": [
+        "{wolframscript}",
+        "-file",
+        "{canon}/mma/BuildSectorCutDE.wls"
+      ],
+      "instructions": "../skills/canon-build-cut-de/SKILL.md",
+      "interface": {
+        "inputs": [
+          "prepared_family",
+          "master_basis",
+          "sector_manifest",
+          "ibp_reduction"
+        ],
+        "optional_inputs": [
+          "prepared_derivatives"
+        ],
+        "outputs": [
+          "ordered_master_de",
+          "sector_basis",
+          "sector_cut_de"
+        ],
+        "scope": "Full symbolic DE from prepared affine derivatives and normalized rules."
+      }
+    },
+    "SLICE_CUT_DE": {
+      "command": [
+        "{wolframscript}",
+        "-file",
+        "{canon}/mma/SliceSectorCutDE.wls"
+      ],
+      "instructions": "../skills/canon-build-cut-de/SKILL.md",
+      "interface": {
+        "inputs": [
+          "ordered_master_de",
+          "sector_manifest"
+        ],
+        "outputs": [
+          "sector_basis",
+          "sector_cut_de"
+        ],
+        "scope": "Extract the requested sector from an existing ordered DE."
+      }
+    },
+    "PROPOSE_INTEGRAL_CANDIDATES": {
+      "command": [
+        "{wolframscript}",
+        "-file",
+        "{canon}/methods/dlogbasis/run.wls"
+      ],
+      "instructions": "../methods/dlogbasis/SKILL.md"
+    },
+    "ROUTE_CORE_CANDIDATES": {
+      "command": [
+        "{wolframscript}",
+        "-file",
+        "{canon}/mma/RouteCoreCandidates.wls"
+      ],
+      "instructions": "../skills/canon-search-core/SKILL.md"
+    },
+    "DIAGNOSE_CORE": {
+      "command": ["{wolframscript}", "-file", "{canon}/methods/residue-balance/run.wls"],
+      "instructions": "../methods/residue-balance/SKILL.md",
+      "interface": {
+        "inputs": ["sector_basis", "sector_cut_de"],
+        "outputs": ["core_diagnosis"],
+        "scope": "Exact bounded applicability diagnosis; never a nonexistence proof."
+      }
+    },
+    "SEARCH_CORE/residue-balance": {
+      "command": ["{wolframscript}", "-file", "{canon}/methods/residue-balance/run.wls"],
+      "instructions": "../methods/residue-balance/SKILL.md",
+      "interface": {
+        "inputs": ["sector_basis", "sector_cut_de"],
+        "outputs": ["core_candidates"],
+        "scope": "Bounded rational residue balances with exact homogeneous-scale lifting; CHECK_CORE required."
+      }
+    },
+    "SEARCH_CORE/canonica": {
+      "command": [
+        "{wolframscript}",
+        "-file",
+        "{canon}/methods/canonica/run.wls"
+      ],
+      "instructions": "../methods/canonica/SKILL.md"
+    },
+    "SEARCH_CORE/libra": {
+      "command": [
+        "{wolframscript}",
+        "-file",
+        "{canon}/methods/libra/run.wls"
+      ],
+      "instructions": "../methods/libra/SKILL.md"
+    },
+    "SEARCH_CORE/epsilon-zero": {
+      "command": [
+        "{wolframscript}",
+        "-file",
+        "{canon}/methods/epsilon-zero/run.wls"
+      ],
+      "instructions": "../methods/epsilon-zero/SKILL.md"
+    },
+    "CHECK_CORE": {
+      "command": [
+        "{wolframscript}",
+        "-file",
+        "{canon}/mma/CheckSectorCore.wls"
+      ],
+      "instructions": "../skills/canon-check-core/SKILL.md"
+    },
+    "BUILD_FULL_DE": {
+      "command": [
+        "{wolframscript}",
+        "-file",
+        "{canon}/mma/BuildFullSectorDE.wls"
+      ],
+      "instructions": "../skills/canon-build-full-de/SKILL.md"
+    },
+    "SOLVE_TAIL": {
+      "command": [
+        "{wolframscript}",
+        "-file",
+        "{canon}/mma/SolveTail.wls"
+      ],
+      "instructions": "../skills/canon-solve-tail/SKILL.md"
+    },
+    "CHECK_CANONICAL": {
+      "command": [
+        "{wolframscript}",
+        "-file",
+        "{canon}/mma/CheckCanonical.wls"
+      ],
+      "instructions": "../skills/canon-check-canonical/SKILL.md"
+    },
+    "COMMIT_SECTOR": {
+      "command": [
+        "{wolframscript}",
+        "-file",
+        "{canon}/mma/CommitSector.wls"
+      ],
+      "instructions": "../skills/canon-commit-sector/SKILL.md"
+    },
+    "NEXT_SECTOR": {
+      "command": [
+        "{wolframscript}",
+        "-file",
+        "{canon}/mma/NextSector.wls"
+      ],
+      "instructions": "../skills/canon-commit-sector/SKILL.md"
+    },
+    "FINAL_CHECK": {
+      "command": [
+        "{wolframscript}",
+        "-file",
+        "{canon}/mma/CheckFullSystem.wls"
+      ],
+      "instructions": "../skills/canon-final-check/SKILL.md"
+    },
+    "ROUTE_PREPARED_BASIS": {
+      "command": [
+        "{wolframscript}",
+        "-file",
+        "{canon}/methods/route-prepared-basis/run.wls"
+      ],
+      "instructions": "../methods/route-prepared-basis/SKILL.md"
+    },
+    "SCREEN_TAIL": {
+      "command": [
+        "{wolframscript}",
+        "-file",
+        "{canon}/methods/full-prefix-tail-screen/run.wls"
+      ],
+      "instructions": "../methods/full-prefix-tail-screen/SKILL.md"
+    },
+    "REPAIR_WITH_LIBRA": {
+      "command": [
+        "{wolframscript}",
+        "-file",
+        "{canon}/methods/libra-structured-repair/run.wls"
+      ],
+      "instructions": "../methods/libra-structured-repair/SKILL.md"
+    },
+    "CHECK_STRUCTURED_REPAIR": {
+      "command": [
+        "{wolframscript}",
+        "-file",
+        "{canon}/mma/CheckStructuredRepair.wls"
+      ],
+      "instructions": "../methods/libra-structured-repair/SKILL.md"
+    },
+    "PROVIDE_UT_EVIDENCE": {
+      "command": [
+        "{wolframscript}",
+        "-file",
+        "{canon}/methods/initial/run.wls"
+      ],
+      "instructions": "../methods/initial/SKILL.md"
+    },
+    "CHECK_UT_EVIDENCE": {
+      "command": [
+        "{wolframscript}",
+        "-file",
+        "{canon}/mma/CheckUTEvidence.wls"
+      ],
+      "instructions": "../methods/initial/SKILL.md"
+    }
+  }
+}

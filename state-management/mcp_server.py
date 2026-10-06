@@ -72,7 +72,7 @@ TOOLS = [
     ),
     tool(
         "statemng_project_list",
-        "List persistent research task names in the nearest project state root.",
+        "List persistent research task names in this checkout's state root.",
         object_schema({}),
         lambda _a: ["project", "list"],
         read_only=True,
@@ -317,7 +317,8 @@ def call_tool(name: str, arguments: Any, meta: Any = None) -> dict[str, Any]:
         with context as authorization:
             try:
                 completed = subprocess.run(
-                    [sys.executable, str(CLI), *item["_command"](checked)],
+                    [sys.executable, str(CLI), "--project-root", str(PROJECT_ROOT),
+                     *item["_command"](checked)],
                     cwd=PROJECT_ROOT,
                     stdin=subprocess.DEVNULL,
                     capture_output=True,

@@ -8,15 +8,16 @@ description: Bind one trusted typed family specification to immutable prepared-f
 In the assigned run workspace, invoke:
 
 ```text
-wolframscript -file mma/PrepareFamily.wls INPUT.json FRESH_OUTPUT_DIR
+python3 run_step.py INPUT.json FRESH_OUTPUT_DIR
 ```
 
 `payload.family_spec` names a trusted Wolfram Association containing the stable
 family/basis identity, topology, parameter/variable and integral-index orders, sector
-convention, regulator, dimension rule, explicit Kira project/jobs, exact family
-data, prepared derivatives, ordered masters, and `propagator_slots`. The script
+convention, regulator, dimension rule, exact family data, prepared derivatives,
+ordered masters, and `propagator_slots`. Legacy Kira project/jobs provenance is
+optional. Native reducer configuration belongs to its selected adapter. The script
 preserves those identities and writes their paths and SHA-256 values to
-`prepared-family.wl`; downstream code must not infer the regulator from a
+`prepared-family.wl`, with paths relative to that artifact; downstream code must not infer the regulator from a
 symbol name.
 
 Relative artifact paths are resolved from the input JSON directory; resource
@@ -27,6 +28,14 @@ checkout root for script locations and pass installed tool paths explicitly.
 The caller supplies every scientific source path and owns the fresh output
 directory. The script does not copy the project, run Kira, or update research
 state; register retained output only through `statemng`.
+
+For user-defined vector or scalar-product charts, the optional parameterization
+component provides its own PREPARE input contract. Choose that front end
+independently of the DISCOVER/REDUCE_IBP backend; read its selected instructions.
+It automatically generates physical derivatives using the
+[standard module](../canon-prepare-derivatives/SKILL.md). For already parameterized
+family data use `PREPARE_DERIVATIVES`; do not hand-write derivative records.
+The typed-source binder above continues to support retained validated inputs.
 
 A PREPARE pass binds source descriptors. Each subsequent operation uses its
 own input contract. For a defined-family integral-basis search, prepare the

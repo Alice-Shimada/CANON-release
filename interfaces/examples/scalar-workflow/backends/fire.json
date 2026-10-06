@@ -1,0 +1,30 @@
+{
+  "schema": "canon-neu/native-backend/v1",
+  "adapter": "fire7",
+  "encoding": {
+    "head": "G",
+    "layout": "family-list",
+    "family": 7
+  },
+  "masters_format": "family-index-pairs",
+  "binding": {
+    "family_ref": "scalar-bubble",
+    "basis_ref": "scalar-bubble-master",
+    "index_order": [
+      "D1",
+      "D2"
+    ],
+    "point": [],
+    "coefficient_domain": "exact-rational-functions"
+  },
+  "operations": {
+    "REDUCE_IBP": {
+      "mode": "import",
+      "source_format": "fire7-rules",
+      "exports": {
+        "masters": "../fixtures/fire-masters.wl",
+        "rules": "../fixtures/fire-rules.wl"
+      }
+    }
+  }
+}

@@ -176,16 +176,33 @@ If[!tailSolved,
     method = "scalar-first-derivative-completion"; tailSolved = True]
 ];
 
-unsolved[reason_:"backend_no_transformation"] := (CanonMethodCard`WriteResult[task, outputDir,
-  "INCONCLUSIVE", "TAIL_UNSOLVED", <||>,
-  <|"candidate_id" -> core["candidate_id"], "method" -> method,
+unsolved[reason_:"backend_no_transformation", artifacts_:<||>, details_:<||>] := (
+  CanonMethodCard`WriteResult[task, outputDir,
+  "INCONCLUSIVE", "TAIL_UNSOLVED", artifacts,
+  Join[<|"candidate_id" -> core["candidate_id"], "method" -> method,
     "reason" -> reason,
     "diagnostics" -> <|"current_master_count" -> dimension - lowerDimension,
       "epsilon_factorized" -> CanonMethodCard`EpsilonFactorizedQ[matrices, regulator],
       "affine_in_epsilon" -> affineEpsilonQ[matrices],
       "rational_coefficients" -> And @@
         (CanonMethodCard`ExactRationalExpressionQ /@ Flatten[matrices]),
-      "alphabet_candidate_count" -> Length[alphabet]|>|>]; Quit[0]);
+      "alphabet_candidate_count" -> Length[alphabet]|>|>, details]]; Quit[0]);
+
+backendUnsolved[stage_String, initialTransformation_, positions_List] := Module[{path},
+  path = CanonMethodCard`WriteWLArtifact[
+    <|"schema" -> "canon-neu/tail-backend-failure/v1", "stage" -> stage,
+      "candidate_id" -> core["candidate_id"], "package_entry" -> package["entry"],
+      (* Read the saved return without evaluating a returned expression again. *)
+      "backend_return" -> Extract[OwnValues[result], {1, 2}, HoldComplete],
+      "call" -> <|"variables" -> variables, "regulator" -> CANONICA`eps,
+        "active_positions" -> positions, "sector_boundaries" -> boundaries,
+        "initial_transformation" -> initialTransformation, "matrices" -> backendMatrices,
+        "options" -> {CANONICA`VerbosityLevel -> 0}|>|>,
+    outputDir, "backend-failure.wl"];
+  unsolved["backend_no_transformation",
+    <|"backend_failure" -> <|"type" -> "mathematica-expression",
+      "path" -> FileNameTake[path]|>|>, <|"backend_stage" -> stage|>]
+];
 
 If[!tailSolved,
   If[!And @@ (CanonMethodCard`ExactRationalExpressionQ /@ Flatten[matrices]),
@@ -200,22 +217,25 @@ If[!tailSolved,
   activeLower = Count[active, i_ /; i <= lowerDimension];
   boundaries = If[activeLower === 0, {{1, Length[active]}},
     {{1, activeLower}, {activeLower + 1, Length[active]}}];
-  backendMatrices = matrices[[All, active, active]];
+  backendMatrices = matrices[[All, active, active]] /. regulator -> CANONICA`eps;
   result = CANONICA`TransformOffDiagonalBlock[
     variables, boundaries, IdentityMatrix[Length[active]],
-    backendMatrices /. regulator -> CANONICA`eps, CANONICA`VerbosityLevel -> 0];
-  If[!MatrixQ[result[[1]]], unsolved[]];
+    backendMatrices, CANONICA`VerbosityLevel -> 0];
+  If[!MatrixQ[result[[1]]], backendUnsolved["TransformOffDiagonalBlock",
+    IdentityMatrix[Length[active]], active]];
   embedding = IdentityMatrix[dimension][[active]];
   lifted = IdentityMatrix[dimension] +
     Transpose[embedding].(result[[1]] - IdentityMatrix[Length[active]]).embedding;
-  backendMatrices = matrices /. regulator -> CANONICA`eps;
+  backendMatrices = CanonMethodCard`GaugeTransform[
+    matrices /. regulator -> CANONICA`eps, variables, lifted];
   boundaries = If[lowerDimension === 0, {{1, dimension}},
     {{1, lowerDimension}, {lowerDimension + 1, dimension}}];
   result = CANONICA`TransformDlogToEpsForm[
     variables, boundaries, lifted,
-    CanonMethodCard`GaugeTransform[backendMatrices, variables, lifted],
+    backendMatrices,
     CANONICA`VerbosityLevel -> 0];
-  If[!MatrixQ[result[[1]]], unsolved[]];
+  If[!MatrixQ[result[[1]]], backendUnsolved["TransformDlogToEpsForm",
+    lifted, Range[dimension]]];
   backendTransformation = result[[1]] /. CANONICA`eps -> regulator;
   transformation = Map[Together, transformation.backendTransformation, {2}];
   matrices = CanonMethodCard`GaugeTransform[fullDE["source_matrices"], variables, transformation];

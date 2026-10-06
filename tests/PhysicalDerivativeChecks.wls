@@ -1,0 +1,41 @@
+#!/usr/bin/env wolframscript
+$HistoryLength=0;
+{repo,tree,receipt}=Rest[$ScriptCommandLine];
+Get[FileNameJoin[{repo,"mma","lib","MethodCardCore.wl"}]];
+load=CanonMethodCard`ReadWLData;
+checks=<||>;
+check[name_,value_]:=(checks[name]=TrueQ[value];Print[name,": ",checks[name]]);
+zero[e_]:=And@@(TrueQ[Together[#]===0]&/@Flatten[{e}]);
+auto=load[FileNameJoin[{tree,"prepare","prepared-derivatives.wl"}]];
+standalone=load[FileNameJoin[{tree,"derivatives","prepared-derivatives.wl"}]];
+prepared=load[FileNameJoin[{tree,"prepare","prepared-family.wl"}]];
+check["standalone_and_auto_same_operator",auto["operators"]===standalone["operators"]];
+check["automatic_reference_survives_relocation",FileExistsQ[CanonMethodCard`ResolveInputPath[
+  FileNameJoin[{tree,"prepare","prepared-family.wl"}],prepared["prepared_derivatives","path"]]]];
+check["generated_derivatives_have_exact_physical_identity",TrueQ[auto["construction","external_gram_identity"]]&&
+  TrueQ[auto["construction","denominator_identity"]]];
+ordered=load[FileNameJoin[{tree,"build","ordered-master-de.wl"}]];
+v=First[ordered["variables"]];reg=ordered["regulator"];
+check["generated_bubble_de_matches_analytic_scaling",zero[ordered["matrices"]-{{{-reg/v}}}]];
+targets=load[FileNameJoin[{tree,"targets","reduction-targets.wl"}]];
+check["bubble_symbolic_targets_generated",Length[targets["targets"]]===2&&targets["point"]==={}];
+bridge=load[FileNameJoin[{tree,"candidate-bridge","candidate-ibp-bridge.wl"}]];
+candidate=First[bridge["candidates"]];
+dimension=prepared["dimension"];
+check["candidate_bridge_uses_generated_affine_records_and_prefactor_chain_rule",
+  bridge["operators",v,"kind"]==="prepared-affine"&&
+  zero[candidate["reduced_derivatives",v]-(dimension/2-1)First[bridge["masters"]]]];
+If[DirectoryQ[FileNameJoin[{tree,"g-build"}]],
+  g=load[FileNameJoin[{tree,"g-build","ordered-master-de.wl"}]];
+  gf=load[FileNameJoin[{tree,"g-prepare","prepared-family.wl"}]];
+  gt=load[FileNameJoin[{tree,"g-targets","reduction-targets.wl"}]];
+  {sVar,uVar}=g["variables"];{ms,mu}=g["matrices"];
+  expected=DiagonalMatrix[((3gf["dimension"]/2-Total[List@@#])/sVar)&/@g["basis"]]/.gf["dimension_rule"];
+  curve=D[mu,sVar]-D[ms,uVar]+mu.ms-ms.mu;
+  check["g3447_34_masters_from_saved_rules",Length[g["basis"]]===34&&Dimensions/@g["matrices"]==={{34,34},{34,34}}];
+  check["g3447_118_targets_from_generated_operators",Length[gt["targets"]]===118];
+  check["g3447_full_homogeneity_exact",zero[ms-expected]];
+  check["g3447_all1156_curvature_entries_exact_zero",zero[curve]]
+];
+Export[receipt,checks,"RawJSON"];
+Exit[If[And@@Values[checks],0,1]];

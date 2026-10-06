@@ -5,7 +5,7 @@ description: Independently check a declared ordered current-sector candidate poo
 
 # Exact current-sector check
 
-Run `mma/CheckSectorCore.wls` with `sector_basis`, `sector_cut_de`, and
+Run `CHECK_CORE` through `python3 run_step.py INPUT.json OUTPUT_DIR` with `sector_basis`, `sector_cut_de`, and
 `core_candidates`.  In declared candidate order it checks only:
 
 - reduction-rank invertibility;

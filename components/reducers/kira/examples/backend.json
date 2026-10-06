@@ -1,0 +1,9 @@
+{
+  "schema": "canon-neu/kira-backend/v1",
+  "executable": "kira3",
+  "options": ["--parallel=1"],
+  "reduction_engine": "firefly",
+  "seed": {"r": 3, "s": 0, "d": 1},
+  "timeout_seconds": 90,
+  "cancel_grace_seconds": 1
+}

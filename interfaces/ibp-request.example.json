@@ -1,9 +1,17 @@
 {
-  "executable": "kira",
-  "project": "prepared-kira-project",
-  "jobs": ["jobs.yaml", "export-math.yaml"],
-  "topology": "box",
-  "targets": "myintegrals",
-  "output": "fresh-kira-output",
-  "options": ["--parallel=1"]
+  "schema": "canon-neu/script-input/v1",
+  "task_id": "T-REDUCE-IBP",
+  "step": "REDUCE_IBP",
+  "sector": null,
+  "payload": {
+    "reduction": {
+      "executable": "kira",
+      "project": "prepared-kira-project",
+      "jobs": ["jobs.yaml", "export-math.yaml"],
+      "topology": "box",
+      "targets": "myintegrals",
+      "output": "fresh-kira-output",
+      "options": ["--parallel=1"]
+    }
+  }
 }

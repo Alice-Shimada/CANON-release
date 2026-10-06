@@ -1,0 +1,12 @@
+<|"schema" -> "canon-neu/parameterization-spec/v1", "chart_type" -> "scalar-products",
+  "family_ref" -> "G-3447", "basis_ref" -> "G-3447-kira3-source",
+  "chart_id" -> "G3447-physical-invariants", "topology" -> "G3447", "integral_head" -> "j",
+  "loop_momenta" -> {q1,q2,q3}, "external_momenta" -> {p,l},
+  "variables" -> {s,u}, "dimension" -> d, "regulator" -> eps, "dimension_rule" -> (d -> 4-2eps),
+  "scalar_products" -> {{p,p}->0, {p,l}->s/2, {l,l}->0},
+  "propagator_momenta" -> {q1-l,q1,q1+q2-q3+(u-1)p,q2+p,q1+q2,q1-q3-l,
+    q1+q2-q3-p,q2+q3,q3,q3+(1-u)p,q2+l-p,q2},
+  "propagator_masses_squared" -> ConstantArray[0,12],
+  "index_order" -> Table["D"<>ToString[i], {i,12}],
+  "propagator_slots" -> {1,2,3,5,6,7,9,11,12}, "top_level_sectors" -> {3447},
+  "invariants" -> {<|"name"->s,"mass_dimension"->2|>, <|"name"->u,"mass_dimension"->0|>}|>

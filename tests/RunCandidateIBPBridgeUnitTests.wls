@@ -121,7 +121,50 @@ cofactorResidual = Together[
     choice["f_cofactor"] polynomial
 ];
 
+(* Independent formal-integrand chain rule, including normalization derivatives. *)
+affineCandidates = candidates;
+affineCandidates["candidates"] = MapIndexed[
+  Join[#1, <|"normalization" -> <|"factor" -> If[First[#2] === 1, s t, t^2]|>|>] &,
+  candidates["candidates"]];
+affinePrepared = Join[KeyTake[prepared, {"variables", "operators", "denominator_count"}],
+  <|"exact_strategy" -> <|"propagator_slots" -> {1,2,3,4}|>|>];
+searchCalled = False;
+affineCompiled = Block[{CANON`BaikovDerivative`Private`findZeroGrowth},
+  CANON`BaikovDerivative`Private`findZeroGrowth[___] := (searchCalled = True; $Failed);
+  CANON`CandidateIBPBridge`CompileCandidateIBPTargets[
+    affineCandidates, preparedFamily, masterBasis, affinePrepared, "prepared-affine"]
+];
+toIntegrand[expr_] := expr /. HoldPattern[box[a__Integer]] :> Times @@ (z^-{a});
+chainRule[expr_, variable_] := Module[{integrand = toIntegrand[expr], rows = prepared["operators", variable]},
+  D[integrand, variable] + Sum[D[integrand, z[[i]]] (rows[[i, "constant"]] +
+    Total[(#["coefficient"] z[[#["denominator"]]]) & /@ rows[[i, "linear"]]]), {i,4}]
+];
+affineResiduals = Flatten[Table[Together[toIntegrand[record["derivatives", variable]] -
+  chainRule[record["expression"], variable]],
+  {record, affineCompiled["candidates"]}, {variable, {s,t}}]];
+
 report = TestReport[{
+  VerificationTest[
+    !searchCalled && AllTrue[Values[affineCompiled["operators"]],
+      #["kind"] === "prepared-affine" && #["enhanced_search_attempted"] === False &],
+    True, TestID -> "explicit-affine-retains-honest-per-variable-choice"],
+  VerificationTest[
+    affineResiduals === ConstantArray[0, 4], True,
+    TestID -> "explicit-affine-equals-independent-integrand-chain-rule-all-candidates-and-variables"],
+  VerificationTest[
+    Lookup[affineCompiled["candidates"], "candidate_id"] === Lookup[candidates["candidates"], "candidate_id"] &&
+      Last[affineCompiled["candidates"]]["targets"][[1, "indices", 4]] === -1 &&
+      AnyTrue[Flatten[Lookup[affineCompiled["candidates"], "targets"], 1], #["sector_mask"] < 15 &] &&
+      SubsetQ[Lookup[affineCompiled["reducer_targets"], "integral"], masterDerivativeTargets],
+    True, TestID -> "explicit-affine-keeps-ids-signed-indices-subsectors-and-master-targets"],
+  VerificationTest[
+    CANON`CandidateIBPBridge`CompileCandidateIBPTargets[
+      candidates, preparedFamily, masterBasis, prepared, "unknown"][[1]],
+    "DERIVATIVE_OPERATOR_INVALID", TestID -> "compiler-propagates-invalid-selection"],
+  VerificationTest[
+    CANON`CandidateIBPBridge`CompileCandidateIBPTargets[
+      candidates, preparedFamily, masterBasis, KeyDrop[affinePrepared, {"exact_strategy"}], "prepared-affine"][[1]],
+    "DERIVATIVE_OPERATOR_INVALID", TestID -> "explicit-affine-requires-used-propagator-metadata"],
   VerificationTest[
     Lookup[compiled["operators"], {s, t}][[All, "kind"]] ===
       {"affine-fallback", "enhanced-baikov"} && cofactorResidual === 0,

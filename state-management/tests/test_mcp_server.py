@@ -277,6 +277,53 @@ class MCPStdioEndToEndTests(unittest.TestCase):
         self.assertTrue(payload["ok"], payload)
         return payload
 
+    def test_fresh_nested_checkout_never_uses_ancestor_state(self) -> None:
+        goal = self.write("goal.md", "Isolate this checkout's state.\n")
+        outer = self.project.parent
+        initialized = subprocess.run(
+            [sys.executable, str(STATE_MANAGEMENT / "statemng"),
+             "init", "outer-sentinel", "--goal-file", str(goal)],
+            cwd=outer, capture_output=True, text=True, check=False,
+        )
+        self.assertEqual(initialized.returncode, 0, initialized.stdout)
+        outer_state = outer / ".state-management"
+        original = {
+            path.relative_to(outer_state): path.read_bytes()
+            for path in outer_state.rglob("*") if path.is_file()
+        }
+
+        self.assertEqual(self.call_ok("statemng_project_list")["task_names"], [])
+        self.assertFalse((self.project / ".state-management").exists())
+        missing = self.client.call(
+            "statemng_project_resume", {"task_name": "outer-sentinel"}
+        )
+        self.assertTrue(missing["isError"], missing)
+        self.assertIn("was not found", self.payload(missing)["error"])
+
+        (self.project / ".state-management").mkdir()
+        self.assertEqual(self.call_ok("statemng_project_list")["task_names"], [])
+        absent = self.client.call(
+            "statemng_task_list", {"task_name": "outer-sentinel"}
+        )
+        self.assertTrue(absent["isError"], absent)
+        self.assertEqual(self.payload(absent)["error"], "TASK_NOT_FOUND")
+
+        local = self.call_ok(
+            "statemng_init", {"task_name": "inner-study", "goal_file": "goal.md"}
+        )
+        self.assertEqual(
+            Path(local["task_root"]), self.project / ".state-management" / "inner-study"
+        )
+        self.assertEqual(
+            self.call_ok("statemng_project_list")["task_names"], ["inner-study"]
+        )
+        self.call_ok("statemng_project_resume", {"task_name": "inner-study"})
+        self.assertEqual(
+            original,
+            {path.relative_to(outer_state): path.read_bytes()
+             for path in outer_state.rglob("*") if path.is_file()},
+        )
+
     def test_real_stdio_protocol_and_complete_research_lifecycle(self) -> None:
         initialized = self.client.request(
             "initialize",

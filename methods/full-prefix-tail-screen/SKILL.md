@@ -17,8 +17,7 @@ this screen's pool-exhaustion gate. General studies start at the
 
 ## Inputs and command
 
-With an available Wolfram kernel, use `-noinit -noprompt -script` to run
-`run.wls <input.json> <new-output-dir>`. The step is `SCREEN_TAIL` and requires
+Run `python3 run_step.py INPUT.json OUTPUT_DIR`. The step is `SCREEN_TAIL` and requires
 `sector_basis`, `sector_cut_de`, `core_candidates`, `accepted_prefix`, and
 `full_prefix_candidates`. `screen_options.candidate_budget` is optional.
 

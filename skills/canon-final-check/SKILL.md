@@ -3,9 +3,18 @@ name: canon-final-check
 description: "Run the global final canonical check after all sectors are committed. Use when an agent is assigned the FINAL_CHECK workflow step."
 ---
 
-Run `mma/CheckFullSystem.wls` with `prepared_family`, `master_basis`,
+Run `FINAL_CHECK` through `python3 run_step.py INPUT.json OUTPUT_DIR` with `prepared_family`, `master_basis`,
 `sector_manifest`, the original complete `ordered_master_de`, and the final
 `accepted_prefix`.
+
+Bind the final prefix to the original `ordered_master_de["basis"]` order before
+submission. BUILD_FULL_DE can map a reused prefix's different source order, while
+COMMIT_SECTOR retains that explicit order. To represent the same complete result
+in resident order, apply the integral-by-integral permutation to both
+`source_basis` and the rows of `transformation`, preserve the canonical basis and
+matrices, and recompute the prefix hash with the standard artifact conventions.
+Changing source labels alone breaks the gauge relation. Keep the original DE as
+the final check's authority.
 
 Enter this step after every resident sector is committed. Scalar/core epsilon
 forms and a flat raw DE do not establish a full canonical system. If the tail
