@@ -1,6 +1,7 @@
+Get[FileNameJoin[{DirectoryName[$InputFileName], "IBPReductionAudit.wl"}]];
 BeginPackage["CANON`CandidateIBPBridge`"];
-CompileCandidateIBPTargets::usage = "CompileCandidateIBPTargets[candidates, preparedFamily, masterBasis, preparedDerivatives, selection:\"enhanced-first\"] builds exact scalar targets for candidate derivatives.";
-AttachCandidateIBPReduction::usage = "AttachCandidateIBPReduction[compiled, reduction] attaches fully reduced rules while preserving candidate IDs.";
+CompileCandidateIBPTargets::usage = "CompileCandidateIBPTargets[candidates, preparedFamily, masterBasis, preparedDerivatives, selection:\"enhanced-first\", auditOptions:<||>] validates audit options and builds exact scalar targets for candidate derivatives.";
+AttachCandidateIBPReduction::usage = "AttachCandidateIBPReduction[compiled, reduction] audits and attaches fully reduced CANON rules while preserving candidate IDs, or returns Failure.";
 ValidateCandidateIBPReduction::usage = "ValidateCandidateIBPReduction[compiled, reduction] checks supplied solved rules for ordered-basis identity and linear closure of the compiled non-master targets, without proving the IBP identities.";
 BuildCoreCandidates::usage = "BuildCoreCandidates[bridge, preparedFamily, sectorBasis, cut] selects a reduced row basis and independent single-row exchanges.";
 MasterDerivativeTargets::usage = "MasterDerivativeTargets[masters, preparedDerivatives] returns affine derivative targets for a DE-only IBP reduction.";
@@ -73,8 +74,10 @@ MasterDerivativeTargets[masters_, preparedDerivatives_] := DeleteDuplicates @ Se
   !MemberQ[masters, #] &];
 
 CompileCandidateIBPTargets[candidates_, preparedFamily_, masterBasis_, preparedDerivatives_,
-    selection_ : "enhanced-first"] :=
- Module[{topology, masters, head, variables, strategy, protected, choices, invalid, records, masterTargets, targets},
+    selection_ : "enhanced-first", auditOptions_ : <||>] :=
+ Module[{topology, masters, head, variables, strategy, protected, choices, invalid, records, masterTargets, targets, options},
+  options = CANON`IBPReductionAudit`ValidateIBPAuditOptions[auditOptions];
+  If[FailureQ[options], Return[options]];
   topology = Lookup[preparedFamily, "integral_head", preparedFamily["topology"]];
   masters = masterBasis["masters"];
   head = Head[First[masters]];
@@ -105,6 +108,8 @@ CompileCandidateIBPTargets[candidates_, preparedFamily_, masterBasis_, preparedD
     "method_evidence" -> candidates["method_evidence"],
     "tool_provenance" -> candidates["tool_provenance"],
     "operators" -> choices, "masters" -> masters, "candidates" -> records,
+    "ibp_audit_contract" -> CANON`IBPReductionAudit`IBPAuditContract[
+      preparedFamily, masterBasis, targets, options],
     "reducer_targets" -> (targetData[
       #, strategy["propagator_slots"]] & /@
         Select[targets, !MemberQ[masters, #] &])|>];
@@ -148,12 +153,23 @@ ValidateCandidateIBPReduction[compiled_, reduction_Association] := Module[
   reduction
 ];
 
-AttachCandidateIBPReduction[compiled_, reduction_] := Module[{rules, reduce},
+AttachCandidateIBPReduction[compiled_, reduction_] := Module[{rules, reduce, audit, identities},
+  If[AssociationQ[reduction],
+    identities = Select[{"family_ref", "basis_ref"},
+      KeyExistsQ[reduction, #] && reduction[#] =!= compiled[#] &];
+    If[identities =!= {}, Return[Failure["IBP_CHECK_FAILED", <|
+      "reason_code" -> "SOURCE_BASIS_MISMATCH",
+      "reason" -> "Reduction identity differs from the current inputs.",
+      "mismatched_fields" -> identities|>]]]
+  ];
+  audit = CANON`IBPReductionAudit`AuditIBPReduction[
+    reduction, Lookup[compiled, "ibp_audit_contract", None]];
+  If[audit["status"] =!= "PASS", Return[Failure[audit["code"], <|"audit" -> audit|>]]];
   rules = reduction["rules"];
   reduce[expression_] := expression /. Dispatch[rules];
   Join[<|"schema" -> "canon-neu/candidate-ibp-bridge/v1"|>,
     KeyDrop[compiled, {"masters", "candidates"}],
-    <|"masters" -> compiled["masters"], "rules" -> rules,
+    <|"masters" -> compiled["masters"], "rules" -> rules, "ibp_audit" -> audit,
       "candidates" -> (Join[#, <|"reduced_expression" -> reduce[#1["expression"]],
         "reduced_derivatives" -> Map[reduce, #1["derivatives"]]|>] & /@
           compiled["candidates"])|>]];

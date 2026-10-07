@@ -116,7 +116,11 @@ If[action === "prepare",
 ];
 If[KeyExistsQ[outcome, "prepared"], Exit[0]];
 If[!KeyExistsQ[outcome, "status"],
-  status = If[MemberQ[{"NATIVE_BASIS_MISMATCH", "UNREDUCED_NATIVE_OUTPUT", "SOURCE_BASIS_CHANGED"}, outcome["code"]], "INCONCLUSIVE", "ERROR"];
-  CanonMethodCard`WriteResult[task, output, status, outcome["code"], <||>, <|"diagnostic" -> ToString[outcome["details"], InputForm], "reduction_complete" -> False, "master_discovery_complete" -> False|>]; Exit[2]
+  resultCheckFailed = action === "import" && task["step"] === "REDUCE_IBP";
+  status = If[resultCheckFailed, "FAIL", "ERROR"];
+  code = If[resultCheckFailed, "IBP_CHECK_FAILED", outcome["code"]];
+  CanonMethodCard`WriteResult[task, output, status, code, <||>,
+    <|"reason_code" -> outcome["code"], "diagnostic" -> ToString[outcome["details"], InputForm],
+      "reduction_complete" -> False, "master_discovery_complete" -> False|>]; Exit[2]
 ];
 CanonMethodCard`WriteResult[task, output, outcome["status"], outcome["code"], outcome["artifacts"], outcome["summary"]];

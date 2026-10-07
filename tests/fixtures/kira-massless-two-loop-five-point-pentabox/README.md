@@ -22,11 +22,32 @@ the five Gram-determinant identities, all five bundles of affine denominator
 identities, the masslessness of the momentum-conservation leg, and the full
 unscaled Baikov determinant identity before writing the fixture.
 
-The optional live test uses exactly 20 Kira threads:
+The optional live test defaults to one Kira evaluator. An optional positive
+integer `THREADS` argument sets `--parallel=THREADS` explicitly:
 
 ```sh
-wolframscript -file tests/RunPentaboxIBPLiveTest.wls KIRA_EXECUTABLE FRESH_OUTPUT
+wolframscript -file tests/RunPentaboxIBPLiveTest.wls KIRA_EXECUTABLE FRESH_OUTPUT [THREADS]
 ```
+
+After reduction, the test calls the common `CHECK_IBP` component through
+`run_step.py`, using declarations from this fixture: integral head `pentabox5`,
+11 indices, the 61 preferred masters, two targets, and exact rational
+coefficients in `{d,s12,s23,s34,s45,s51}`. It also checks the fixture's exact
+master and rule-target order independently. Audit inputs, the audit result and
+receipt, and fixture checks are saved under `FRESH_OUTPUT.check/`.
+This checks reduction structure and coverage; it does not prove the IBP identities.
+The live entry reads the reduction descriptor from the matching successful
+`result.json`, allowing renamed relative or absolute exports and verifying a
+declared file hash. A failed producer cannot start the audit.
+
+The same check can audit an existing normalized CANON reduction without rerunning Kira:
+
+```sh
+wolframscript -file tests/CheckPentaboxIBP.wls REDUCTION.wl FRESH_CHECK_OUTPUT
+```
+
+`CANON_PYTHON` and `CANON_WOLFRAMSCRIPT` select the Python and Wolfram runners
+when they are not available under their standard executable names.
 
 No Kira output, machine path, runtime log, hash certificate, or discovery
 history is part of the fixture.

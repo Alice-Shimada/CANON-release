@@ -33,6 +33,7 @@ FIXTURE_NAMES = {
 SOURCE_FILES = ["run_step.py", "components/default.json", "mma/PrepareFamily.wls",
                 "mma/DiscoverSectors.wls", "mma/BuildSectorCutDE.wls",
                 "mma/lib/MethodCardCore.wl", "mma/lib/DEBuilder.wl", "mma/lib/SectorDE.wl",
+                "mma/lib/IBPReductionAudit.wl",
                 *["mma/lib/method-card/" + name + ".wl" for name in (
                     "ArtifactIO", "Contracts", "PreparedBasis", "Sectors", "GaugeChecks",
                     "DLogAlgebra", "StructuredRepair")]]

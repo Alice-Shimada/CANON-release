@@ -65,10 +65,19 @@ An optional package can replace any subset of steps while keeping the published
 scientific inputs and outputs. The default scientific route is:
 
 ```text
-PREPARE → DISCOVER → IBP and ordered DE
+PREPARE → DISCOVER → IBP → IBP audit → ordered DE
   → sector core proposal → CHECK_CORE → full-prefix construction and tail repair
   → CHECK_CANONICAL → COMMIT_SECTOR → next sector → FINAL_CHECK
 ```
+
+The [IBP audit](INTERFACES.md#ibp-reduction-audit) checks the unified reduction
+against independently declared targets, masters and coefficient symbols.
+`BUILD_CUT_DE` and candidate reduction include it before consumption; standalone
+`mma/CheckIBPReduction.wls` checks imported or delivered reductions. It verifies
+structural integrity and coverage; the subsequent mathematical gates are still required.
+The producer binds its passing receipt to the final file. Consumers check file
+identity and current target/master requirements, avoiding repeated structural
+audits or per-rule fingerprint scans of an unchanged accepted artifact.
 
 For integral-basis discovery from a family (UT or canonical), choose a small
 proposal from the geometry and current evidence: selected dots and normalization,

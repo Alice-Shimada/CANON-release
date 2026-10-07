@@ -3,6 +3,7 @@ BeginPackage["CANON`DEBuilder`"];
 BuildDifferentialEquations::usage =
   "BuildDifferentialEquations[family, masters, rules] constructs exact ordered " <>
   "master-integral differential-equation matrices entirely in memory.";
+DifferentialEquationTargets::usage = "DifferentialEquationTargets[family, masters] returns the distinct integral targets of the same affine derivatives used by BuildDifferentialEquations.";
 
 Begin["`Private`"];
 
@@ -23,6 +24,13 @@ vectorizedRules[masters_, rules_] := Module[{basis, vectors, zero},
   basis = Thread[masters -> IdentityMatrix[Length[masters]]];
   vectors = Replace[(Last /@ rules) /. basis, 0 -> zero, {1}];
   Dispatch @ Join[basis, Thread[(First /@ rules) -> vectors]]
+];
+
+DifferentialEquationTargets[family_, masters_List] := Module[{head = Head[First[masters]]},
+  DeleteDuplicates[Cases[
+    Table[masterDerivative[master, operator],
+      {master, masters}, {operator, Values[family["operators"]]}],
+    Blank[head], {0, Infinity}], SameQ]
 ];
 
 curvature[matrices_, {variableI_, variableJ_}, assignments_] := Module[

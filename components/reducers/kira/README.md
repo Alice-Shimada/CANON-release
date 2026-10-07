@@ -11,6 +11,9 @@ executable, and the explicitly supplied CANON common API through `{canon}`.
 Discovery uses `CanonMethodCard`FormatMasterArtifacts` to retain standard sector
 ordering and within-sector native order. It imports no optional package.
 Local process ownership requires POSIX groups and `waitid(WNOWAIT)`.
+On macOS, an `EPERM` during cleanup is ignored only after a successful process
+table inspection confirms that the unreaped leader's group has no live members.
+Permission errors for live groups remain operational failures.
 
 Select this manifest for either phase through the runner, or use per-step
 `from` bindings to combine it with another parameterization or reducer:
@@ -216,11 +219,12 @@ Wolfram-format rules, maps the declared native head back, and checks:
   requested source master remains an identity;
 - every result is linear in that basis and uses only declared coefficient symbols.
 
-A native master outside the requested set returns `INCONCLUSIVE/NATIVE_BASIS_MISMATCH`.
-Provide an explicit basis conversion in the calling workflow before advancing;
-the adapter does not relabel another basis. A rule using a master omitted from
-the native list remains `UNREDUCED_NATIVE_OUTPUT`. Missing/unreduced targets likewise
-remain incomplete. On success, `PASS/IBP_REDUCED` exposes standard
+Nonpassing output checks return `FAIL/IBP_CHECK_FAILED`. `summary.reason_code`
+and the diagnostic details identify a missing export, native master mismatch,
+unreduced target or invalid expression. For a different native basis, provide an
+explicit conversion before advancing; the adapter does not relabel another
+basis. A nonpassing check publishes no normalized reduction. On success,
+`PASS/IBP_REDUCED` exposes standard
 `ibp_reduction` containing only `masters` and `rules`, plus
 `reduction_kinematics` and the run receipt. Preserve the dimension symbol until
 the downstream DE builder applies its regulator rule.
@@ -236,6 +240,13 @@ the parent still owns the group leader PID. Timeouts, nonzero exits, missing
 exports, identity/basis/coverage failures retain logs and never report completion.
 An interrupted outer Wolfram import also remains incomplete. An uncatchable
 adapter crash does not imply a completed reduction.
+
+For `REDUCE_IBP`, failures have two categories: execution errors use `ERROR`
+(including timeout and interruption), while a normally returned native result
+that does not pass checking uses `FAIL/IBP_CHECK_FAILED`. Specific execution
+codes and output-check reasons remain available for diagnosis. Neither category
+is method exhaustion or a proof about the existence of a reduction. `DISCOVER`
+retains its separate initiation contract.
 
 `backend-run.json` records exact selected commands, executable hash, separate
 neutral/config references, point binding, effective phase budgets (including

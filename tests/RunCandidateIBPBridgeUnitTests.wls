@@ -143,7 +143,92 @@ affineResiduals = Flatten[Table[Together[toIntegrand[record["derivatives", varia
   chainRule[record["expression"], variable]],
   {record, affineCompiled["candidates"]}, {variable, {s,t}}]];
 
+(* A selected reducer can exit successfully while exporting incomplete data.
+   Exercise the common JSON/component entry and the final-file audit handoff. *)
+temporary = CreateDirectory[];
+project = CreateDirectory[FileNameJoin[{temporary, "project"}]];
+Put[candidates, FileNameJoin[{temporary, "candidates.wl"}]];
+Put[preparedFamily, FileNameJoin[{temporary, "family.wl"}]];
+Put[masterBasis, FileNameJoin[{temporary, "masters.wl"}]];
+Put[prepared, FileNameJoin[{temporary, "derivatives.wl"}]];
+integralText[e_] := SymbolName[Head[e]] <> "[" <>
+  StringRiffle[ToString[#, InputForm] & /@ List @@ e, ","] <> "]";
+Export[FileNameJoin[{project, "fake-masters"}],
+  StringRiffle[integralText /@ orderedMasters, "\n"] <> "\n", "Text"];
+Export[FileNameJoin[{project, "fake-rules"}], ToString[Most[reductionRules], InputForm], "Text"];
+adapterPath = FileNameJoin[{temporary, "fake-adapter.py"}];
+Export[adapterPath, StringRiffle[{
+  "import json, pathlib, sys",
+  "source, output = map(pathlib.Path, sys.argv[1:])",
+  "task = json.loads(source.read_text())",
+  "project = pathlib.Path(__file__).parent / 'project'",
+  "masters = ','.join((project / 'fake-masters').read_text().splitlines())",
+  "rules = (project / 'fake-rules').read_text()",
+  "output.mkdir()",
+  "(output / 'ibp-reduction.wl').write_text('<|\"masters\" -> {' + masters + '}, \"rules\" -> ' + rules + '|>')",
+  "(output / 'result.json').write_text(json.dumps({'schema':'canon-neu/script-result/v1', 'task_id':task['task_id'], 'step':'REDUCE_IBP', 'status':'PASS', 'code':'IBP_REDUCED', 'artifacts':{'ibp_reduction':{'type':'mathematica-expression', 'path':'ibp-reduction.wl'}}, 'summary':{}}))"
+}, "\n"], "Text"];
+manifestPath = FileNameJoin[{temporary, "components.json"}];
+Export[FileNameJoin[{temporary, "instructions.md"}], "Synthetic reducer boundary fixture.\n", "Text"];
+Export[manifestPath, <|"schema" -> "canon-neu/components/v1", "steps" -> <|
+  "REDUCE_IBP" -> <|"command" -> {"{python}", "{package}/fake-adapter.py"},
+    "instructions" -> "instructions.md"|>|>|>, "RawJSON"];
+requestPath = FileNameJoin[{temporary, "request.json"}];
+Export[requestPath, <|"schema" -> "canon-neu/script-input/v1",
+  "task_id" -> "CANDIDATE-AUDIT-FIXTURE", "step" -> "REDUCE_CANDIDATE_IBP",
+  "payload" -> <|
+    "integral_candidates" -> <|"path" -> "candidates.wl"|>,
+    "prepared_family" -> <|"path" -> "family.wl"|>,
+    "master_basis" -> <|"path" -> "masters.wl"|>,
+    "prepared_derivatives" -> <|"path" -> "derivatives.wl"|>,
+    "backend" -> <|"path" -> "backend.json"|>|>|>, "RawJSON"];
+Export[FileNameJoin[{temporary, "backend.json"}], <||>, "RawJSON"];
+outputPath = FileNameJoin[{temporary, "failed-output"}];
+resultPath = FileNameJoin[{outputPath, "candidate-ibp-bridge.wl"}];
+publicCommand[out_] := {"python3", FileNameJoin[{repoRoot, "run_step.py"}],
+  requestPath, out, "--components", manifestPath};
+process = RunProcess[publicCommand[outputPath]];
+failedAudit = Get[FileNameJoin[{outputPath, "ibp-audit.wl"}]];
+
+(* A complete reversed reducer order is mapped by the audited bridge. *)
+Export[FileNameJoin[{project, "fake-masters"}],
+  StringRiffle[integralText /@ Reverse[orderedMasters], "\n"] <> "\n", "Text"];
+Export[FileNameJoin[{project, "fake-rules"}], ToString[reductionRules, InputForm], "Text"];
+successfulOutput = FileNameJoin[{temporary, "successful-output"}];
+successfulPath = FileNameJoin[{successfulOutput, "candidate-ibp-bridge.wl"}];
+successfulCommand = publicCommand[successfulOutput];
+successfulProcess = RunProcess[successfulCommand];
+successfulBridge = Get[successfulPath];
+successfulAudit = Get[successfulPath <> ".audit.wl"];
+successfulSHA256 = FileHash[successfulPath, "SHA256", "HexString"];
+consumerAudit = CANON`IBPReductionAudit`AuditIBPReduction[successfulBridge,
+  successfulBridge["ibp_audit_contract"], successfulAudit, successfulSHA256];
+overwriteProcess = RunProcess[successfulCommand];
+
 report = TestReport[{
+  VerificationTest[successfulProcess["ExitCode"] === 0 &&
+    successfulAudit["binding", "reduction_sha256"] === successfulSHA256 &&
+    consumerAudit["reuse", "used"] &&
+    consumerAudit["master_permutation"] === Range[Length[orderedMasters]],
+    True, TestID -> "candidate-command-binds-PASS-to-final-reordered-bridge-file"],
+  VerificationTest[overwriteProcess["ExitCode"] =!= 0 &&
+    FileHash[successfulPath, "SHA256", "HexString"] === successfulSHA256,
+    True, TestID -> "candidate-command-keeps-published-bridge-unchanged"],
+  VerificationTest[With[{a = CANON`IBPReductionAudit`AuditIBPReduction[
+      final, compiled["ibp_audit_contract"]]},
+    a["status"] === "PASS" && !a["reuse", "used"] &&
+      a["master_permutation"] === Range[Length[orderedMasters]]],
+    True, TestID -> "in-memory-bridge-needs-file-identity-before-reusing-proof"],
+  VerificationTest[process["ExitCode"] =!= 0 && !FileExistsQ[resultPath] &&
+    Lookup[failedAudit, {"status", "code"}] === {"FAIL", "IBP_CHECK_FAILED"} &&
+      failedAudit["summary", "reason_code"] === "IBP_MISSING_TARGETS",
+    True, TestID -> "candidate-command-writes-audit-failure-without-publishing-bridge"],
+  VerificationTest[
+    FailureQ[CANON`CandidateIBPBridge`AttachCandidateIBPReduction[
+      compiled, <|"masters" -> orderedMasters, "rules" -> Most[reductionRules]|>]],
+    True,
+    TestID -> "candidate-bridge-rejects-incomplete-reduction-before-substitution"
+  ],
   VerificationTest[
     !searchCalled && AllTrue[Values[affineCompiled["operators"]],
       #["kind"] === "prepared-affine" && #["enhanced_search_attempted"] === False &],
@@ -205,4 +290,5 @@ Print[InputForm[<|
   "failed" -> report["TestsFailedCount"]
 |>]];
 If[report["TestsFailedCount"] =!= 0, Print[InputForm[report["TestsFailed"]]]];
+DeleteDirectory[temporary, DeleteContents -> True];
 Exit[If[report["TestsFailedCount"] === 0, 0, 1]];

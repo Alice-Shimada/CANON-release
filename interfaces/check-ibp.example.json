@@ -1,0 +1,9 @@
+{
+  "schema": "canon-neu/script-input/v1",
+  "task_id": "EXAMPLE-CHECK-IBP",
+  "step": "CHECK_IBP",
+  "payload": {
+    "ibp_reduction": {"type": "mathematica-expression", "path": "ibp-audit-reduction.example.wl"},
+    "ibp_contract": {"type": "mathematica-expression", "path": "ibp-audit-contract.example.wl"}
+  }
+}

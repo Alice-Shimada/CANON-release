@@ -2,6 +2,7 @@ BeginPackage["CANON`SectorDE`"];
 
 LoadPreparedDerivatives::usage = "LoadPreparedDerivatives[prepared, preparedPath, masterBasis, derivativePath:Automatic] binds the declared family and basis identities, loads the selected derivative file, applies the explicit symbol map once, and returns checked v2 derivatives and the input form. Automatic resolves the embedded reference from preparedPath; an explicit path is already resolved by the caller.";
 NormalizePreparedDerivatives::usage = "NormalizePreparedDerivatives[value, variables, denominatorCount] validates v2 affine records or single-variable legacy records, preserving the prepared variable order. Returns derivatives and input_form, or Failure.";
+DifferentialEquationFamily::usage = "DifferentialEquationFamily[prepared, normalized] returns the same checked affine family used by BuildOrderedMasterDE, for derivative-target declaration before the reduction audit.";
 BuildOrderedMasterDE::usage = "BuildOrderedMasterDE[prepared, masterBasis, reduction, normalized] consumes checked derivatives from LoadPreparedDerivatives, builds the complete DE once, applies dimension_rule, and checks closure and exact rational entries once.";
 ValidateOrderedMasterDE::usage = "ValidateOrderedMasterDE[ordered] checks an external ordered-master-de/v1 before slicing; internally built DEs already satisfy this contract.";
 CurrentSectorRecord::usage = "CurrentSectorRecord[ordered, manifest, requestedSector] checks the external manifest binding and returns its complete requested sector record. No matrix validation or slicing is performed.";
@@ -109,6 +110,10 @@ affineOperators[derivatives_] := AssociationMap[Function[variable,
   operatorRow[#, derivatives["denominator_count"]] & /@
     derivatives["operators", variable]], derivatives["variables"]];
 
+DifferentialEquationFamily[prepared_, normalized_] := <|
+  "parameters" -> prepared["parameters"],
+  "operators" -> affineOperators[normalized["derivatives"]]|>;
+
 (* Exact rational functions are closed under sums and products. Check their
    pieces before asking Together to combine a complete, potentially large entry.
    The original checker remains the fallback when cancellation is required. *)
@@ -150,8 +155,7 @@ BuildOrderedMasterDE[prepared_, masterBasis_, reduction_, normalized_] := Module
   If[!ListQ[rules] || !AllTrue[rules, MatchQ[#, _Rule | _RuleDelayed] &] ||
     Lookup[reduction, "masters", masters] =!= masters, Return[invalid]];
   fullDE = Quiet @ Check[CANON`DEBuilder`BuildDifferentialEquations[
-    <|"parameters" -> prepared["parameters"],
-      "operators" -> affineOperators[normalized["derivatives"]]|>, masters, rules], $Failed];
+    DifferentialEquationFamily[prepared, normalized], masters, rules], $Failed];
   matrices = If[AssociationQ[fullDE] && AssociationQ[Lookup[fullDE, "matrices", None]],
     Lookup[fullDE["matrices"], variables, $Failed] /. dimensionRule, $Failed];
   If[!validMatricesQ[matrices, variables, Length[masters]], Return[invalid]];

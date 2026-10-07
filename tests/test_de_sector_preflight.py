@@ -24,11 +24,12 @@ def main():
     lib = tree / 'mma/lib'
     lib.mkdir(parents=True)
     shutil.copyfile(script, tree / 'mma/BuildSectorCutDE.wls')
-    for name in ['MethodCardCore.wl', 'SectorDE.wl', 'method-card']:
+    for name in ['MethodCardCore.wl', 'SectorDE.wl', 'IBPReductionAudit.wl', 'method-card']:
         (lib / name).symlink_to((script.parent / 'lib' / name).resolve(), target_is_directory=name == 'method-card')
     marker = output / 'full-build-called.wl'
     (lib / 'DEBuilder.wl').write_text('''BeginPackage["CANON`DEBuilder`"];
 BuildDifferentialEquations::usage = "neutral call marker";
+DifferentialEquationTargets[family_, masters_] := masters;
 BuildDifferentialEquations[args___] := (Put[True, ''' + json.dumps(str(marker)) + ''']; $Failed);
 EndPackage[];
 ''')
@@ -39,7 +40,7 @@ EndPackage[];
     prepared = write('prepared.wl', '''<|"family_ref" -> "neutral", "basis_ref" -> "neutral-basis",
 "parameters" -> {d,x}, "variables" -> {x}, "regulator" -> eps,
 "dimension_rule" -> (d -> 4 - 2 eps), "index_order" -> {"D1"}|>\n''')
-    basis = write('basis.wl', '<|"family_ref" -> "neutral", "basis_ref" -> "neutral-basis", "masters" -> {f[1]}|>\n')
+    basis = write('basis.wl', '<|"family_ref" -> "neutral", "basis_ref" -> "neutral-basis", "index_order" -> {"D1"}, "masters" -> {f[1]}|>\n')
     sectors = write('sectors.wl', '''<|"family_ref" -> "neutral", "propagator_slots" -> {1},
 "sectors" -> {<|"id" -> 1, "propagator_count" -> 1, "sector_bits" -> {1}|>}|>\n''')
     derivatives = write('derivatives.wl', '''<|"schema" -> "canon.prepared-derivatives/v2", "denominator_count" -> 1,
@@ -52,7 +53,8 @@ EndPackage[];
     cases = [('null', None), ('unknown-id', {'id': 2, 'propagator_count': 1}),
              ('wrong-count', {'id': 1, 'propagator_count': 2})]
     records = []
-    for name, sector in cases + [('valid-marker', {'id': 1, 'propagator_count': 1}),
+    for name, sector in cases + [('invalid-audit-type', {'id': 1, 'propagator_count': 1}),
+                                  ('valid-marker', {'id': 1, 'propagator_count': 1}),
                                   ('valid-real', {'id': 1, 'propagator_count': 1})]:
         if name == 'valid-real':
             (lib / 'DEBuilder.wl').unlink()
@@ -60,10 +62,12 @@ EndPackage[];
         if marker.exists():
             marker.unlink()
         request = output / (name + '.json')
+        payload = {'prepared_family': prepared, 'master_basis': basis, 'sector_manifest': sectors,
+                   'prepared_derivatives': derivatives, 'ibp_reduction': reduction}
+        if name == 'invalid-audit-type':
+            payload['ibp_audit_options'] = 7
         request.write_text(json.dumps({'schema': 'canon-neu/script-input/v1', 'step': 'BUILD_CUT_DE',
-            'task_id': 'neutral-sector-preflight', 'sector': sector, 'payload': {
-                'prepared_family': prepared, 'master_basis': basis, 'sector_manifest': sectors,
-                'prepared_derivatives': derivatives, 'ibp_reduction': reduction}}, indent=2) + '\n')
+            'task_id': 'neutral-sector-preflight', 'sector': sector, 'payload': payload}, indent=2) + '\n')
         destination = output / name
         cmd = [sys.executable, str(root / 'run_step.py'), str(request), str(destination)]
         for selection in args.components + [manifest]:
@@ -83,7 +87,10 @@ EndPackage[];
         if name == 'valid-real':
             assert result['status'] == 'PASS' and result['summary']['full_master_count'] == 1, result
         else:
-            assert result['status'] == 'ERROR' and result['code'] == 'INVALID_DIFFERENTIAL_EQUATION', result
+            code = 'IBP_EXECUTION_FAILED' if name == 'invalid-audit-type' else 'INVALID_DIFFERENTIAL_EQUATION'
+            assert result['status'] == 'ERROR' and result['code'] == code, result
+            if name == 'invalid-audit-type':
+                assert result['summary']['reason_code'] == 'INVALID_IBP_AUDIT_OPTIONS', result
             assert marker.exists() == (name == 'valid-marker'), name
         records.append({'case': name, 'elapsed_seconds': time.monotonic() - started,
                         'returncode': proc.returncode, 'build_called_marker': marker.exists(), 'result': result})

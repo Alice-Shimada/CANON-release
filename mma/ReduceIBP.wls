@@ -61,8 +61,9 @@ If[KeyExistsQ[task["payload"], "master_basis"],
   expected = Block[{$Context = "CANON`DEData`", $ContextPath = {"System`"}},
     CanonMethodCard`LoadArtifact[task, requestPath, "master_basis"]]["masters"];
   If[Sort[expected] =!= Sort[result["masters"]],
-    CanonMethodCard`WriteResult[task, outputDir, "INCONCLUSIVE", "MASTER_BASIS_MISMATCH", <||>,
-      <|"reason" -> "Native masters differ from the declared source basis; supply an explicit conversion."|>]; Exit[0]];
+    CanonMethodCard`WriteResult[task, outputDir, "FAIL", "IBP_CHECK_FAILED", <||>,
+      <|"reason_code" -> "MASTER_BASIS_MISMATCH",
+        "reason" -> "Native masters differ from the declared source basis; supply an explicit conversion."|>]; Exit[1]];
   result["masters"] = expected
 ];
 If[ValueQ[targetData],
@@ -74,8 +75,9 @@ If[ValueQ[targetData],
   ];
   If[!AllTrue[Join[targetData["targets"], result["masters"]], completeQ] ||
       !AllTrue[(result["masters"] /. Dispatch[result["rules"]]) - result["masters"], Together[#] === 0 &],
-    CanonMethodCard`WriteResult[task, outputDir, "INCONCLUSIVE", "INCOMPLETE_REDUCTION", <||>,
-      <|"reason" -> "Targets do not reduce completely in the declared source basis."|>]; Exit[0]]
+    CanonMethodCard`WriteResult[task, outputDir, "FAIL", "IBP_CHECK_FAILED", <||>,
+      <|"reason_code" -> "INCOMPLETE_REDUCTION",
+        "reason" -> "Targets do not reduce completely in the declared source basis."|>]; Exit[1]]
 ];
 artifactPath = CanonMethodCard`WriteWLArtifact[result, outputDir, "ibp-reduction.wl"];
 CanonMethodCard`WriteResult[task, outputDir, "PASS", "IBP_REDUCED",

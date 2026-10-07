@@ -37,6 +37,10 @@ def descriptor(declaring, path, kind="json"):
 
 
 def result(task, output, status, code, summary, artifacts=None):
+    # REDUCE_IBP failures distinguish unsuccessful execution from a returned
+    # native result that failed checking. Preserve discovery's separate contract.
+    if task["step"] == "REDUCE_IBP" and status == "INCONCLUSIVE":
+        status = "ERROR"
     write(output / "result.json", {"schema":"canon-neu/script-result/v1", "task_id":task["task_id"],
         "step":task["step"], "status":status, "code":code, "artifacts":artifacts or {}, "summary":summary})
     return 0 if status == "PASS" else 3 if status == "INCONCLUSIVE" else 2
@@ -205,6 +209,19 @@ class OwnedProcesses:
                     os.killpg(child.pid,number)
                 except ProcessLookupError:
                     pass
+                except PermissionError:
+                    # Darwin reports EPERM for a group containing only zombies.
+                    # WNOWAIT still holds the leader PID, so the group identity
+                    # cannot be reused while we inspect it. Never hide denial
+                    # for a group with a live member, or a failed inspection.
+                    if sys.platform != "darwin":
+                        raise
+                    rows = subprocess.check_output(
+                        ["ps", "-axo", "pgid=,stat="], text=True, timeout=5)
+                    states = [fields[1] for row in rows.splitlines()
+                              if len(fields := row.split()) == 2 and fields[0] == str(child.pid)]
+                    if any(not state.startswith("Z") for state in states):
+                        raise
 
             try:
                 while True:
@@ -326,8 +343,10 @@ def main(canon, wolfram, request, output):
             native_paths["native_rules"] = resolve(output / "interop.json",context["native_rules"])
         required = list(native_paths.values())
         if not all(path.is_file() and path.stat().st_size for path in required):
-            return result(task,output,"INCONCLUSIVE","NATIVE_OUTPUT_MISSING",
+            return result(task,output,"FAIL" if task["step"] == "REDUCE_IBP" else "INCONCLUSIVE",
+                          "IBP_CHECK_FAILED" if task["step"] == "REDUCE_IBP" else "NATIVE_OUTPUT_MISSING",
                           {"missing":[os.path.relpath(path,output) for path in required if not path.is_file() or not path.stat().st_size],
+                           "reason_code":"NATIVE_OUTPUT_MISSING",
                            "master_discovery_complete":False,"reduction_complete":False},
                           {"backend_run":descriptor(output / "result.json",receipt_path)})
         receipt["native_outputs"] = {key:descriptor(receipt_path,path,"native-output") for key,path in native_paths.items()}

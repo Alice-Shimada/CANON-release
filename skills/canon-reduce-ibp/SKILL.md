@@ -18,9 +18,29 @@ python3 run_step.py INPUT.json OUTPUT_DIR
 Read `result.json` and its `ibp_reduction` descriptor. A successful call returns
 `PASS/IBP_REDUCED`; its WL artifact contains `masters` and `rules`.
 Preserve the declared source master order. When no source basis was supplied,
-the default adapter retains the native order. In the task's positive scientific check, compare
-every requested target with the master/rule left sides and require every rule
-right-hand side to contain only those ordered masters.
+the default adapter retains the native order. Before consuming or delivering the result, require
+the common [IBP audit](../../INTERFACES.md#ibp-reduction-audit):
+
+```text
+python3 run_step.py INPUT.json FRESH_OUTPUT_DIR
+```
+
+Its `CHECK_IBP` payload references `ibp_reduction` and an independently prepared
+`ibp_contract`: family integral head/arity, coefficient symbols, expected masters,
+required targets and `exact` or explicit `permutation` ordering. Require
+`PASS/IBP_AUDIT_PASS`. Do not infer declarations from the result. This checks
+structure and coverage, not the mathematical IBP identities. When proceeding
+directly to `BUILD_CUT_DE` or the candidate bridge, their embedded audit supplies
+the same required gate; a separate unchanged-input audit is unnecessary.
+
+Reuse the trusted passing receipt bound to an unchanged final reduction file.
+The checker verifies file identity and still checks current targets, domain and
+master order, without traversing the rules. The candidate command writes the
+file-bound receipt at `candidate-ibp-bridge.wl.audit.wl`; CHECK_IBP and BUILD_CUT_DE discover it
+beside the input, or take `payload.ibp_audit` for separately registered receipts.
+Register and reference the receipt separately when artifact paths are renamed.
+Publish modified reductions as new artifacts. An absent, stale, legacy or
+nonpassing receipt causes a full audit, never an unchecked handoff.
 
 For symbolic master derivatives, obtain the target artifact through
 [PREPARE_REDUCTION_TARGETS](../canon-prepare-reduction-targets/SKILL.md), then
@@ -48,7 +68,7 @@ hypothesis and check that its positive powers, dots and numerator degree fit
 the configured bounds. A two-dot probe with a one-dot seed is not a master-count
 test. Report requested, reduced and unresolved target counts separately.
 
-For `NATIVE_BASIS_MISMATCH`, compare the exact ordered native/exported list with
+For a diagnostic `summary.reason_code` of `NATIVE_BASIS_MISMATCH`, compare the exact ordered native/exported list with
 the declared source list and the closure of the requested targets. A local
 current-sector list, its lower-sector closure and the family's full list have
 different sizes. Counts such as 3, 19 and 34 alone do not imply extra or missing
@@ -76,17 +96,23 @@ python3 run_step.py INPUT.json OUTPUT_DIR
 To reuse an existing normalized symbolic reduction, supply
 `payload.ibp_reduction: {"path": "rules.wl"}` instead of reducer configuration.
 The bridge compiles the same targets, loads that artifact through the common
-data reader, and checks ordered masters, optional family/basis identities,
+data reader, and checks the declared master set with an explicit order permutation,
+optional family/basis identities,
 unchanged source masters and complete linear target closure in one substitution.
 The artifact contains `masters` and distinct explicit `rules`; source masters do
 not need identity rules. Its scientific provenance and the truth of its rules
-remain supplied inputs. A passing reuse call launches no reducer. Missing or
-unreduced targets return `INCONCLUSIVE/INCOMPLETE_REDUCTION` with readable target
-diagnostics; incompatible inputs return an explicit `ERROR`. Both retain the
-current `reduction_targets` and never silently dispatch a replacement reduction.
+remain supplied inputs. A passing reuse call launches no reducer. Nonpassing
+output checks return `FAIL/IBP_CHECK_FAILED`; `summary.reason_code` and its
+details identify missing targets, unclosed right-hand sides, unsupported syntax
+or an unfinished check. Optional identity mismatches use the same FAIL result,
+with `SOURCE_BASIS_MISMATCH` in the diagnostic details, for supplied and newly
+produced reductions. These
+failures retain current `reduction_targets` and never dispatch a replacement
+reduction. Audit failures also retain an `ibp_audit` diagnostic artifact.
 
-The result is `PASS/CANDIDATES_REDUCED` with `candidate_ibp_bridge` and
-`reduction_targets` descriptors. The bridge compiles targets and forwards config
+The result is `PASS/CANDIDATES_REDUCED` with `candidate_ibp_bridge`,
+`reduction_targets` and `ibp_audit` descriptors. Invalid `ibp_audit_options` are
+rejected before target compilation or reducer launch. The bridge compiles targets and forwards config
 references; native project copying and target/export syntax belong to the adapter.
 Pass the task's `--components` manifest to either call. The candidate bridge's
 nested `REDUCE_IBP` call inherits it, so the selected reducer is used throughout.
@@ -125,7 +151,19 @@ Follow this order:
    Missing or malformed metadata returns a preparation failure, resolved by
    supplying the family-derived fields required by the contract.
 4. Run the bridge on the saved candidates and reduce its required targets.
-   Continue with ROUTE_CORE_CANDIDATES and CHECK_CORE.
+   The compiler declares all candidate and raw-master derivative targets; the
+   bridge audits the reduction before substitution. Only its passing bridge
+   continues with ROUTE_CORE_CANDIDATES and CHECK_CORE. Optional
+   `payload.ibp_audit_options` sets finite audit time limits or the `Q(i)` field.
+
+For `ERROR/IBP_EXECUTION_FAILED`, fix the audit invocation, inputs or options.
+For `FAIL/IBP_CHECK_FAILED`, read the diagnostic details: extend named missing
+coverage, fix the declared data, or resolve a timeout, unresolved denominator or
+unsupported representation. A failed gate means PASS has not been established;
+an unfinished check does not prove bad reduction data. Neither failure category
+is method exhaustion. Specific diagnostic reasons are not workflow routing codes.
+The failed candidate audit is saved as `ibp-audit.wl`; its descriptor is returned
+in the failed result, and no bridge is published.
 
 If a concrete bounded preparation attempt cannot supply the needed construction,
 report the attempted operation, exact missing object and remaining resources to

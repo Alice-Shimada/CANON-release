@@ -52,13 +52,20 @@ assert config['adapter']=='independent-fixture'
 assert 'G[2]' in (source.parent/payload['reduction_targets']['path']).read_text()
 assert 'reduction' not in payload and 'project' not in payload
 output.mkdir()
-(output/'ibp-reduction.wl').write_text('<|"masters"->{G[1]},"rules"->{G[2]->(1-d/2)/x G[1]}|>')
+reduction='<|"masters"->{G[1]},"rules"->{G[2]->(1-d/2)/x G[1]}|>'
+if config.get('wrong_identity'):
+    reduction=reduction.replace('<|','<|"family_ref"->"wrong","basis_ref"->"wrong",',1)
+if config.get('nonassociation'):
+    reduction='{G[2]->G[1]}'
+if not config.get('missing_export'):
+    (output/'ibp-reduction.wl').write_text(reduction)
+artifact_path=str((output/'ibp-reduction.wl').resolve()) if config.get('absolute') else 'ibp-reduction.wl'
 (output/'seen-request.json').write_text(json.dumps(task,indent=2))
 (output/'result.json').write_text(json.dumps({'schema':'canon-neu/script-result/v1',
 'task_id':task['task_id'],'step':'REDUCE_IBP',
 'status':'INCONCLUSIVE' if config.get('incomplete') else 'PASS',
 'code':'EXPLICIT_CONVERSION_NEEDED' if config.get('incomplete') else 'IBP_REDUCED',
-'artifacts':{'ibp_reduction':{'type':'mathematica-expression','path':'ibp-reduction.wl'}},
+'artifacts':{'ibp_reduction':{'type':'mathematica-expression','path':artifact_path}},
 'summary':{'scope':'synthetic adapter boundary; supplied analytic tadpole rule'}}))
 sys.exit(config.get('exit_code',0))
 '''
@@ -89,7 +96,7 @@ Do[
     facts[key<>"candidate_targets"] = Lookup[c["targets"],"integral"]===
       If[affine,{g[1],g[2]},{g[1]}],
     {c,b["candidates"]}],
-  {mode,{"custom","legacy","custom-affine","reuse"}}];
+  {mode,{"custom","custom-absolute","legacy","custom-affine","reuse"}}];
 b = CanonMethodCard`ReadWLData[FileNameJoin[{base,"reuse-tail","candidate-ibp-bridge.wl"}]];
 g=Head[First[b["masters"]]]; x=First[b["variables"]]; d=Symbol["CANON`DEData`d"];
 c=First[b["candidates"]];
@@ -128,6 +135,9 @@ def main():
     write_json(tree / "backend.json", {"adapter": "independent-fixture"})
     write_json(tree / "backend-incomplete.json", {"adapter": "independent-fixture", "incomplete": True, "exit_code": 3})
     write_json(tree / "backend-invalid-exit.json", {"adapter": "independent-fixture", "exit_code": 3})
+    for suffix, option in (("absolute", "absolute"), ("missing-export", "missing_export"),
+                           ("nonassociation", "nonassociation"), ("identity", "wrong_identity")):
+        write_json(tree / f"backend-{suffix}.json", {"adapter": "independent-fixture", option: True})
     write_json(tree / "adapter.json", {"schema": "canon-neu/components/v1", "steps": {
         "REDUCE_IBP": {"command": ["{python}", "{package}/fake_adapter.py"],
                        "instructions": "instructions.md"}}})
@@ -146,12 +156,18 @@ def main():
     payload = {key: {"path": name} for key, name in (
         ("prepared_family", "family.wl"), ("master_basis", "masters.wl"),
         ("integral_candidates", "candidates.wl"), ("prepared_derivatives", "derivatives.wl"))}
-    for mode in ("custom", "legacy", "basis", "missing", "custom-incomplete", "custom-invalid-exit",
-                 "custom-affine", "custom-invalid-selection", "custom-invalid-selection-type"):
+    invalid_audit_options = {"custom-invalid-audit-type": 7,
+                            "custom-invalid-audit-budget": {"time_limit_seconds": -1},
+                            "custom-invalid-audit-key": {"typo": 1}}
+    for mode in ("custom", "custom-absolute", "custom-missing-export", "custom-nonassociation", "custom-identity",
+                 "legacy", "basis", "missing", "custom-incomplete", "custom-invalid-exit",
+                 "custom-affine", "custom-invalid-selection", "custom-invalid-selection-type",
+                 *invalid_audit_options):
         selected = dict(payload)
         if mode.startswith("custom"):
             suffix = mode.removeprefix("custom") if mode in (
-                "custom-incomplete", "custom-invalid-exit") else ""
+                "custom-incomplete", "custom-invalid-exit", "custom-absolute", "custom-missing-export",
+                "custom-nonassociation", "custom-identity") else ""
             selected["backend"] = {"path": "backend" + suffix + ".json"}
         else:
             selected["reduction"] = {"executable": sys.executable, "project": "native project",
@@ -163,6 +179,8 @@ def main():
             selected["derivative_operator_selection"] = "unknown-operator"
         elif mode == "custom-invalid-selection-type":
             selected["derivative_operator_selection"] = 7
+        if mode in invalid_audit_options:
+            selected["ibp_audit_options"] = invalid_audit_options[mode]
         write_json(tree / f"{mode}.json", {"schema": "canon-neu/script-input/v1", "task_id": mode,
             "step": "REDUCE_CANDIDATE_IBP", "sector": {"id": 1, "propagator_count": 1}, "payload": selected})
     reuse_rules = {
@@ -200,17 +218,26 @@ def main():
         write_json(moved / f"{mode}.json", task)
     environment = dict(os.environ)
     environment.pop("CANON_COMPONENTS", None)
-    expected = {"custom": "CANDIDATES_REDUCED", "legacy": "CANDIDATES_REDUCED",
-                "basis": "MASTER_BASIS_MISMATCH", "missing": "INCOMPLETE_REDUCTION",
+    expected = {"custom": "CANDIDATES_REDUCED", "custom-absolute": "CANDIDATES_REDUCED",
+                "custom-missing-export": "MISSING_ARTIFACT", "custom-nonassociation": "INVALID_ARTIFACT",
+                "custom-identity": "IBP_CHECK_FAILED", "legacy": "CANDIDATES_REDUCED",
+                "basis": "IBP_CHECK_FAILED", "missing": "IBP_CHECK_FAILED",
                 "custom-incomplete": "EXPLICIT_CONVERSION_NEEDED", "custom-invalid-exit": "REDUCTION_FAILED",
                 "custom-affine": "CANDIDATES_REDUCED",
                 "custom-invalid-selection": "DERIVATIVE_OPERATOR_INVALID",
                 "custom-invalid-selection-type": "DERIVATIVE_OPERATOR_INVALID",
+                **{mode: "IBP_EXECUTION_FAILED" for mode in invalid_audit_options},
                 "reuse": "CANDIDATES_REDUCED", "reuse-tail": "CANDIDATES_REDUCED",
-                "reuse-missing": "INCOMPLETE_REDUCTION", "reuse-unreduced": "INCOMPLETE_REDUCTION",
-                "reuse-nonlinear": "INCOMPLETE_REDUCTION", "reuse-master-change": "MASTER_BASIS_MISMATCH",
-                "reuse-identity": "SOURCE_BASIS_MISMATCH", "reuse-order": "MASTER_BASIS_MISMATCH",
-                "reuse-invalid-rules": "INVALID_REDUCTION"}
+                "reuse-missing": "IBP_CHECK_FAILED", "reuse-unreduced": "IBP_CHECK_FAILED",
+                "reuse-nonlinear": "IBP_CHECK_FAILED", "reuse-master-change": "IBP_CHECK_FAILED",
+                "reuse-identity": "IBP_CHECK_FAILED", "reuse-order": "CANDIDATES_REDUCED",
+                "reuse-invalid-rules": "IBP_CHECK_FAILED"}
+    audit_reasons = {"reuse-missing": "IBP_MISSING_TARGETS", "reuse-unreduced": "IBP_UNREDUCED_INTEGRALS",
+                     "reuse-nonlinear": "IBP_UNSUPPORTED_STRUCTURE", "reuse-master-change": "IBP_MASTER_REDEFINED",
+                     "reuse-invalid-rules": "IBP_DUPLICATE_LHS"}
+    check_reasons = {**audit_reasons, "custom-identity": "SOURCE_BASIS_MISMATCH",
+                     "reuse-identity": "SOURCE_BASIS_MISMATCH", "basis": "MASTER_BASIS_MISMATCH",
+                     "missing": "INCOMPLETE_REDUCTION"}
     components = [path.resolve() for path in args.components] or [canon / "components/profiles/custom-kira.json"]
     results = {}
     for mode, code in expected.items():
@@ -219,32 +246,47 @@ def main():
         for manifest in components:
             command += ["--components", str(manifest)]
         is_reuse = mode.startswith("reuse")
-        selection = "reuse-selection.json" if is_reuse else "selection.json" if mode.startswith("custom") else "legacy-selection.json"
+        selection = "reuse-selection.json" if is_reuse or mode in invalid_audit_options else "selection.json" if mode.startswith("custom") else "legacy-selection.json"
         command += ["--components", str(moved / selection)]
         with (work / f"{mode}.log").open("w") as log:
             process = subprocess.run(command, env=environment, stdout=log, stderr=subprocess.STDOUT)
         result = json.loads((output / "result.json").read_text())
         invalid_selection = mode.startswith("custom-invalid-selection")
-        error = mode == "custom-invalid-exit" or invalid_selection or (
-            is_reuse and code not in ("CANDIDATES_REDUCED", "INCOMPLETE_REDUCTION"))
+        error = mode in {"custom-invalid-exit", "custom-missing-export", "custom-nonassociation", "custom-identity", "basis", "missing"} or invalid_selection or mode in invalid_audit_options or (
+            is_reuse and code != "CANDIDATES_REDUCED")
         assert process.returncode == (1 if error else 0) and result["code"] == code, (mode, process.returncode, result)
+        if code == "IBP_CHECK_FAILED":
+            assert result["status"] == "FAIL"
+            assert result["summary"]["reason_code"] == check_reasons[mode]
         if is_reuse:
             assert not (moved / "forbidden-reducer-called").exists()
             assert not (output / "ibp-input.json").exists() and not (output / "ibp").exists()
             assert (output / "reduction-targets.wl").is_file()
             if code != "CANDIDATES_REDUCED":
-                assert set(result["artifacts"]) == {"reduction_targets"}
+                audit_failure = mode in audit_reasons
+                assert set(result["artifacts"]) == ({"reduction_targets", "ibp_audit"}
+                    if audit_failure else {"reduction_targets"})
                 assert not (output / "candidate-ibp-bridge.wl").exists()
-            if code == "INCOMPLETE_REDUCTION":
-                assert result["status"] == "INCONCLUSIVE"
-                assert len(result["summary"]["unresolved_targets"]) == 1
-                assert 'G[2]' in result["summary"]["unresolved_targets"][0]
+                if audit_failure:
+                    assert (output / "ibp-audit.wl").is_file()
+                    assert result["status"] == "FAIL"
+                    assert result["summary"]["ibp_audit"]["code"] == code
+                    assert result["summary"]["reason_code"] == audit_reasons[mode]
+                    assert result["summary"]["ibp_audit"]["summary"]["reason_code"] == audit_reasons[mode]
+            if mode == "reuse-missing":
+                assert any('G[2]' in value for value in result["summary"]["missing_targets"])
             if mode == "reuse-unreduced":
-                assert 'G[3]' in result["summary"]["target_images"][0]
+                assert any('G[3]' in value for value in result["summary"]["integrals"])
+            if mode == "reuse-order":
+                assert result["status"] == "PASS"
+                assert set(result["artifacts"]) == {"reduction_targets", "candidate_ibp_bridge", "ibp_audit"}
             if mode == "reuse-identity":
                 assert result["summary"]["mismatched_fields"] == ["family_ref", "basis_ref"]
-        if invalid_selection:
+        if invalid_selection or mode in invalid_audit_options:
             assert result["status"] == "ERROR" and result["artifacts"] == {}
+            if mode in invalid_audit_options:
+                assert result["summary"]["reason_code"] == "INVALID_IBP_AUDIT_OPTIONS"
+            assert not (moved / "forbidden-reducer-called").exists()
             assert not (output / "ibp-input.json").exists()
             assert not (output / "reduction-targets.wl").exists()
             assert not (output / "ibp").exists()
@@ -261,6 +303,8 @@ def main():
     assert all(facts.values())
     write_json(work / "evidence.json", {"all_expected": True, "results": results, "facts": facts,
         "components": [str(path) for path in components], "invalid_selection_stopped_before_reducer": True,
+        "invalid_audit_options_stopped_before_reducer": True,
+        "custom_reducer_artifact_paths_and_identities_checked": True,
         "native_project_untouched": True, "relocated_custom_selection": True,
         "reuse_never_dispatched_reducer": True, "reuse_failure_preserves_targets": True,
         "scope": "candidate bridge live dispatch and supplied-reduction boundary with synthetic rules"})

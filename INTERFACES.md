@@ -88,9 +88,10 @@ paths are relative to the directory containing `result.json` and are resolved by
 the method-card caller. `statemng` neither parses scientific `result.json` files
 nor automatically advances the scientific stage graph based on their codes.
 Read `status` and `code` even when the process exits zero: a structured scientific
-failure may be returned normally. A nonzero exit is an operational failure and
-cannot establish scientific completion from a saved `PASS` alone; preserve any
-more specific failure result for diagnosis.
+failure may be returned normally. A nonzero exit means the invocation did not
+succeed; a valid matching result distinguishes an execution error from a failed
+check. A saved `PASS` alone cannot establish completion after a nonzero exit.
+Preserve the result and process diagnostics.
 
 ## Skills, payloads, and outputs by step
 
@@ -108,8 +109,9 @@ See [component composition](docs/components.md#composition-and-handoff).
 | `PREPARE_DERIVATIVES` | `canon-prepare-derivatives` | `mma/PrepareDerivatives.wls` | `family_data` | `prepared_derivatives` |
 | `PREPARE_REDUCTION_TARGETS` | `canon-prepare-reduction-targets` | `mma/PrepareReductionTargets.wls` | `prepared_family`, `master_basis`; optional `prepared_derivatives` | `reduction_targets` |
 | `REDUCE_IBP` | `canon-reduce-ibp` | `mma/ReduceIBP.wls` | Legacy `reduction`, or `backend` config; optional `reduction_targets` and `master_basis` | `ibp_reduction` |
-| `REDUCE_CANDIDATE_IBP` | `canon-reduce-ibp` | `mma/ReduceCandidateIBP.wls` | `integral_candidates`, `prepared_family`, `master_basis`, `prepared_derivatives`; existing `ibp_reduction`, or selected `backend` plus required neutral descriptors, or legacy `reduction` | `candidate_ibp_bridge`, `reduction_targets` |
-| `BUILD_CUT_DE` | `canon-build-cut-de` | `mma/BuildSectorCutDE.wls` | `prepared_family`, `master_basis`, `sector_manifest`, `ibp_reduction`; optional `prepared_derivatives` | `sector_basis`, `sector_cut_de`, `ordered_master_de` |
+| `CHECK_IBP` | `canon-reduce-ibp` | `mma/CheckIBPReduction.wls` | `ibp_reduction`, `ibp_contract`; optional `ibp_audit` | `ibp_audit` |
+| `REDUCE_CANDIDATE_IBP` | `canon-reduce-ibp` | `mma/ReduceCandidateIBP.wls` | `integral_candidates`, `prepared_family`, `master_basis`, `prepared_derivatives`; existing `ibp_reduction`, or selected `backend` plus required neutral descriptors, or legacy `reduction`; optional `ibp_audit_options` | `candidate_ibp_bridge`, `reduction_targets`, `ibp_audit` |
+| `BUILD_CUT_DE` | `canon-build-cut-de` | `mma/BuildSectorCutDE.wls` | `prepared_family`, `master_basis`, `sector_manifest`, `ibp_reduction`; optional `prepared_derivatives`, `ibp_audit`, `ibp_audit_options` | `sector_basis`, `sector_cut_de`, `ordered_master_de` |
 | `SLICE_CUT_DE` | `canon-build-cut-de` | `mma/SliceSectorCutDE.wls` | `ordered_master_de`, `sector_manifest` | `sector_basis`, `sector_cut_de` |
 | `ROUTE_CORE_CANDIDATES` | `canon-search-core` | `mma/RouteCoreCandidates.wls` | `prepared_family`, `sector_basis`, `sector_cut_de`, `candidate_ibp_bridge` | `core_candidates` |
 | `SEARCH_CORE` | `canon-search-core` | Selected direct-DE card's `run.wls` | `sector_cut_de`; `sector_basis` for CANONICA/Libra/INITIAL; card-specific `method_options` and optional artifacts | `core_candidates` |
@@ -403,9 +405,10 @@ the ordinary candidate contract and independent CHECK_CORE gate.
 |---|---|---|
 | `PREPARE` | `OK` | None |
 | `DISCOVER` | `SECTORS_READY` | None |
-| `REDUCE_IBP` | `IBP_REDUCED` | `ERROR/REDUCTION_FAILED` |
-| `REDUCE_CANDIDATE_IBP` | `CANDIDATES_REDUCED` | `ERROR/REDUCTION_FAILED`, or the reducer's unsolved result |
-| `BUILD_CUT_DE` | `OK` | None |
+| `REDUCE_IBP` | `IBP_REDUCED` | `ERROR/REDUCTION_FAILED`, `FAIL/IBP_CHECK_FAILED` |
+| `REDUCE_CANDIDATE_IBP` | `CANDIDATES_REDUCED` | execution `ERROR`, `FAIL/IBP_CHECK_FAILED`, or the selected reducer's scoped unsolved result |
+| `CHECK_IBP` | `IBP_AUDIT_PASS` | `ERROR/IBP_EXECUTION_FAILED`, `FAIL/IBP_CHECK_FAILED` |
+| `BUILD_CUT_DE` | `OK` | `ERROR/IBP_EXECUTION_FAILED`, `FAIL/IBP_CHECK_FAILED`, or a DE input/construction error |
 | `CHECK_CORE` | `CORE_PASS` | `CORE_FAIL` |
 | `BUILD_FULL_DE` | `OK` | None |
 | `SOLVE_TAIL` | `TAIL_READY` | `INCONCLUSIVE/TAIL_UNSOLVED` |
@@ -778,30 +781,44 @@ Set `step` to `REDUCE_CANDIDATE_IBP`. Its payload contains four WL descriptors:
 The optional `payload.derivative_operator_selection` is `"enhanced-first"`
 (the default) or `"prepared-affine"`. It applies to all declared variables and is
 recorded through the existing per-variable `operators` evidence. The WL compiler
-accepts the same selection as its optional fifth argument. A selector preparation
+accepts the same selection as its optional fifth argument and `ibp_audit_options`
+as its optional sixth argument. A selector preparation
 failure, including an unknown selection or missing requested operator, returns
 `ERROR/DERIVATIVE_OPERATOR_INVALID` before targets or a nested reducer request
 are written.
-The result exposes `candidate_ibp_bridge` in the common artifact map.
+The result exposes `candidate_ibp_bridge`, `reduction_targets` and `ibp_audit`
+in the common artifact map.
 The default bridge calls `REDUCE_IBP` through the selected component package.
 
 An optional `payload.ibp_reduction: {"path": "rules.wl"}` explicitly selects reuse
 of an already normalized symbolic reduction. No backend configuration is needed
 and no reducer is launched. The bridge still compiles and publishes the current
-targets first. The supplied WL Association must contain `masters` in exactly the
-declared source order and distinct explicit integral `rules`. Optional
+targets first. The supplied WL Association must contain the same `masters` as the
+declared source basis; an explicit permutation aligns their order. It must contain
+distinct explicit integral `rules`. Optional
 `family_ref` and `basis_ref` must match when present. One rule substitution must
 leave source masters unchanged and reduce every compiled non-master target to a
 linear combination of those masters. Identity rules for masters are unnecessary;
 rules requiring recursive back-substitution are not normalized inputs.
 
-Incomplete closure returns `INCONCLUSIVE/INCOMPLETE_REDUCTION`, with
-`unresolved_targets` and `target_images` as readable WL strings. Invalid rules or
-incompatible identities/order return an explicit `ERROR`. Reuse failures retain
-`reduction_targets`, produce no passing bridge, and never launch a fallback
-reducer. Successful reuse returns the same `CANDIDATES_REDUCED` bridge/target
-artifacts. These checks establish closure relative to the supplied rules; their
-IBP truth and symbolic scope remain the caller's pinned scientific inputs.
+The common [IBP audit](#ibp-reduction-audit) returns `FAIL/IBP_CHECK_FAILED`
+whenever the output check does not pass. Missing targets, unclosed right-hand
+sides, unsupported syntax and timeout are diagnostic reasons in `summary`,
+not separate workflow result codes.
+An incompatible optional identity also returns `FAIL/IBP_CHECK_FAILED`, with
+`SOURCE_BASIS_MISMATCH` in `summary.reason_code`, for both supplied and freshly
+produced reductions. Artifact read errors return `ERROR`.
+Failures retain `reduction_targets`, produce no passing bridge, and never launch
+a fallback reducer; an audit failure also publishes `ibp_audit` diagnostics.
+Successful calls return `PASS/CANDIDATES_REDUCED` with bridge, target and audit
+descriptors. These checks establish structural closure relative to supplied rules;
+their IBP truth and symbolic scope remain the caller's pinned scientific inputs.
+
+`payload.ibp_audit_options` follows the audit options below. Invalid options return
+`ERROR/IBP_EXECUTION_FAILED`, with the option error in `summary.reason_code`,
+before target compilation or reducer dispatch.
+The nested reducer's artifact descriptors use the common path contract: relative
+paths resolve from its `result.json`, and absolute paths remain absolute.
 
 Input candidates are the linear combinations of `j[family,a1,...,an]` supplied by
 the DlogBasis-refine adapter. The bridge maps them to the declared Kira topology
@@ -951,8 +968,9 @@ line remains relative to the caller's working directory.
 See `interfaces/ibp-request.example.json` for an example. The adapter trusts the
 collaborator's prepared project and Kira output, copies the project, runs the two
 argv jobs in order, and directly reads ordered `masters.final` and exported rules.
-The caller's positive scientific tests check exact target coverage, master order,
-and RHS closure.
+Before consumption or delivery, audit the unified result against independently
+declared targets, masters and symbols using `CHECK_IBP` below. The candidate bridge
+and `BUILD_CUT_DE` include this gate automatically.
 
 On success, `result.json` reports `PASS/IBP_REDUCED` and an `ibp_reduction`
 descriptor. The referenced WL artifact contains only:
@@ -961,9 +979,169 @@ descriptor. The referenced WL artifact contains only:
 <|"masters" -> orderedMasters, "rules" -> fullyReducedRules|>
 ```
 
-The adapter preserves Kira's `masters.final` order. It performs no additional
-mathematical checks. The old positional IBP invocations are superseded by the
-common envelope; the scientific WL contents remain the same.
+Without `master_basis`, the adapter preserves Kira's `masters.final` order.
+When a source basis is supplied, it aligns the same master set to that order;
+a different set returns `FAIL/IBP_CHECK_FAILED`, with `MASTER_BASIS_MISMATCH`
+in `summary.reason_code`. Supplied `reduction_targets` trigger its target-closure
+preflight; a nonpassing result uses the same FAIL code, with `INCOMPLETE_REDUCTION`
+in the diagnostic details. These producer checks do not prove IBP
+identities or replace the consumer's structural audit. The old positional IBP
+invocations are superseded by the common envelope; normalized `masters`/`rules`
+remain the same representation.
+
+### IBP reduction audit
+
+Select `CHECK_IBP` in the common request envelope.
+
+```text
+python3 run_step.py INPUT.json FRESH_OUTPUT_DIR
+```
+
+The common `canon-neu/script-input/v1` envelope has `step: "CHECK_IBP"` and
+payload descriptors `ibp_reduction` and `ibp_contract`, with optional `ibp_audit`
+referencing a previous trusted checker receipt. Without that descriptor, a
+receipt at `REDUCTION.wl.audit.wl` is used when present; explicit `null` disables
+this lookup. Paths are relative to
+the declaring JSON. These inputs are trusted, evaluable WL Associations.
+The auditor uses CANON's internal `masters`/`rules` format, independently of
+which reducer produced it. Additional bridge metadata is ignored. It does not
+parse native Kira, FIRE or BLADE exports; the selected reducer component normalizes
+them before this common handoff.
+See `interfaces/ibp-audit-contract.example.wl` and
+`interfaces/check-ibp.example.json` for a complete standalone example.
+
+The declaration is:
+
+```wl
+<|"schema" -> "canon-neu/ibp-audit-contract/v1",
+  "integral_head" -> f, "index_count" -> 3,
+  "coefficient_symbols" -> {d, s},
+  "expected_masters" -> {f[1,0,1]},
+  "required_targets" -> {f[1,0,1], f[2,0,1]},
+  "master_order" -> "exact",
+  "options" -> <|"coefficient_field" -> "Q",
+    "time_limit_seconds" -> 150, "denominator_time_limit_seconds" -> 3|>|>
+```
+
+The head, arity, symbols, expected masters, required targets and ordering policy
+are required. Derive these from the declared family, selected basis and target
+producer, never from the result being checked. Signed integer indices are allowed.
+Masters and targets must each be duplicate-free. `master_order: "exact"` requires
+the reducer's exact declared source order; `"permutation"` requires the identical
+master set and returns positions such that
+`reduction["masters"][[audit["master_permutation"]]] === expected_masters`.
+The latter explicitly accommodates CANON's sector-sorted basis without changing
+the raw reducer order.
+
+Options are optional; the example shows defaults. `Q` means rational functions
+over exact rational constants in the declared symbols. `Q(i)` additionally allows
+exact complex rational constants. Machine numbers, undefined values and undeclared
+coefficient symbols cannot pass. This field policy is explicit and narrower than
+the existing generic algebraic DE interfaces. Unknown option keys are errors.
+Time limits are finite positive seconds, bounded by the caller's resource budget.
+The total limit bounds the in-memory audit;
+file loading, file SHA256 hashing and startup are outside it. No subkernels or
+external processes are started by the library.
+
+The gate checks integral shape, unique masters/rule left sides, declared master
+space/order, target coverage by a master or rule, RHS closure, homogeneous linear
+syntax, declared exact rational coefficient syntax and non-identically-zero
+denominator bases. Immediate rules are required, and masters cannot be redefined.
+Every rule is checked, including extra exported rules outside the target list.
+Native expression matching scans scalar blocks without expanding complete RHSs.
+An exact nonzero rational specialization proves a denominator is not identically
+zero; all-zero samples invoke a bounded exact symbolic fallback. Generic poles
+are allowed. Unsupported syntax (including expressions needing cancellation to
+exhibit linearity) leaves the check unpassed; it does not prove incorrectness.
+
+`ibp-audit.wl` records `canon-neu/ibp-audit/v1`, checks, counts, order permutation,
+diagnostics and all declared input-file SHA256 hashes.
+
+Optional descriptor `sha256` values are checked before loading. Files are hashed
+again after the audit; a changed input returns `ERROR/IBP_EXECUTION_FAILED`, with
+`IBP_AUDIT_INPUT_CHANGED` in `summary.reason_code`.
+
+Passing receipts use `canon-neu/ibp-audit-binding/v2`, binding the final reduction
+file SHA256, master set, integral head/arity, declared coefficient-symbol set/field,
+checker source SHA256 and Wolfram version. They retain the small list of
+`covered_integrals` (all masters and rule left sides), so later target coverage
+can be checked without rescanning rule expressions. There are no per-rule
+fingerprints or cached copies of the large RHSs.
+
+Publish changed results as new artifacts; keep accepted files unchanged. The
+producer audits once, writes its final result, and binds the trusted PASS to
+those final file bytes in a separate receipt. A receipt cannot contain a hash
+of the file containing itself. The candidate command therefore writes
+`candidate-ibp-bridge.wl.audit.wl` after writing its final bridge. Its embedded `ibp_audit`
+remains diagnostic evidence, without a verified identity of the containing file.
+When registering or renaming artifacts, retain this receipt separately and pass
+its descriptor explicitly; do not depend on its original adjacent filename.
+
+Consumers check artifact identity and current master shape/space/order, domain
+and target coverage. A complete matching PASS reuses the prior structural checks,
+including left-side uniqueness, RHS closure/syntax and denominators. The library
+does not traverse the rules on this path. The report records `reuse.used` and its
+reason. Changed file bytes, master set, coefficient domain, checker or runtime
+trigger a full audit; missing, legacy, incomplete or nonpassing receipts also
+trigger a full audit. An uncovered target still fails. Permutation mode allows
+a different consumer ordering with a newly checked mapping. Resource limits may
+change without invalidating a completed check.
+
+The standalone scripts verify file SHA256 at their input boundary, also checking
+an optional declared descriptor hash. Callers that already verified an accepted
+immutable artifact can supply that identity directly to the library without
+rehashing. Merely having the same path or an unchecked stored hash is insufficient.
+Only trusted checker-produced receipts may be reused. No global cache directory
+or persistent research-state mutation is introduced.
+
+The result routing is:
+
+| status/code | meaning / next action |
+|---|---|
+| `PASS/IBP_AUDIT_PASS` | The declared structural handoff passes; consume these unchanged inputs. |
+| `ERROR/IBP_EXECUTION_FAILED` | The audit cannot run with the supplied inputs/options, or input identity changed during the call. Correct the invocation using its diagnostics. |
+| `FAIL/IBP_CHECK_FAILED` | The returned reduction has not passed the check. Retain it and use the diagnostic details to repair or complete the check before downstream use. |
+
+The two failure categories separate execution failure from a nonpassing output
+check. Specific reasons are recorded in `summary.reason_code`, with details such
+as named missing targets or a rule index. These reasons are diagnostic, not
+additional workflow routing codes. A timeout, unresolved denominator or
+unsupported representation means the gate has not established a PASS; it does
+not prove that the reduction is wrong or exhaust an IBP method. Native reducer
+execution failures retain the selected provider's ERROR diagnostics.
+
+Only PASS exits zero. An audit does not prove IBP identities, basis completeness
+or physical kinematics. Existing mathematical core/canonical/final gates remain
+required. A receipt certifies only its declared scope and bound unchanged inputs.
+
+The reusable API is ``CANON`IBPReductionAudit`AuditIBPReduction[reduction, contract, previousAudit, verifiedReductionSHA256]``
+from `mma/lib/IBPReductionAudit.wl`. `IBPAuditContract[preparedFamily, masterBasis,
+targets, options]` constructs a declaration in permutation mode using the family
+parameters and basis index order. The optional third argument defaults to
+`Automatic`, which considers `reduction["ibp_audit"]`; `None` forces a full audit.
+The fourth argument defaults to `None`: without a file identity actually verified
+by the caller, in-memory inputs are audited in full even with an embedded PASS.
+The caller must supply the object loaded from those verified, unchanged file
+bytes, never mutate it while retaining that identity. Library-only full audits
+without a file identity still report PASS but cannot certify a file for reuse.
+`BUILD_CUT_DE` derives its targets from the same
+affine derivatives used by `DEBuilder` and takes optional `payload.ibp_audit_options`.
+It audits before building any matrices; a non-PASS emits its audit status/code and
+publishes no DE artifacts. A successful build includes the audit in its summary.
+`BUILD_CUT_DE` accepts an optional `payload.ibp_audit` descriptor for separately
+stored trusted receipts, or looks for the producer's adjacent file-bound receipt.
+Its summary reports whether reuse occurred. The standalone
+`CHECK_IBP` accepts the same optional descriptor and binds that input file too.
+The candidate compiler declares all candidate and raw-master derivative targets;
+`AttachCandidateIBPReduction` audits before substitution and returns a `Failure`
+on non-PASS. Successful bridges retain `ibp_audit_contract` and `ibp_audit`.
+`REDUCE_CANDIDATE_IBP` accepts `payload.ibp_audit_options` for the same options,
+without changing the selected reducer's configuration. Use the common JSON
+input/output pair through `run_step.py`. Output paths must be fresh. On audit
+failure it writes `ibp-audit.wl`, includes its descriptor in the failed result,
+exits nonzero and publishes no bridge. On success it returns a separate
+`ibp_audit` descriptor for `candidate-ibp-bridge.wl.audit.wl`, binding PASS to
+the final bridge bytes. Register and forward that descriptor independently.
 
 ### Differential equation construction
 
