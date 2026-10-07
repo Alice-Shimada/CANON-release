@@ -19,27 +19,60 @@ accepted results when available. The agent can translate your definitions into
 the existing formats; resolve a missing physical convention before calculations
 that depend on it.
 
-The current entry point requires the following preparation. These are concrete
-inputs, not outputs inferred by `PREPARE`:
+When a time allowance is supplied, record its start and absolute deadline with
+timezone. Keep per-step execution caps, cancellation/collection reserves, tool
+wait limits and mathematical search bounds separate. Record each cap's source
+and enforcing layer in the task context; recalculate remaining time from system
+time on launch and resume. See the
+[execution budget and recovery rules](../skills/canon-workflow/SKILL.md#6-execution-budgets-and-operational-recovery)
+for adjustment, cancellation and collection. These rules add no universal step
+timeout; the user's resource limits govern the allocation.
+
+The default entry point requires the following preparation. These are concrete
+inputs, not outputs inferred by the default `PREPARE` component:
 
 | Input | Responsibility |
 |---|---|
 | Family/basis identity, parameter and variable order, regulator and dimension rule | User supplies conventions; agent records them explicitly in the typed spec. |
 | Full propagator/ISP index order and `propagator_slots` | Agent records the declared family; slots are one-based positions in the full index list. |
-| Kira project, kinematics, reduction/export jobs and targets | Reuse supplied files or prepare them for the declared scope and installed Kira. |
-| Ordered masters | Reuse the selected list or obtain it through the declared Kira preparation/reduction workflow before binding it. |
-| Exact family data and derivatives for every independent variable | Reuse supplied data or prepare the existing affine-operator format and, where applicable, enhanced-Baikov data. |
+| Backend configuration, native jobs/drivers and targets | Supply them to the selected reducer, independently of the parameterization. Legacy Kira provenance in a default family spec is optional. |
+| Ordered masters | Reuse the selected list or obtain it through the explicitly selected discovery adapter before binding it. |
+| Exact family data and derivatives for every independent variable | Declare geometry and call automatic parameterization `PREPARE` or `PREPARE_DERIVATIVES`. Reuse validated derivatives; agents do not write operators. Enhanced-Baikov strategy data remain separate. |
 | Tool entries and resource options | Resolve from task parameters, environment or Wolfram configuration; record actual entries in requests. |
+
+When reusing a saved transformation, recover its exact source integral vector
+from the same artifact or producer record. Match integral tuples and powers,
+including their order, against the current DE. A reducer master list can contain
+the same integrals in a different order. Preserve the saved matrix's source order
+in `source_basis` and let the consumer map those explicit entries, or apply one
+recorded permutation to the corresponding matrix axis and labels together.
+Matching family names, dimensions or sector counts alone does not establish this
+binding. Convert the saved transformation convention exactly once.
 
 Use the existing [IBP/DE interfaces](../INTERFACES.md) and
 [preparation skill](../skills/canon-prepare-family/SKILL.md) for missing
 preparation. `ChooseDerivativeOperator` selects from supplied derivative data;
-it does not derive that data from a propagator list. `PrepareFamily.wls` binds
+it does not derive that data from a propagator list. The
+[physical derivative module](physical-derivatives.md) generates affine data from
+the declared external kinematics and routing. `PrepareFamily.wls` binds
 the typed sources and their hashes. `DiscoverSectors.wls` organizes supplied
 masters; it does not discover an independent complete basis from the family.
-There is currently no general propagator-only family compiler. If the available
-definitions do not determine a required input, retain the completed preparation
-and identify the specific missing convention or construction.
+Family definitions still require explicit external kinematics and index orders.
+The parameterization front end compiles those definitions and their physical
+derivatives; master discovery and reduction follow the selected backend's
+contract. If an input is not determined, retain the completed preparation and
+identify the specific missing convention or construction.
+
+The optional [parameterization](../components/parameterization/README.md) package
+retains user-defined vector or scalar-product charts and supplies a neutral
+family view and physical derivatives. Select the discovery/reduction adapter
+independently; the front end does not write native reducer jobs.
+The [point-DE package](../components/point-de/README.md)
+constructs point derivatives for its declared vector geometry and supplied
+integral candidates. The [reconstruction package](../components/dlog-reconstruction/README.md)
+consumes point DEs with explicit training/validation roles. These packages have
+their own input scope and do not change the preparation requirements above for
+default consumers.
 
 ## Supplied prepared-input example
 
@@ -78,7 +111,7 @@ The agent can invoke PREPARE from the checkout root as follows, placing output
 in its assigned workspace:
 
 ```text
-wolframscript -file mma/PrepareFamily.wls interfaces/prepare.example.json RUN_WORKSPACE/prepare
+python3 run_step.py interfaces/prepare.example.json RUN_WORKSPACE/prepare
 ```
 
 `RUN_WORKSPACE` denotes the workspace supplied to that agent. PREPARE only
@@ -90,19 +123,51 @@ running that regression is not a prerequisite for using the example.
 
 ## Execute or resume the workflow
 
+For supported operations, prepare mathematical objects and JSON settings, then
+call named interfaces and existing programs. Use `PREPARE_REQUEST` to bind
+existing result descriptors into a request, and `PREPARE_REDUCTION_TARGETS` for
+symbolic master derivatives before reduction. These steps replace per-task
+scientific glue scripts. If an algorithm or native exporter is missing, identify
+that capability and implement it as a separate reusable component development
+task with bounded tests before resuming research.
+
 Read [canon-workflow](../skills/canon-workflow/SKILL.md). It is the single
 scientific routing entry: identify the current artifact/result, take the first
 matching action, then read only that step's skill. Method cards describe how to
 execute the selected method; they do not define a second coordinator loop.
 
+For a task with custom component packages, carry the ordered manifests in every
+worker assignment and repeat `--components PATH` on each `run_step.py` call.
+Per-step `from` references can select different providers for discovery,
+reduction and cut-DE construction. Preserve that profile during nested candidate
+reduction; do not replace it with a single whole-backend selection.
+Use `--list` or `--describe` to find the selected instructions and any package
+workflow. Its algorithm
+and implementation-specific options replace the built-in instructions; the
+public artifact conventions and acceptance roles still apply. See
+[component packages](components.md). If the package supplies an unqualified
+`SEARCH_CORE` entry, call that entry without selecting a built-in `--method`.
+The package workflow defines its own additional steps, repair routes and scoped
+completion checks. Unselecting a package restores the remaining definitions;
+`--defaults` ignores the whole inherited selection. The runner loads packages
+only when selected, so optional code can live outside the checkout.
+
 The route distinguishes successful intermediate results, provisional candidates,
 method exhaustion and operational failure. In particular:
 
-- A defined-family UT/canonical search starts with a bounded DlogBasis-refine
-  proposal. Candidate derivative data are prepared for the subsequent IBP bridge;
-  the proposal uses its own family and provider inputs. See the ordered
-  [core-selection rules](../skills/canon-search-core/SKILL.md).
+- For a defined-family UT/canonical search, select a small proposal from the
+  geometry and existing evidence: dots and normalization for suitable simple
+  sectors, Gram constructions for a concrete numerator/dimensional/contact
+  hypothesis, or DlogBasis-refine when a general bounded search is useful.
+  Candidate derivative data are prepared for the subsequent IBP bridge.
+  DlogBasis is optional; the independent gates are unchanged. Retain tested
+  choices and their limits using the [core-selection rules](../skills/canon-search-core/SKILL.md).
 - A passing core continues through the full DE and tail; it is not a final result.
+- A failed epsilon-zero construction or a proposed monodromy obstruction goes
+  through the [core selection rules](../skills/canon-search-core/SKILL.md#scope-of-an-obstruction).
+  `DIAGNOSE_CORE` and the bounded residue-balance provider handle supported
+  rational systems, including exact homogeneous-scale separation. Regulator
+  poles in a transformation are allowed; diagnostic failure is not nonexistence.
 - An absent alphabet is a supported input. The solver proposes pole factors and
   supported quadratic-root letters, then checks the resulting span exactly.
 - An unsupported algebraic tail does not go to a rational backend by default.
@@ -116,17 +181,36 @@ The coordinator uses `statemng` and the persistent-research skill to dispatch an
 accept tasks. Scientific scripts return artifacts and receipts; they do not
 change persistent task status. Include the last result code/reason, exact input
 references, changed hypothesis, applicable skills and remaining budget in each
-continuation task. A new worker should not need the full conversation to know
+continuation task. For operational recovery, record the interrupted stage
+(unknown without phase evidence), current result or its absence, saved job/output
+references and the changed runtime setting instead of claiming an exhausted
+mathematical ansatz. A new worker should not need the full conversation to know
 its next step.
+
+For an explicitly selected [local job](../components/local-jobs/README.md), record
+its immutable job/watch handles and let the worker return `DEFERRED` while the
+research task stays `running`. The completion monitor executes only the declared
+checkpoint check and callback. A configured host adapter requests continuation
+in the bound session; on resumption, the coordinator collects the existing run
+and performs normal review/acceptance. Callback acknowledgment records delivery,
+not execution of a model turn. A launched process, a terminal receipt, and an
+accepted scientific result are separate events. Do not turn ordinary detached
+waiting into a failed research attempt.
 
 ## Artifact ownership and delivery
 
 Source inputs and installed tools remain read-only. Workers write new files in
-their assigned workspaces. JSON-relative paths are resolved from the declaring
-JSON; spec-relative paths from the spec; Kira jobs/config/targets from the
+the workspace returned by `task_show`; dependency `stored_path` values resolve
+from its returned `project_root`. JSON-relative paths are resolved from the
+declaring JSON; spec-relative paths from the spec; Kira jobs/config/targets from the
 declared project. If an input is relocated, update its references deliberately.
 JSON paths do not expand `~` or environment variables. Output command-line
 paths remain relative to the working directory.
+
+Keep generated receipts byte-exact under their original references. Correct
+inputs or bindings in new files, use `PREPARE_REQUEST` where applicable, and
+register the new result separately. A copied old receipt is not a new attempt's
+result; apply the workflow's recovery rules when a stopped stage wrote none.
 
 Declare direct dependencies on shared preparation, raw DE/rules, and the latest
 accepted prefix. Register each new or changed file separately and submit one

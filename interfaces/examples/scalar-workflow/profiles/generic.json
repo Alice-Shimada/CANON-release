@@ -1,0 +1,8 @@
+{
+  "schema": "canon-neu/components/v1",
+  "steps": {
+    "BUILD_CUT_DE": {
+      "from": "../../../../components/default.json"
+    }
+  }
+}

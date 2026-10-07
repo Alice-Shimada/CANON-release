@@ -1,0 +1,19 @@
+{
+  "schema": "canon-neu/script-input/v1",
+  "task_id": "SCALAR-slice",
+  "step": "SLICE_CUT_DE",
+  "sector": {
+    "id": 3,
+    "propagator_count": 2
+  },
+  "payload": {
+    "ordered_master_de": {
+      "from_result": "../outputs/generic/result.json",
+      "artifact": "ordered_master_de"
+    },
+    "sector_manifest": {
+      "from_result": "../outputs/discover/result.json",
+      "artifact": "sector_manifest"
+    }
+  }
+}

@@ -1,6 +1,6 @@
 ---
 name: canon-dlogbasis-integral-candidates
-description: Prioritize DlogBasis-refine for UT or canonical integral-basis discovery from a defined family and propose bounded constant-LS candidates with dimensional continuation.
+description: Use a selected bounded DlogBasis-refine search to propose constant-LS integral candidates with dimensional continuation.
 ---
 
 # DlogBasis-refine integral candidates before reduction
@@ -11,18 +11,18 @@ This card implements only `PROPOSE_INTEGRAL_CANDIDATES`. It calls
 ``DlogBasis`DlogBasisSearch`` before candidate IBP reduction and neither
 constructs nor accepts a canonical basis.
 
-For integral-basis discovery from a defined family, whether requested as
-"UT integrals" or a "canonical basis", start with a small, declared, bounded
-search on the unresolved sector. Reuse suitable existing candidates and
+When the [core-selection skill](../../skills/canon-search-core/SKILL.md) selects
+DlogBasis-refine for integral-basis discovery, start with a small, declared,
+bounded search on the unresolved sector. Reuse suitable existing candidates and
 already checked sectors. From `project_root`, run
-`wolframscript -file methods/dlogbasis/run.wls INPUT.json OUTPUT_DIR` with the
+`python3 run_step.py INPUT.json OUTPUT_DIR` with the
 `PROPOSE_INTEGRAL_CANDIDATES` input shown in the
 [request example](../../interfaces/integral-candidate-input.example.json).
 Loading the package or calling `CreateDlogFamily` prepares the family; an
 actual `DlogBasisSearch` call is required to attempt a candidate search.
-The [core-selection skill](../../skills/canon-search-core/SKILL.md) defines the
-direct-DE exceptions. Use finite numerator/dot bounds and apply this card only
-to unresolved scope.
+The core-selection skill also permits explicit dot/normalization, Gram and
+direct-DE proposals without first calling this provider. Use finite
+numerator/dot bounds and apply this card only to unresolved scope.
 
 ## Inputs and finite bounds
 
@@ -85,6 +85,51 @@ per-propagator cap. For example, a total bound of two is represented by:
 Setting `max_dots_per_propagator` to 1 with `max_added_dots` set to 2 is
 unsupported; changing the total bound would change the requested search.
 
+## Choose the search cost before launch
+
+When the caller has not fixed the bounds, start with the smallest numerator/dot
+bounds justified by the sector geometry and intended representatives. Explain
+the loop order and attach each base dimension to its loop momentum. Increase
+one bound at a time only when the saved result motivates that change and the
+remaining budget permits it. Preserve caller-specified bounds; any change is a
+new declared request. There is no universal loop order or base dimension for
+all families.
+
+For `a` active slots, `b` inactive slots, total dot bound `d` and numerator bound
+`n`, the provider enumerates
+`Binomial[a+d,a] * Binomial[b+n,b]` integral index vectors. For example, eight
+active and three inactive slots with `n=1,d=2` already give `45*4=180` vectors.
+Simultaneously starting with degree one and two dots is therefore not a small
+search merely because the returned-candidate budget is small. The lattice size
+does not estimate symbolic runtime or the number of final directions.
+
+`numerator_positions` omitted means `Automatic`. At positive numerator degree,
+the provider first completes a search on the reduced chart, then repeats the
+search for each singleton position missing from that chart. Each call performs
+lattice enumeration, Baikov chart construction and mapping, dimensionally
+regulated generalized cuts and finite residual signatures, then a module lift
+when those earlier stages permit it. The result selects one chart by its
+returned directions/coverage; it does not combine all chart spans. An explicit
+position list changes the chart experiment and must be justified and recorded.
+The returned-candidate cap is applied only after these searches return.
+
+Use a fresh output directory and an explicit elapsed-time/cancellation budget.
+`dlogbasis-progress.jsonl` is operational evidence separate from `result.json`.
+It records the request and input hashes, declared revision, loader and sibling
+`Kernel/*.wl` hashes, and `entered`/`returned` boundaries for package/family
+loading, the public search and candidate conversion. The implementation list is
+the installed source snapshot, not a trace of every file loaded at runtime.
+Each record is closed on disk; after a hard interruption ignore an incomplete
+last line and retain the prior complete records. Distinguish invocations by
+`invocation_id` if an output directory was reused.
+
+An entered phase without its returned record locates an interrupted boundary;
+it does not establish a failed mathematical ansatz. A `dlogbasis_search` entry
+does not identify a particular internal chart, residue or module-lift hotspot.
+Inspect that evidence and the declared lattice/chart scope before extending time
+or bounds. With no phase records, retain the stage as unknown. Package/family
+loading alone still does not establish that the provider search was invoked.
+
 ## Result and next action
 
 Each `CandidateCombinations` element is one constant-LS candidate direction.
@@ -103,7 +148,8 @@ use `FINAL_CHECK` when the stated scope is complete.
 Retain `ScientificStatus`, finite affine coverage, and all four certification
 flags. Even when candidates exist, `ConstantLeadingSingularityCertifiedQ`,
 `UniformTranscendentalityCertifiedQ`, and `CanonicalBasisCertifiedQ` generally
-remain `False`. Record the declared package revision and actual loader SHA-256.
+remain `False`. Record the declared package revision and actual loader and
+executable Kernel SHA-256 values; the loader alone does not identify the implementation.
 Provisional output is not a UT result, and `METHOD_EXHAUSTED` is not evidence
 that the family has no UT basis. Return the search bounds and stopped gate to
 the workflow entry for the next assigned step.

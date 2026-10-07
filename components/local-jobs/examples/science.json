@@ -1,0 +1,7 @@
+{
+  "schema": "canon-neu/script-input/v1",
+  "task_id": "synthetic-local-job-demo",
+  "step": "SYNTHETIC_LOCAL_JOB",
+  "sector": null,
+  "payload": {}
+}

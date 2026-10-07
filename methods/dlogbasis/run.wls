@@ -11,17 +11,56 @@ args = CanonMethodCard`ScriptArguments[];
 If[Length[args] =!= 2, Print["usage: run.wls <input.json> <output_dir>"]; Quit[2]];
 {inputPath, outputDir} = ExpandFileName /@ args;
 task = CanonMethodCard`ReadTask[inputPath, "PROPOSE_INTEGRAL_CANDIDATES"];
+(* Operational evidence is separate from result.json. Close each append so a
+   cancelled provider leaves the last entered/returned boundary on disk. *)
+If[!DirectoryQ[outputDir], CreateDirectory[outputDir, CreateIntermediateDirectories -> True]];
+progressPath = FileNameJoin[{outputDir, "dlogbasis-progress.jsonl"}];
+invocationId = CreateUUID[];
+startedAt = AbsoluteTime[];
+recordPhase[phase_, event_, details_ : <||>] := Module[{stream},
+  stream = OpenAppend[progressPath];
+  WriteString[stream, ExportString[<|
+    "schema" -> "canon-neu/dlogbasis-progress/v1",
+    "invocation_id" -> invocationId, "process_id" -> $ProcessID,
+    "elapsed_seconds" -> N[AbsoluteTime[] - startedAt],
+    "phase" -> phase, "event" -> event, "details" -> details
+  |>, "RawJSON", "Compact" -> True], "\n"];
+  Close[stream];
+];
+recordPhase["request", "read", <|
+  "input_path" -> inputPath, "input_sha256" -> FileHash[inputPath, "SHA256", "HexString"],
+  "request" -> task, "runtime" -> $Version <> "; " <> $SystemID
+|>];
+recordPhase["prepared_family_load", "entered"];
 prepared = CanonMethodCard`LoadArtifact[task, inputPath, "prepared_family"];
+recordPhase["prepared_family_load", "returned"];
 payload = task["payload"];
 methodOptions = payload["method_options"];
 package = CanonMethodCard`ResolveMethodPackage[task, inputPath, "DlogBasis`"];
 entry = package["entry"];
 entryHash = FileHash[entry, "SHA256", "HexString"];
 packageRevision = Lookup[methodOptions, "package_revision", Null];
+packageFiles = <|"path" -> #, "sha256" -> FileHash[#, "SHA256", "HexString"]|> & /@
+  DeleteDuplicates[Prepend[Sort[FileNames["*.wl",
+    FileNameJoin[{DirectoryName[entry], "Kernel"}], Infinity]], entry]];
+recordPhase["package_load", "entered", <|
+  "entry" -> entry, "package_revision" -> packageRevision,
+  "implementation_files" -> packageFiles
+|>];
 Get[entry];
+recordPhase["package_load", "returned"];
 
 (* Sector bits follow the full propagator/ISP index order. *)
-familyData = Get[prepared["family_data", "path"]];
+preparedPath = CanonMethodCard`ResolveInputPath[inputPath, task["payload", "prepared_family", "path"]];
+familyDataPath = CanonMethodCard`ResolveInputPath[preparedPath, prepared["family_data", "path"]];
+recordPhase["family_load", "entered", <|
+  "prepared_family_path" -> preparedPath,
+  "prepared_family_sha256" -> FileHash[preparedPath, "SHA256", "HexString"],
+  "family_data_path" -> familyDataPath,
+  "family_data_sha256" -> FileHash[familyDataPath, "SHA256", "HexString"]
+|>];
+familyData = CanonMethodCard`ReadWLData[familyDataPath];
+recordPhase["family_load", "returned"];
 family = familyData["Family"];
 sector = Reverse @ IntegerDigits[
   task["sector", "id"], 2, Length[family["Propagators"]]];
@@ -65,6 +104,19 @@ singularExecutable = Lookup[methodOptions, "singular_executable", "Singular"];
 If[StringContainsQ[singularExecutable, {"/", "\\"}],
   singularExecutable = CanonMethodCard`ResolveInputPath[inputPath, singularExecutable]
 ];
+recordPhase["dlogbasis_search", "entered", <|
+  "public_entry" -> "DlogBasis`DlogBasisSearch", "sector" -> sector,
+  "loop_order" -> methodOptions["loop_order"],
+  "loop_dimensions" -> methodOptions["loop_dimensions"],
+  "numerator_degree" -> powerDefinition["numerator_degree"],
+  "max_added_dots" -> powerDefinition["max_added_dots"],
+  "numerator_positions" -> Lookup[methodOptions, "numerator_positions", "Automatic"],
+  "expected_lattice_count" ->
+    Binomial[Count[sector, 1] + powerDefinition["max_added_dots"], Count[sector, 1]]*
+    Binomial[Count[sector, 0] + powerDefinition["numerator_degree"], Count[sector, 0]],
+  "candidate_budget" -> payload["candidate_budget"],
+  "candidate_budget_scope" -> "returned_directions_after_provider_return"
+|>];
 result = DlogBasis`DlogBasisSearch[
   family, sector,
   "LoopSpecifications" -> loopSpecifications,
@@ -76,6 +128,7 @@ result = DlogBasis`DlogBasisSearch[
   "ResidualBackend" -> Lookup[methodOptions, "residual_backend", "Current"],
   "SingularExecutable" -> singularExecutable
 ];
+recordPhase["dlogbasis_search", "returned", <|"failure" -> FailureQ[result]|>];
 If[FailureQ[result],
   CanonMethodCard`WriteProviderResult[
     task, outputDir, "ERROR", "DLOGBASIS_SEARCH_FAILED", <||>,
@@ -100,7 +153,7 @@ canonExpression[expression_] := Factor[
 
 candidateRecord[expression_, index_] := Module[{integral, factor},
   integral = First @ Cases[
-    expression, item_ /; Head[Unevaluated[item]] === integralHead :> item, Infinity
+    expression, item_ /; Head[Unevaluated[item]] === integralHead :> item, {0, Infinity}
   ];
   factor = Coefficient[expression, integral];
   <|
@@ -114,6 +167,7 @@ candidateRecord[expression_, index_] := Module[{integral, factor},
   |>
 ];
 
+recordPhase["candidate_conversion", "entered"];
 allCandidateRecords = MapIndexed[
   candidateRecord, canonExpression /@ Lookup[result, "CandidateCombinations", {}]
 ];
@@ -121,6 +175,10 @@ budget = payload["candidate_budget"];
 candidateRecords = Take[allCandidateRecords, UpTo[budget["maximum"]]];
 remainingCandidates = Length[allCandidateRecords] - Length[candidateRecords];
 poolExhausted = remainingCandidates === 0;
+recordPhase["candidate_conversion", "returned", <|
+  "available_candidate_count" -> Length[allCandidateRecords],
+  "returned_candidate_count" -> Length[candidateRecords]
+|>];
 
 summary = <|
   "method_id" -> methodId,
@@ -146,6 +204,7 @@ summary = <|
   "package_revision" -> packageRevision,
   "entry" -> entry,
   "entry_sha256" -> entryHash,
+  "implementation_files" -> packageFiles,
   "runtime" -> $Version <> "; " <> $SystemID
 |>;
 
@@ -193,6 +252,7 @@ artifact = <|
     "tool_revision" -> packageRevision,
     "entry" -> entry,
     "entry_sha256" -> entryHash,
+    "implementation_files" -> packageFiles,
     "runtime" -> $Version <> "; " <> $SystemID
   |>
 |>;

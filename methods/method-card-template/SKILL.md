@@ -27,3 +27,11 @@ Supply a scientific method only when instantiating this template. Keep
 pre-reduction integral definitions distinct from post-reduction transformations.
 Do not add workflow state or scheduling, or allow a provider to publish
 `PASS`/`FAIL`.
+
+## Package entry
+
+Declare the command and this instruction file in a
+[component manifest](../../docs/components.md). The runner appends `INPUT.json`
+and `OUTPUT_DIR` to the command. Existing scientific gates consume the returned
+artifacts through their published contracts. A package may implement several
+steps; each entry keeps its explicit stage and role.

@@ -1,0 +1,15 @@
+{
+  "mode": "command",
+  "commands": [
+    [
+      "{python}",
+      "{package}/export.py",
+      "{context}"
+    ]
+  ],
+  "source_format": "neatibp-solved-rules",
+  "exports": {
+    "masters": "masters.wl",
+    "rules": "rules.wl"
+  }
+}

@@ -26,12 +26,11 @@ Supply `method_options.package_entry` (INITIAL.m), `finite_flow_package_file`
 library), and `reference_directory` (official `examples/massless_3L4P`), plus
 the exact identities `INITIAL 2.1; 63d8f813ac415f82f7ef945ee7e3f78a242fae49`
 and `FiniteFlow; 278344c169010b74e791af8c5604c8cb9cd8df11`. Relative paths
-resolve from the input JSON directory. Use a WolframKernel compatible with
-the installed native library:
+resolve from the input JSON directory. Use `CANON_WOLFRAMSCRIPT` to select a
+Wolfram installation compatible with the native library, then run:
 
 ```bash
-"${CANON_WOLFRAM_KERNEL:-WolframKernel}" \
-  -noinit -noprompt -script methods/initial/run.wls input.json NEW_OUTPUT_DIR
+python3 run_step.py input.json NEW_OUTPUT_DIR
 ```
 
 `NEW_OUTPUT_DIR` must not exist; its parent must exist and be writable, and

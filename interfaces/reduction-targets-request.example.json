@@ -1,0 +1,15 @@
+{
+  "schema": "canon-neu/script-input/v1",
+  "task_id": "scalar-bubble-symbolic-targets",
+  "step": "PREPARE_REDUCTION_TARGETS",
+  "payload": {
+    "prepared_family": {
+      "type": "mathematica-expression",
+      "path": "../outputs/prepare/prepared-family.wl"
+    },
+    "master_basis": {
+      "type": "mathematica-expression",
+      "path": "../outputs/discover/master-basis.wl"
+    }
+  }
+}

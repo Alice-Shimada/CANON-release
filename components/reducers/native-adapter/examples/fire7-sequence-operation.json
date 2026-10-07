@@ -1,0 +1,26 @@
+{
+  "mode": "command",
+  "commands": [
+    [
+      "{wolframscript}",
+      "-file",
+      "{package}/prepare.wls",
+      "{context}"
+    ],
+    [
+      "{backend_dir}/installed/FIRE7/bin/FIRE7",
+      "-c",
+      "{backend_dir}/reduction"
+    ],
+    [
+      "{backend_dir}/installed/FIRE7/bin/tables2rules",
+      "reduction.tables",
+      "rules.wl"
+    ]
+  ],
+  "source_format": "fire7-rules",
+  "exports": {
+    "masters": "preferred.m",
+    "rules": "rules.wl"
+  }
+}

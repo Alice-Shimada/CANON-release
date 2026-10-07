@@ -1,7 +1,7 @@
 BeginPackage["CANON`BaikovDerivative`"];
 
 ChooseDerivativeOperator::usage =
-  "ChooseDerivativeOperator[prepared, variable] returns a bounded exact zero-growth Baikov solution when found, otherwise the prepared affine operator.";
+  "ChooseDerivativeOperator[prepared, variable, selection:\"enhanced-first\"] uses the bounded enhanced search by default; selection \"prepared-affine\" explicitly uses the supplied affine operator without searching.";
 
 Begin["`Private`"];
 
@@ -85,20 +85,26 @@ findZeroGrowth[strategy_Association, variable_Symbol] := Module[
   found
 ];
 
-ChooseDerivativeOperator[prepared_Association, variable_Symbol] := Module[
+ChooseDerivativeOperator[prepared_Association, variable_Symbol, selection_ : "enhanced-first"] := Module[
   {operators, strategy, exact},
+  If[!MemberQ[{"enhanced-first", "prepared-affine"}, selection],
+    Return[failure["Unknown derivative operator selection."]]];
   operators = Lookup[prepared, "operators", $Failed];
-  strategy = Lookup[prepared, "exact_strategy", $Failed];
   If[
-    !AssociationQ[operators] || !KeyExistsQ[operators, variable] ||
-      !AssociationQ[strategy],
+    !AssociationQ[operators] || !KeyExistsQ[operators, variable],
     Return[failure["The requested variable or its prepared operator is missing."]]
   ];
+  If[selection === "prepared-affine",
+    Return[<|"kind" -> "prepared-affine", "operator" -> operators[variable],
+      "enhanced_search_attempted" -> False|>]];
+  strategy = Lookup[prepared, "exact_strategy", $Failed];
+  If[!AssociationQ[strategy],
+    Return[failure["The enhanced-Baikov strategy is missing."]]];
   exact = findZeroGrowth[strategy, variable];
   If[FailureQ[exact], Return[exact]];
   If[AssociationQ[exact], exact, <|"kind" -> "affine-fallback", "operator" -> operators[variable]|>]
 ];
-ChooseDerivativeOperator[_, _] :=
+ChooseDerivativeOperator[___] :=
   failure["ChooseDerivativeOperator expects a prepared Association and a symbolic variable."];
 
 End[];

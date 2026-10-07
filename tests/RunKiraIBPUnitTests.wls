@@ -1,13 +1,14 @@
 #!/usr/bin/env wolframscript
 
 repoRoot = DirectoryName[DirectoryName[$InputFileName]];
-adapter = FileNameJoin[{repoRoot, "mma", "ReduceIBP.wls"}];
+runner = FileNameJoin[{repoRoot, "run_step.py"}];
 temporaryDirectory = CreateDirectory[];
 project = CreateDirectory[FileNameJoin[{temporaryDirectory, "project with spaces"}]];
 output = FileNameJoin[{temporaryDirectory, "output with spaces"}];
 backend = FileNameJoin[{temporaryDirectory, "FakeKira.wls"}];
 requestPath = FileNameJoin[{temporaryDirectory, "request.json"}];
-resultPath = FileNameJoin[{temporaryDirectory, "result.wl"}];
+resultDir = FileNameJoin[{temporaryDirectory, "result"}];
+resultPath = FileNameJoin[{resultDir, "ibp-reduction.wl"}];
 
 Export[backend, StringRiffle[{
   "directory = FileNameJoin[{Directory[], \"results\", \"box\"}];",
@@ -19,22 +20,28 @@ Export[FileNameJoin[{project, "reduce.yaml"}], "jobs: []\n", "Text"];
 Export[FileNameJoin[{project, "export.yaml"}], "jobs: []\n", "Text"];
 Export[FileNameJoin[{project, "targets"}], "box[2,1,1,1]\n", "Text"];
 Export[requestPath, <|
+  "schema" -> "canon-neu/script-input/v1", "task_id" -> "ibp-interface-test",
+  "step" -> "REDUCE_IBP", "sector" -> Null, "payload" -> <|"reduction" -> <|
   "executable" -> "wolframscript", "project" -> FileNameTake[project],
   "jobs" -> {"reduce.yaml", "export.yaml"}, "topology" -> "box",
   "targets" -> "targets", "output" -> FileNameTake[output],
   "options" -> {"-file", backend}
-|>, "RawJSON"];
+|>|>|>, "RawJSON"];
 
 process = RunProcess[
-  {"wolframscript", "-file", adapter, requestPath, resultPath},
+  {"python3", runner, requestPath, resultDir},
   All,
   ProcessDirectory -> repoRoot
 ];
-result = Get[resultPath];
+result = Block[{$Context = "CANON`DEData`", $ContextPath = {"System`"}}, Get[resultPath]];
+receipt = Import[FileNameJoin[{resultDir, "result.json"}], "RawJSON"];
 head = Symbol["CANON`DEData`box"];
 s = Symbol["CANON`DEData`s"];
 report = TestReport[{VerificationTest[
-  process["ExitCode"] === 0 && Keys[result] === {"masters", "rules"} &&
+  process["ExitCode"] === 0 && receipt["status"] === "PASS" &&
+    receipt["code"] === "IBP_REDUCED" &&
+    receipt["artifacts", "ibp_reduction", "path"] === FileNameTake[resultPath] &&
+    Keys[result] === {"masters", "rules"} &&
     result["masters"] === {head[1, 1, 1, 1], head[1, 0, 0, 0]} &&
     result["rules"] === {
       head[2, 1, 1, 1] -> 2 head[1, 1, 1, 1] + s head[1, 0, 0, 0]

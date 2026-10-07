@@ -5,13 +5,16 @@ description: Build the exact lower-prefix-plus-current-sector DE and declared fu
 
 # Build the full prefix DE
 
-Run `mma/BuildFullSectorDE.wls` with `ordered_master_de`, `sector_cut_de`,
+Run `BUILD_FULL_DE` through `python3 run_step.py INPUT.json OUTPUT_DIR` with `ordered_master_de`, `sector_cut_de`,
 `core_candidates`, `core_transform`, `declared_alphabet`, and `accepted_prefix`.
 The first sector uses `accepted_prefix -> null`.
 
 `ordered_master_de` is the full result already written by `BUILD_CUT_DE`.
 Never rerun Kira or DEBuilder.  For a nonempty accepted prefix use its explicit
 raw `source_basis` and `old_source_basis = transformation . accepted_basis`.
+For a reused prefix, take that source vector from the saved transformation's
+producer, preserving its actual integral order. The reducer's master-file order
+may differ; this step maps the explicit source entries into `ordered_master_de`.
 For every declared core group use its complete reduced `full_new_basis_rows`;
 embed these rows by their explicit source-basis order, using zero coefficients
 for raw masters absent from a DE provider's source basis.

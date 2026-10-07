@@ -1,0 +1,11 @@
+{
+  "schema": "canon-neu/script-input/v1",
+  "task_id": "SCALAR-bind-discover",
+  "step": "PREPARE_REQUEST",
+  "payload": {
+    "template": {
+      "type": "json",
+      "path": "../templates/discover.json"
+    }
+  }
+}

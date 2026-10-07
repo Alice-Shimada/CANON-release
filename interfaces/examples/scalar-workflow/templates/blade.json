@@ -1,0 +1,27 @@
+{
+  "schema": "canon-neu/script-input/v1",
+  "task_id": "SCALAR-blade",
+  "step": "BUILD_CUT_DE",
+  "sector": {
+    "id": 3,
+    "propagator_count": 2
+  },
+  "payload": {
+    "reducer_family": {
+      "from_result": "../outputs/prepare/result.json",
+      "artifact": "reducer_family"
+    },
+    "master_basis": {
+      "from_result": "../outputs/discover/result.json",
+      "artifact": "master_basis"
+    },
+    "sector_manifest": {
+      "from_result": "../outputs/discover/result.json",
+      "artifact": "sector_manifest"
+    },
+    "backend": {
+      "type": "json",
+      "path": "../backends/blade.json"
+    }
+  }
+}

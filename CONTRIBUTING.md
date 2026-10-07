@@ -14,6 +14,13 @@ the same contribution. For scientific changes, state the input and method range
 covered by the result. A candidate, a sampled check, and an accepted full-system
 check provide different evidence.
 
+Keep public entry files short and split internal work into named routines by
+responsibility. Check external input at the callable boundary; internal routines
+should use that checked shape. Remove a repeated guard only when the same call's
+earlier checks and construction imply it. Preserve independent mathematical
+checks such as exact gauge identities and flatness. Prefer a reusable component
+interface over a scientific glue script specific to one research run.
+
 Run the existing tests relevant to the changed part and report the result. Add a
 small regression case when it captures a scientific or behavioral error. State
 which checks were not run and which dependencies they require. Documentation-only
@@ -38,6 +45,14 @@ wolframscript -file tests/RunFullSystemUnitTests.wls
 Live Kira/provider tests are separate scripts with explicit installation and
 output arguments. Run them only when the change needs that evidence; the
 [installation guide](docs/installation.md) lists their dependency configuration.
+
+For component selection and command interfaces, run
+`python3 -m unittest discover -s tests -p 'test_components.py' -v` and
+`PYTHONPATH=. python3 -m unittest discover -s tests -p 'test_prepare_request.py' -v`.
+The existing
+`tests/RunKiraIBPUnitTests.wls` covers the reducer interface;
+`tests/RunEndToEndWorkflowLiveTest.wls` exercises the default component chain.
+See [component contracts](docs/components.md) before adding a component package.
 
 Keep runtime state, logs, native build products, machine-local launchers, and
 personal configuration out of contributions. For a deliberate example addition,

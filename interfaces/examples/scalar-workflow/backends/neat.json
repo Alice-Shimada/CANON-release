@@ -1,0 +1,29 @@
+{
+  "schema": "canon-neu/native-backend/v1",
+  "adapter": "neatibp",
+  "encoding": {
+    "head": "G",
+    "layout": "indices"
+  },
+  "masters_format": "integrals",
+  "binding": {
+    "family_ref": "scalar-bubble",
+    "basis_ref": "scalar-bubble-master",
+    "index_order": [
+      "D1",
+      "D2"
+    ],
+    "point": [],
+    "coefficient_domain": "exact-rational-functions"
+  },
+  "operations": {
+    "REDUCE_IBP": {
+      "mode": "import",
+      "source_format": "neatibp-solved-rules",
+      "exports": {
+        "masters": "../fixtures/neat-masters.wl",
+        "rules": "../fixtures/neat-rules.wl"
+      }
+    }
+  }
+}

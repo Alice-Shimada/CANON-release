@@ -18,6 +18,8 @@ their native integrations have not been validated in this release.
 
 - [Installation and minimum dependencies](docs/installation.md)
 - [Agent workflow and input preparation](docs/agent-workflow.md)
+- [Scientific components and custom packages](docs/components.md)
+- [Automatic physical derivatives](docs/physical-derivatives.md)
 - [Next-action routing for agents](skills/canon-workflow/SKILL.md)
 - [Saved examples](examples/README.md)
 - [Reading a basis, transformation, DE, and alphabet](docs/results.md)
@@ -50,14 +52,17 @@ de = Get["examples/one-loop/canonical-de.wl"];
 
 ## Scientific scope
 
-The current prepared input consists of a family specification, Kira project/jobs,
-ordered masters, and derivative operators for each variable. The agent can
+The current default prepared input consists of a family specification, ordered
+masters, and derivative operators for each variable. Native reducer projects or
+driver settings belong to the selected backend configuration. The agent can
 prepare these using available tools and explicit conventions; `PrepareFamily.wls`
 itself binds the supplied files. It is not a general compiler from an arbitrary
 list of propagators. Physical definitions, known masters/rules, and existing DEs
 should be supplied when available; see the [input guide](docs/agent-workflow.md).
 
-The scientific route is:
+Each step is selected through the [component manifest](components/default.json).
+An optional package can replace any subset of steps while keeping the published
+scientific inputs and outputs. The default scientific route is:
 
 ```text
 PREPARE → DISCOVER → IBP and ordered DE
@@ -65,12 +70,15 @@ PREPARE → DISCOVER → IBP and ordered DE
   → CHECK_CANONICAL → COMMIT_SECTOR → next sector → FINAL_CHECK
 ```
 
-For integral-basis discovery from a family (UT or canonical), prioritize a bounded DlogBasis-refine
-candidate search, followed by candidate IBP reduction and the existing checks.
+For integral-basis discovery from a family (UT or canonical), choose a small
+proposal from the geometry and current evidence: selected dots and normalization,
+a justified Gram construction, or a bounded DlogBasis-refine search. Integral
+proposals continue through candidate IBP reduction and the same checks.
 CANONICA supplies rational DE transformations and Libra the implemented
 single-variable route when a direct-DE approach is justified. A supplied-DE-only
 task can start there. The [routing skill](skills/canon-workflow/SKILL.md) explains when
-to change routes; an exhaustive numerator/dot search is not required. The
+to change routes and retain useful method experience; an exhaustive numerator/dot
+search is not required. The
 [method cards](methods/README.md) describe their actual scopes.
 
 A successful final check returns a canonical basis and DE in the declared
@@ -103,15 +111,41 @@ from the earlier resident CANON workflow and keeps its original export schema.
 
 Science lives in `mma/`, proposals in `methods/`, and step instructions in
 `skills/`. [INTERFACES.md](INTERFACES.md) documents the request/result contracts.
-A typical stateless call is:
+The runner selects one component from the request's `step`. A stateless call is:
 
 ```sh
-wolframscript -file mma/PrepareFamily.wls interfaces/prepare.example.json runs/triangle-prepare
+python3 run_step.py interfaces/prepare.example.json runs/triangle-prepare
 ```
 
 Use a fresh output directory. Relative artifact paths are resolved from their
 declaring JSON; family-spec resources are resolved from the spec. Supply tool
 entries and thread budgets through the documented task parameters or environment.
+Use `--components /path/to/package/components.json` for a custom package, and
+`--method libra` (for example) when selecting a `SEARCH_CORE` method.
+
+Supported workflows compose these interfaces with mathematical inputs and JSON
+settings. `PREPARE_REQUEST` binds producer artifacts into consumer requests;
+`PREPARE_REDUCTION_TARGETS` prepares symbolic derivative targets for the chosen
+reducer. Native setup, solve and export programs can be listed as ordered argv
+commands. See [composition](docs/components.md#binding-requests-without-a-glue-program)
+and the [scalar JSON workflow example](interfaces/examples/scalar-workflow/README.md).
+
+`--describe` shows the chosen command and instructions without executing it.
+Repeat `--components` to compose packages, or use a manifest's relative `extends`
+list. `--defaults` restores the original selection. Packages are reread at each
+step invocation and may live outside this checkout. Their optional `workflow`
+instructions describe additional routes and scoped completion checks.
+The [parameterization package](components/parameterization/README.md) supports
+user-defined vector and scalar-product charts, including twistor coordinates,
+independently of the selected reducer. A profile can select `DISCOVER`,
+`REDUCE_IBP` and `BUILD_CUT_DE` from different providers with per-step `from`
+references. See the [mixed profile](components/profiles/mixed-reducers.json) and
+the [Kira adapter](components/reducers/kira/README.md); Blade, FIRE7 and NeatIBP
+adaptation packages document their own native execution/export requirements.
+Optional [point-DE](components/point-de/README.md),
+[dlog reconstruction](components/dlog-reconstruction/README.md), and
+[local execution/notification](components/local-jobs/README.md) packages can be
+selected independently. All original scientific components remain the defaults.
 
 The agent owns planning and acceptance. `statemng` stores research tasks and
 artifacts in `.state-management/<task-name>/`; it does not choose scientific

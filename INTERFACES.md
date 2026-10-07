@@ -1,19 +1,25 @@
 # Mathematica script interfaces
 
 This document defines interfaces, not algorithms, internal functions, or implementation
-details. The first part describes the typed method-card envelope. The direct IBP/DE
-interfaces at the end are a stateless scientific adapter layer; they do not accept
-that envelope or define another research state machine.
+details. All executable workflow steps, including IBP, use the same envelope.
+The mathematical library functions at the end operate directly on WL expressions.
 
 ## Common invocation
 
 ```text
-wolframscript -file <script.wls> <input.json> <output_dir>
+python3 run_step.py <input.json> <output_dir> [--components PACKAGE.json] [--method NAME]
 ```
 
 Implemented scripts must write the common result format to `<output_dir>/result.json`.
 Use `.wl` for scientific artifacts where possible; Python passes their paths without
 reading their contents.
+
+The request's `step` selects an implementation from
+[`components/default.json`](components/default.json), optionally overridden by a
+user component package. `--method` selects a named implementation of a step, such
+as `SEARCH_CORE/libra`. See [component packages](docs/components.md) for package
+layout and command resolution. The built-in `.wls` files also accept the same
+input/output pair directly.
 
 ## Common input
 
@@ -39,6 +45,22 @@ See the [agent guide](docs/agent-workflow.md) for input preparation and the
 
 For global steps, `sector` is `null`.
 
+### Wolfram artifact symbol contexts
+
+The common artifact reader interprets unqualified non-System symbols in
+``CANON`DEData` `` with only ``System` `` on the context path. This applies uniformly
+to integral heads, dimension and regulator symbols, kinematic variables, and
+Association keys. Explicitly qualified symbols retain their declared contexts;
+symbols from different contexts are never identified by name. Direct data-file
+consumers can use ``CanonMethodCard`ReadWLData[path]`` for the same interpretation.
+Prepared derivative files and unqualified names in `operator_source_symbol_map`
+use this data context too; explicitly qualified map names remain exact.
+
+`WriteWLArtifact` serializes under the same fixed data context, independently of
+the caller's context path. Canonical data symbols may be unqualified on disk;
+other contexts remain explicit so a write/read round trip preserves them.
+These routines load data, not Wolfram package definitions.
+
 ## Common output
 
 ```json
@@ -59,24 +81,39 @@ For global steps, `sector` is `null`.
 ```
 
 `status` follows the single typed method-card protocol and is one of `ERROR`,
-`INCONCLUSIVE`, `PROVISIONAL`, `FAIL`, or `PASS`. Providers may emit only codes
+`INCONCLUSIVE`, `PROVISIONAL`, `FAIL`, or `PASS`. Candidate providers may emit only codes
 allowed by their cards within the first three categories; they cannot emit `PASS`
 or `FAIL`. Independent checkers retain final `PASS`/`FAIL` authority. Artifact
 paths are relative to the directory containing `result.json` and are resolved by
 the method-card caller. `statemng` neither parses scientific `result.json` files
 nor automatically advances the scientific stage graph based on their codes.
+Read `status` and `code` even when the process exits zero: a structured scientific
+failure may be returned normally. A nonzero exit is an operational failure and
+cannot establish scientific completion from a saved `PASS` alone; preserve any
+more specific failure result for diagnosis.
 
 ## Skills, payloads, and outputs by step
 
-| step | SKILL | script | payload keys | artifact keys |
+The table describes the built-in scientific contracts. A package replacing
+several connected steps may document a distinct internal intake schema; artifacts
+returned to built-in consumers must satisfy the corresponding contracts below.
+See [component composition](docs/components.md#composition-and-handoff).
+
+| step | SKILL | default script | payload keys | artifact keys |
 |---|---|---|---|---|
+| `PREPARE_REQUEST` | `canon-prepare-request` | `prepare_request.py` | `template` (JSON descriptor) | `request` |
 | `PREPARE` | `canon-prepare-family` | `mma/PrepareFamily.wls` | `family_spec` | `prepared_family` |
 | `PROPOSE_INTEGRAL_CANDIDATES` | `canon-dlogbasis-integral-candidates` | `methods/dlogbasis/run.wls` | `family_identity`, `sector_identity`, `prepared_family`, `dimension_policy`, `numerator_or_power_counting_policy`, `candidate_budget`, `candidate_unit`, `normalization_policy`, `method_options` | `integral_candidates` |
 | `DISCOVER` | `canon-discover-sectors` | `mma/DiscoverSectors.wls` | `prepared_family` | `sector_manifest`, `master_basis` |
-| `BUILD_CUT_DE` | `canon-build-cut-de` | `mma/BuildSectorCutDE.wls` | `prepared_family`, `master_basis`, `sector_manifest`, `ibp_reduction` | `sector_basis`, `sector_cut_de`, `ordered_master_de` |
+| `PREPARE_DERIVATIVES` | `canon-prepare-derivatives` | `mma/PrepareDerivatives.wls` | `family_data` | `prepared_derivatives` |
+| `PREPARE_REDUCTION_TARGETS` | `canon-prepare-reduction-targets` | `mma/PrepareReductionTargets.wls` | `prepared_family`, `master_basis`; optional `prepared_derivatives` | `reduction_targets` |
+| `REDUCE_IBP` | `canon-reduce-ibp` | `mma/ReduceIBP.wls` | Legacy `reduction`, or `backend` config; optional `reduction_targets` and `master_basis` | `ibp_reduction` |
+| `REDUCE_CANDIDATE_IBP` | `canon-reduce-ibp` | `mma/ReduceCandidateIBP.wls` | `integral_candidates`, `prepared_family`, `master_basis`, `prepared_derivatives`; existing `ibp_reduction`, or selected `backend` plus required neutral descriptors, or legacy `reduction` | `candidate_ibp_bridge`, `reduction_targets` |
+| `BUILD_CUT_DE` | `canon-build-cut-de` | `mma/BuildSectorCutDE.wls` | `prepared_family`, `master_basis`, `sector_manifest`, `ibp_reduction`; optional `prepared_derivatives` | `sector_basis`, `sector_cut_de`, `ordered_master_de` |
 | `SLICE_CUT_DE` | `canon-build-cut-de` | `mma/SliceSectorCutDE.wls` | `ordered_master_de`, `sector_manifest` | `sector_basis`, `sector_cut_de` |
 | `ROUTE_CORE_CANDIDATES` | `canon-search-core` | `mma/RouteCoreCandidates.wls` | `prepared_family`, `sector_basis`, `sector_cut_de`, `candidate_ibp_bridge` | `core_candidates` |
-| `SEARCH_CORE` | `canon-search-core` | `methods/*/run.wls` | `prepared_family`, `sector_basis`, `sector_cut_de`, `method_options` | `core_candidates` |
+| `SEARCH_CORE` | `canon-search-core` | `methods/*/run.wls` | `sector_basis`, `sector_cut_de`; provider-specific `method_options` (see selected card) | `core_candidates` |
+| `DIAGNOSE_CORE` | `canon-residue-balance-core` | `methods/residue-balance/run.wls` | `sector_basis`, `sector_cut_de`; optional `method_options` | `core_diagnosis` |
 | `CHECK_CORE` | `canon-check-core` | `mma/CheckSectorCore.wls` | `sector_basis`, `sector_cut_de`, `core_candidates` | `core_transform` |
 | `BUILD_FULL_DE` | `canon-build-full-de` | `mma/BuildFullSectorDE.wls` | `ordered_master_de`, `sector_cut_de`, `core_candidates`, `core_transform`, `declared_alphabet`, `accepted_prefix` | `full_sector_de` |
 | `SOLVE_TAIL` | `canon-solve-tail` | `mma/SolveTail.wls` | `full_sector_de`, `core_transform`, `method_options` | `sector_transform` |
@@ -92,6 +129,28 @@ Historical steps that remain unimplemented must not be treated as complete merel
 because the table contains placeholder interfaces for them.
 
 For the first sector, `accepted_prefix` or `previous_accepted_prefix` is `null`.
+
+`PREPARE_REQUEST` accepts a normal request template whose payload can contain
+`{"from_result":"../producer/result.json","artifact":"master_basis"}`.
+It copies the named descriptor from a PASS or PROVISIONAL result and rebases its
+path into the generated request. Literal artifact paths resolve from the template;
+backend settings remain in their own referenced file. It returns
+`PASS/REQUEST_READY`, without executing or checking the target scientific step.
+See [request binding](skills/canon-prepare-request/SKILL.md).
+
+`PREPARE_DERIVATIVES` returns `PASS/PHYSICAL_DERIVATIVES_READY` with standard
+v2 affine records generated from routing and the physical external Gram chain
+rule. The parameterization component's PREPARE calls the same core automatically.
+Agents supply family definitions, not derivative records. See
+[physical derivatives](docs/physical-derivatives.md) for conventions and scope.
+
+`PREPARE_REDUCTION_TARGETS` returns `PASS/REDUCTION_TARGETS_READY` with a
+`canon-neu/reduction-targets/v1` artifact containing `family_ref`, `basis_ref`,
+the ordered derivative-target union, source `masters`, and symbolic `point: {}`
+(WL empty list). It accepts the same affine derivatives as `BUILD_CUT_DE`.
+For both steps, an explicit `prepared_derivatives` descriptor resolves from the
+request; otherwise the source resolves from `prepared_family`. Point/frame
+preparation retains the optional package's `PREPARE_POINT` interface.
 
 `DISCOVER/PASS` must also provide:
 
@@ -127,6 +186,11 @@ actual entry file's SHA-256 is always recorded.
 After IBP, `ROUTE_CORE_CANDIDATES` selects an independent row basis and single-row
 exchanges using the current sector's actual master rank, returning
 `PROVISIONAL/CORE_CANDIDATES_ROUTED`. It does not enumerate every subset of that rank.
+The sector basis must match the cut basis and occur in the bridge's source
+masters with identical symbols. Declared bridge/family variables and the family
+regulator must agree with the cut. A mismatch returns
+`ERROR/SOURCE_BASIS_MISMATCH` before row routing. A compatible but rank-deficient
+candidate pool still returns a valid empty routed pool.
 
 `SEARCH_CORE` is a provider step and does not use the authoritative `PASS`/`FAIL`
 statuses below. It emits `PROVISIONAL/CANDIDATE_TRANSFORMATION` when candidates
@@ -135,10 +199,25 @@ when the scope or method has not been established, and a specific `ERROR/*` for
 input or tool failures. Other method-card providers follow the same single typed
 protocol in `methods/README.md`.
 
+`DIAGNOSE_CORE` returns `PROVISIONAL/CORE_DIAGNOSIS` with a
+`canon-neu/core-diagnosis/v1` WL artifact: exact input identities, original
+variables/regulator, active variable, scale rows, finite poles, Fuchsian status
+when needed, epsilon-zero regularity, permitted transformation class and bounds.
+Its structural applicability does not guarantee candidate construction.
+`nonexistence_proved` is always false. Unsupported inputs return
+`INCONCLUSIVE/OUT_OF_SCOPE`; a bounded construction failure returns
+`INCONCLUSIVE/METHOD_EXHAUSTED`. Both retain a `method_limit` artifact naming the
+reason/stage; malformed inputs return `ERROR/*`. No diagnostic claims PASS.
+The [residue-balance card](methods/residue-balance/SKILL.md) defines the rational
+gauge domain and exact reference-pair encoding. Its `SEARCH_CORE` output uses
+the ordinary candidate contract and independent CHECK_CORE gate.
+
 | step | PASS | Failed or unsolved |
 |---|---|---|
 | `PREPARE` | `OK` | None |
 | `DISCOVER` | `SECTORS_READY` | None |
+| `REDUCE_IBP` | `IBP_REDUCED` | `ERROR/REDUCTION_FAILED` |
+| `REDUCE_CANDIDATE_IBP` | `CANDIDATES_REDUCED` | `ERROR/REDUCTION_FAILED`, or the reducer's unsolved result |
 | `BUILD_CUT_DE` | `OK` | None |
 | `CHECK_CORE` | `CORE_PASS` | `CORE_FAIL` |
 | `BUILD_FULL_DE` | `OK` | None |
@@ -214,7 +293,136 @@ does not define persistent research state or agent delegation. The `statemng`
 rules in the root `AGENTS.md` and `README.md` define the sole current state
 authority and handoff protocol. This interface does not create another state machine.
 
-## Direct IBP/DE interfaces
+## Optional component routes
+
+The default table above is unchanged. An explicitly selected manifest can expose
+additional steps and a relative `workflow` instruction file. Compose manifests
+with repeated `--components`, relative `extends`, or per-step `from` references;
+`--describe` records the
+resolved selection and instructions. These optional contracts do not convert
+sampled evidence into the default exact-global-gauge acceptance scope.
+
+| Package | Steps | Handoff |
+|---|---|---|
+| `parameterization` | `PREPARE` | Symbolic neutral family, reducer-family export view and prepared metadata; no native reducer project |
+| `reducers/kira` | `DISCOVER`, `REDUCE_IBP` | Kira-owned project generation/execution/import, standard masters/sectors/rules |
+| `reducers/blade`, `reducers/fire7`, `reducers/neatibp` | `DISCOVER`, `REDUCE_IBP`, `BUILD_CUT_DE` within the configured adapter capability | Declared native execution or saved-output import and normalization; solver/export requirements remain explicit |
+| `point-de` | `PREPARE_POINT`, `BUILD_POINT_DE`, `COLLECT_DE_SAMPLES` | Prepared derivatives/targets, a full point connection and a sample-set index |
+| `dlog-reconstruction` | `RECONSTRUCT_DLOG`, `PROPOSE_LETTERS`, `CHECK_RECONSTRUCTION` | Provisional constant residues and raw analytic letters; separate finite-sample verification |
+| `local-jobs` | `SUBMIT_JOB`, `COLLECT_JOB`, `CANCEL_JOB`, `WATCH_COMPLETION`, `CANCEL_WATCH` | Operational job/watch handles, terminal checkpoints and callback events |
+
+See each package's instructions under [components](docs/components.md) for
+payloads, arithmetic options and method limits. Removing a package from the
+selection removes its additional steps; no optional implementation is loaded
+by default.
+
+### Parameterization and backend interchange
+
+Parameterization is selected independently of discovery, reduction and DE
+construction. `family_data` is a WL `canon-neu/parameterized-family/v1` artifact:
+scientific identities, canonical `integral_head`, ordered variables and slots,
+dimension/regulator, symbolic routing and chart data. `reducer_family` is a JSON
+`canon-neu/reducer-family/v1` export view. It contains loop/external momentum
+names, propagator momentum and squared-mass expression strings, scalar products,
+explicit remaining invariants and mass dimensions, and any exact point rules.
+Its reference to the symbolic family is relative to the export file. A vector
+chart is one possible input representation; a scalar-product chart does not
+require external four-vectors. Twistor coordinates have no special backend role.
+
+`prepared_family` keeps the standard metadata and relative scientific input
+references. Available ordered masters and derivatives can be bound; an absent
+input remains absent and must be produced before invoking a consumer that needs
+it. Provider-specific data such as a DlogBasis `Family` still follow that
+provider's documented contract. Default typed preparation accepts optional
+legacy Kira provenance but does not require it.
+
+Each backend consumes `payload.backend`, a JSON config descriptor. Its native
+options and paths are defined by that adapter and resolved from that config
+file. The scientific family producer does not store executables, native jobs or
+backend choice. The legacy default reducer also accepts the existing inline
+`reduction` object; a descriptor with `payload_key: "reduction"` can refer to
+that object in its original request without changing its path base.
+
+The shared WL target artifact is `canon-neu/reduction-targets/v1`, containing
+`family_ref`, `basis_ref`, ordered `targets`, preferred `masters`, and optionally
+the exact point. The candidate bridge writes this artifact, forwards public
+descriptors and invokes the selected `REDUCE_IBP`. Native project copying,
+target syntax and export conversion belong entirely to that adapter.
+
+Discovery returns standard `master_basis` and `sector_manifest`. The public
+``CanonMethodCard`FormatMasterArtifacts[prepared, masters, sourceHash]`` helper
+groups sectors in their existing order and preserves source order inside each
+sector. It uses the explicit canonical `integral_head` when present; a native
+program's family identifier is a separate adapter mapping.
+Neutral expression consumers and native importers interpret unqualified heads
+and coordinates in the common ``CANON`DEData` `` context. The legacy default
+discovery step still parses master text in ``Global` `` when `integral_head` is
+declared; without it the reader uses ``CANON`DEData` ``. Use qualified WL names
+in declarations and supplied expressions when an explicit context is required;
+data readers preserve those names.
+
+Reduction returns fully reduced `masters`/`rules`. When the consumer supplies a
+source basis, reordered identical masters can be aligned, but a different basis
+needs an explicit conversion. Unreduced target integrals, changed source basis
+or equations without solved rules cannot count as completed reduction.
+
+The generic `BUILD_CUT_DE` needs only prepared derivatives and full symbolic normalized rules,
+independently of their reducer. Alternatively, a native DE adapter returns the
+same complete `ordered_master_de`, `sector_basis` and `sector_cut_de` artifacts.
+Keep all directions and the declared exact coefficient domain; finite-field
+samples cannot be presented as a symbolic DE. Later independent scientific gates
+retain their existing acceptance role.
+Use fixed-point reductions with `BUILD_POINT_DE` and their explicit kinematics
+binding; a constant coefficient at one point does not establish a symbolic rule.
+
+### Point-DE and reconstruction handoff
+
+A WL `canon-neu/de-sample/v1` Association contains `family_id`, `basis_id`,
+`chart_id`, `frame_id`, an explicit `scope` Association, ordered `variables`,
+`regulator`, exact `point` rules, and all directional `matrices`. Variables may
+be indexed symbols such as `x[1]`. Matrices still include the regulator. The
+convention is `D[basis, variables[[i]]] = matrices[[i]] . basis`. Root signs,
+permutations and normalization belong to the declared basis/frame.
+
+Point construction differentiates before specializing kinematics and includes
+the derivative of a nonconstant frame: for `Jnew = R Jold`,
+`Anew = (D[R] + R Aold) Inverse[R]`. Reduced targets must include candidate
+projections, candidate derivatives and ordered-master derivatives. A point
+reduction must identify that same point; globally symbolic rules are explicitly
+declared separately. Discovery's initiate-only job is not a DE reduction job.
+
+A WL `canon-neu/de-sample-set/v1` Association carries the shared identity,
+scope, variable, regulator and convention fields plus `training`, `validation`
+and optional `blind` lists. Each entry has an `id` and a `path` relative to this
+index. Roles are disjoint, and different file names do not make the same
+kinematic point independent. The index references samples without copying their
+matrices.
+
+`RECONSTRUCT_DLOG` reads training data and raw analytic letter definitions. Its
+provisional artifact retains rational constant residues, explicit expressions,
+arithmetic settings and source bindings. `CHECK_RECONSTRUCTION` independently
+differentiates the original letters and checks the complete matrices in all
+directions against original samples, including validation data. Its scoped
+`PASS/RECONSTRUCTION_VALIDATED` is not `PASS/ALL_PASS`, an all-kinematics gauge
+proof, a UT proof or an alphabet-completeness claim. Rank insufficiency and an
+unrepresented residual return to the package's sampling/letter route.
+
+### Detached execution handoff
+
+`SUBMIT_JOB` returns `PROVISIONAL/JOB_SUBMITTED` and an immutable handle; the child
+later writes the scientific step's own `result.json`. Collection references that
+result without launching the calculation again. A valid zero-exit call can
+contain a scientific `FAIL` or `INCONCLUSIVE`; the scientific result is preserved
+and routed by its own code. Operational completion never grants acceptance.
+
+Terminal checkpoints and completion events carry job/run identity. Watchers run
+only declared checks and callbacks and keep a durable event/delivery record.
+An acknowledged callback proves delivery only; it does not prove a model turn
+executed or a scientific result passed. A coordinator may resume a deferred
+worker with its existing run ID; only the normal state MCP review/acceptance
+operations change the research task's status.
+
+## Scientific input and library contracts
 
 The following programs handle only mathematical inputs and ordinary files. The
 calling agent runs them in its assigned workspace and registers results to retain
@@ -242,11 +450,12 @@ each sector.
 
 ```wl
 Get[FileNameJoin[{repoRoot, "mma", "lib", "BaikovDerivative.wl"}]];
-choice = ChooseDerivativeOperator[prepared, variable];
+choice = ChooseDerivativeOperator[prepared, variable]; (* default enhanced-first *)
+affine = ChooseDerivativeOperator[prepared, variable, "prepared-affine"];
 ```
 
-`prepared` supplies both an affine denominator operator and bounded
-enhanced-Baikov membership data. These are inputs to candidate derivative
+`prepared` supplies an affine denominator operator and, for the default
+`"enhanced-first"` selection, bounded enhanced-Baikov membership data. These are inputs to candidate derivative
 compilation, not inputs to `methods/dlogbasis/run.wls`.
 
 The `operators` Association maps each declared variable to one record per
@@ -270,9 +479,10 @@ The `exact_strategy` Association supplies:
 
 To prepare the polynomial, solve the propagator/ISP definitions for the
 loop-dependent scalar products, substitute them into that Gram determinant,
-and apply the declared kinematic/fixed-scale rules consistently. Both selector
-branches require these family-derived Gram expressions and a nonnegative search
-degree. The bounded membership calculation determines which branch applies.
+and apply the declared kinematic/fixed-scale rules consistently. The default
+`"enhanced-first"` selection requires these family-derived Gram expressions and
+a nonnegative search degree. Its bounded membership calculation determines
+whether to return an enhanced operator or the affine fallback.
 
 An exact zero-growth solution returns:
 
@@ -286,7 +496,21 @@ Finding no solution within the declared degree is not an error; it returns:
 <|"kind" -> "affine-fallback", "operator" -> prepared["operators", variable]|>
 ```
 
-A missing or malformed `exact_strategy` returns a preparation failure; a valid
+An explicit `"prepared-affine"` selection returns the supplied affine records
+without calling the enhanced search:
+
+```wl
+<|"kind" -> "prepared-affine", "operator" -> prepared["operators", variable],
+  "enhanced_search_attempted" -> False|>
+```
+
+The selector needs only the requested affine operator for this mode. Candidate
+compilation also requires `exact_strategy.propagator_slots` for target metadata;
+it does not consume or validate the unused enhanced-search polynomial, Gram,
+or search-degree fields. This choice is not a failed or exhausted enhanced
+search. An unknown selection returns `DERIVATIVE_OPERATOR_INVALID`.
+
+For the default selection, a missing or malformed `exact_strategy` returns a preparation failure; a valid
 bounded search with no enhanced solution returns `affine-fallback`. For a
 preparation failure, retain the integral candidates, supply the required fields
 and resume their bridge.
@@ -298,10 +522,40 @@ supplied by collaborators.
 ### Candidate derivatives and IBP bridge
 
 ```text
-wolframscript -file mma/ReduceCandidateIBP.wls \
-  INTEGRAL-CANDIDATES.wl PREPARED-FAMILY.wl MASTER-BASIS.wl \
-  PREPARED-DERIVATIVES.wl REQUEST.json RESULT.wl
+python3 run_step.py INPUT.json OUTPUT_DIR
 ```
+
+Set `step` to `REDUCE_CANDIDATE_IBP`. Its payload contains four WL descriptors:
+`integral_candidates`, `prepared_family`, `master_basis`, and
+`prepared_derivatives`, plus the selected reducer configuration or an existing
+`ibp_reduction` descriptor as described below.
+The optional `payload.derivative_operator_selection` is `"enhanced-first"`
+(the default) or `"prepared-affine"`. It applies to all declared variables and is
+recorded through the existing per-variable `operators` evidence. The WL compiler
+accepts the same selection as its optional fifth argument. A selector preparation
+failure, including an unknown selection or missing requested operator, returns
+`ERROR/DERIVATIVE_OPERATOR_INVALID` before targets or a nested reducer request
+are written.
+The result exposes `candidate_ibp_bridge` in the common artifact map.
+The default bridge calls `REDUCE_IBP` through the selected component package.
+
+An optional `payload.ibp_reduction: {"path": "rules.wl"}` explicitly selects reuse
+of an already normalized symbolic reduction. No backend configuration is needed
+and no reducer is launched. The bridge still compiles and publishes the current
+targets first. The supplied WL Association must contain `masters` in exactly the
+declared source order and distinct explicit integral `rules`. Optional
+`family_ref` and `basis_ref` must match when present. One rule substitution must
+leave source masters unchanged and reduce every compiled non-master target to a
+linear combination of those masters. Identity rules for masters are unnecessary;
+rules requiring recursive back-substitution are not normalized inputs.
+
+Incomplete closure returns `INCONCLUSIVE/INCOMPLETE_REDUCTION`, with
+`unresolved_targets` and `target_images` as readable WL strings. Invalid rules or
+incompatible identities/order return an explicit `ERROR`. Reuse failures retain
+`reduction_targets`, produce no passing bridge, and never launch a fallback
+reducer. Successful reuse returns the same `CANDIDATES_REDUCED` bridge/target
+artifacts. These checks establish closure relative to the supplied rules; their
+IBP truth and symbolic scope remain the caller's pinned scientific inputs.
 
 Input candidates are the linear combinations of `j[family,a1,...,an]` supplied by
 the DlogBasis-refine adapter. The bridge maps them to the declared Kira topology
@@ -399,10 +653,11 @@ is constructed.
 ### IBP reduction
 
 ```text
-wolframscript -file mma/ReduceIBP.wls REQUEST.json RESULT.wl
+python3 run_step.py INPUT.json OUTPUT_DIR
 ```
 
-The request must have exactly seven fields:
+Set `step` to `REDUCE_IBP`. The default Kira component reads the following seven
+fields from `payload.reduction` (also used by `REDUCE_CANDIDATE_IBP`):
 
 | field | meaning |
 |---|---|
@@ -417,7 +672,7 @@ The request must have exactly seven fields:
 `project`, `output`, and an `executable` containing a path separator are resolved
 relative to the request JSON directory. An `executable` supplied as a command name
 alone is found on PATH. `jobs` and `targets` are relative to the Kira project.
-The candidate IBP bridge uses the same rules; the result file path on the command
+The candidate IBP bridge uses the same rules; the output directory on the command
 line remains relative to the caller's working directory.
 
 See `interfaces/ibp-request.example.json` for an example. The adapter trusts the
@@ -426,15 +681,16 @@ argv jobs in order, and directly reads ordered `masters.final` and exported rule
 The caller's positive scientific tests check exact target coverage, master order,
 and RHS closure.
 
-The successful result contains only:
+On success, `result.json` reports `PASS/IBP_REDUCED` and an `ibp_reduction`
+descriptor. The referenced WL artifact contains only:
 
 ```wl
 <|"masters" -> orderedMasters, "rules" -> fullyReducedRules|>
 ```
 
-The adapter does not probe versions, compute hashes, save logs/provenance/sector
-manifests, or change research state. Master order preserves Kira's `masters.final`
-unchanged.
+The adapter preserves Kira's `masters.final` order. It performs no additional
+mathematical checks. The old positional IBP invocations are superseded by the
+common envelope; the scientific WL contents remain the same.
 
 ### Differential equation construction
 

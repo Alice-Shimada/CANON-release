@@ -1,0 +1,16 @@
+{
+  "schema": "canon-neu/script-input/v1",
+  "task_id": "SCALAR-discover",
+  "step": "DISCOVER",
+  "sector": null,
+  "payload": {
+    "reducer_family": {
+      "from_result": "../outputs/prepare/result.json",
+      "artifact": "reducer_family"
+    },
+    "backend": {
+      "type": "json",
+      "path": "../runtime/kira-backend.json"
+    }
+  }
+}

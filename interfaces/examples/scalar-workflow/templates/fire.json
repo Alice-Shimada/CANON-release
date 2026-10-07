@@ -1,0 +1,24 @@
+{
+  "schema": "canon-neu/script-input/v1",
+  "task_id": "SCALAR-fire",
+  "step": "REDUCE_IBP",
+  "sector": null,
+  "payload": {
+    "reducer_family": {
+      "from_result": "../outputs/prepare/result.json",
+      "artifact": "reducer_family"
+    },
+    "master_basis": {
+      "from_result": "../outputs/discover/result.json",
+      "artifact": "master_basis"
+    },
+    "reduction_targets": {
+      "from_result": "../outputs/targets/result.json",
+      "artifact": "reduction_targets"
+    },
+    "backend": {
+      "type": "json",
+      "path": "../backends/fire.json"
+    }
+  }
+}

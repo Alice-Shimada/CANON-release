@@ -11,9 +11,14 @@ preparedFamily = CanonMethodCard`LoadArtifact[task, inputPath, "prepared_family"
 sectorBasis = CanonMethodCard`LoadArtifact[task, inputPath, "sector_basis"];
 cut = CanonMethodCard`LoadArtifact[task, inputPath, "sector_cut_de"];
 bridge = CanonMethodCard`LoadArtifact[task, inputPath, "candidate_ibp_bridge"];
+invalid = SelectFirst[{preparedFamily, sectorBasis, cut, bridge}, FailureQ, None];
+If[FailureQ[invalid],
+  CanonMethodCard`WriteResult[task, outputDir, "ERROR", invalid[[1]], <||>, invalid[[2]]]; Exit[1]];
 
 result = CANON`CandidateIBPBridge`BuildCoreCandidates[
   bridge, preparedFamily, sectorBasis, cut];
+If[FailureQ[result],
+  CanonMethodCard`WriteResult[task, outputDir, "ERROR", result[[1]], <||>, result[[2]]]; Exit[1]];
 artifactPath = CanonMethodCard`WriteWLArtifact[result, outputDir, "core-candidates.wl"];
 CanonMethodCard`WriteResult[
   task, outputDir, "PROVISIONAL", "CORE_CANDIDATES_ROUTED",

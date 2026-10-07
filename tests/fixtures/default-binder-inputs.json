@@ -1,0 +1,18 @@
+{
+  "family_data": {
+    "path": "../../components/parameterization/examples/scalar-spec.wl",
+    "sha256": "de03d894f33456d24022ed31181c60f81aead4dc13d9743aaf235caf888d5f30"
+  },
+  "prepared_derivatives": {
+    "path": "../../components/parameterization/examples/scalar-derivatives.wl",
+    "sha256": "7c1dba93b3758334afe0bd346224980377355b9780646db9c3ffa619910ef99f"
+  },
+  "ordered_masters": {
+    "path": "../../components/parameterization/examples/scalar-masters",
+    "sha256": "e6c5a3ba557022e1e41975225312566962e0cd5a561cf83e64c8674f6ee70319"
+  },
+  "ibp_reduction": {
+    "path": "default-binder-reduction.wl",
+    "sha256": "cf75e07589b3e13f9ccc869d1800b96fd25687ab0f7a27bca54fadcb27deb861"
+  }
+}

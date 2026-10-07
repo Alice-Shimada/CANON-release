@@ -1,0 +1,12 @@
+{
+  "schema": "canon-neu/script-input/v1",
+  "task_id": "SCALAR-prepare",
+  "step": "PREPARE",
+  "sector": null,
+  "payload": {
+    "family_spec": {
+      "type": "mathematica-expression",
+      "path": "../../../../components/parameterization/examples/scalar-spec.wl"
+    }
+  }
+}

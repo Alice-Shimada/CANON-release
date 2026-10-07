@@ -1,0 +1,51 @@
+{
+  "schema": "canon-neu/components/v1",
+  "workflow": "WORKFLOW.md",
+  "steps": {
+    "DISCOVER": {
+      "command": [
+        "{python}",
+        "{package}/run.py",
+        "{canon}",
+        "{wolframscript}"
+      ],
+      "instructions": "README.md",
+      "interface": {
+        "inputs": [
+          "reducer_family",
+          "backend"
+        ],
+        "outputs": [
+          "master_basis",
+          "sector_manifest",
+          "reduction_kinematics"
+        ],
+        "scope": "Native master initiation within the declared point and seed."
+      }
+    },
+    "REDUCE_IBP": {
+      "command": [
+        "{python}",
+        "{package}/run.py",
+        "{canon}",
+        "{wolframscript}"
+      ],
+      "instructions": "README.md",
+      "interface": {
+        "inputs": [
+          "reducer_family",
+          "backend",
+          "reduction_targets"
+        ],
+        "optional_inputs": [
+          "master_basis"
+        ],
+        "outputs": [
+          "ibp_reduction",
+          "reduction_kinematics"
+        ],
+        "scope": "Declared target coverage in the requested source basis."
+      }
+    }
+  }
+}

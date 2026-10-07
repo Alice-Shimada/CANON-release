@@ -60,7 +60,7 @@ multivariable dlog decomposition checks.
 ## Inputs, invocation, and dependent rows
 
 From `project_root`, run
-`wolframscript -file methods/libra/run.wls INPUT.json OUTPUT_DIR`
+`python3 run_step.py INPUT.json OUTPUT_DIR --method libra`
 with standard `SEARCH_CORE` input,
 `sector_basis`, `sector_cut_de`, and an available Wolfram kernel.
 Supply `method_options.package_entry`, relative

@@ -13,7 +13,9 @@ zero = Map[Factor, matrices /. regulator -> 0, {3}];
 weights = -Diagonal[Map[Together, Total[MapThread[Times, {variables, zero}]], {2}]];
 exhausted[] := (CanonMethodCard`WriteProviderResult[task, outputDir,
   "INCONCLUSIVE", "METHOD_EXHAUSTED", <||>,
-  <|"method_id" -> "epsilon-zero-polynomial", "reason" -> "bounded horizontal ansatz exhausted"|>]; Quit[0]);
+  <|"method_id" -> "epsilon-zero-polynomial", "reason" -> "bounded horizontal ansatz exhausted",
+    "nonexistence_proved" -> False, "epsilon_singular_completion_max_dimension" -> 2,
+    "next_diagnostic" -> "DIAGNOSE_CORE"|>]; Quit[0]);
 
 trace = ({{regulator Tr[#]}} &) /@ zero;
 traceAlphabet = CanonMethodCard`DLogAlphabet[trace, variables, regulator];

@@ -1,0 +1,8 @@
+{
+  "schema": "canon-neu/components/v1",
+  "steps": {
+    "REDUCE_IBP": {
+      "from": "../../../../components/reducers/neatibp/components.json"
+    }
+  }
+}

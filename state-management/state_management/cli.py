@@ -124,9 +124,12 @@ def validate_task_name(task_name: str) -> None:
         raise StateError("invalid task name")
 
 
-def state_root_from(start: Path, *, required: bool) -> Path | None:
-    current = start.resolve()
-    for directory in (current, *current.parents):
+def state_root_from(
+    start: Path, *, required: bool, project_root: Path | None = None
+) -> Path | None:
+    current = (start if project_root is None else project_root).resolve()
+    directories = (current, *current.parents) if project_root is None else (current,)
+    for directory in directories:
         candidate = directory / ".state-management"
         if candidate.is_symlink():
             raise StateError(".state-management must not be a symbolic link")
@@ -139,11 +142,13 @@ def state_root_from(start: Path, *, required: bool) -> Path | None:
     return None
 
 
-def resolve_task_root(task_name: str | None) -> tuple[str, Path, Path]:
+def resolve_task_root(
+    task_name: str | None, project_root: Path | None = None
+) -> tuple[str, Path, Path]:
     if task_name is None:
         raise StateError("TASK_NAME_REQUIRED")
     validate_task_name(task_name)
-    state_root = state_root_from(Path.cwd(), required=True)
+    state_root = state_root_from(Path.cwd(), required=True, project_root=project_root)
     assert state_root is not None
     task_root = state_root / task_name
     if task_root.is_symlink() or not task_root.is_dir():
@@ -554,7 +559,7 @@ def command_init(args: argparse.Namespace) -> dict[str, Any]:
         goal_path = Path.cwd() / goal_path
     goal = read_utf8_file(goal_path, "goal")
 
-    project_root = Path.cwd().resolve()
+    project_root = (args.project_root or Path.cwd()).resolve()
     state_root = project_root / ".state-management"
     if state_root.is_symlink():
         raise StateError(".state-management must not be a symbolic link")
@@ -585,8 +590,8 @@ def command_init(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-def command_project_list(_args: argparse.Namespace) -> dict[str, Any]:
-    state_root = state_root_from(Path.cwd(), required=False)
+def command_project_list(args: argparse.Namespace) -> dict[str, Any]:
+    state_root = state_root_from(Path.cwd(), required=False, project_root=args.project_root)
     if state_root is None:
         return {"ok": True, "task_names": []}
     task_names = sorted(
@@ -598,7 +603,7 @@ def command_project_list(_args: argparse.Namespace) -> dict[str, Any]:
 
 
 def command_project_resume(args: argparse.Namespace) -> dict[str, Any]:
-    task_name, task_root, _ = resolve_task_root(args.task_name)
+    task_name, task_root, _ = resolve_task_root(args.task_name, args.project_root)
     meta = load_json(task_root / "meta.json")
     if meta.get("schema_version") != SCHEMA_VERSION:
         raise StateError("incompatible schema version", task_name)
@@ -615,7 +620,7 @@ def command_project_resume(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def command_task_create(args: argparse.Namespace) -> dict[str, Any]:
-    task_name, task_root, _ = resolve_task_root(args.task_name)
+    task_name, task_root, _ = resolve_task_root(args.task_name, args.project_root)
     if not isinstance(args.title, str) or not args.title.strip():
         raise StateError("title must be a non-empty string", task_name)
     description_path = Path(args.description_file)
@@ -671,7 +676,7 @@ def command_task_create(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def command_task_ready(args: argparse.Namespace) -> dict[str, Any]:
-    task_name, task_root, _ = resolve_task_root(args.task_name)
+    task_name, task_root, _ = resolve_task_root(args.task_name, args.project_root)
     tasks = [
         {"task_id": task["task_id"], "title": task["title"]}
         for task in all_tasks(task_root)
@@ -681,7 +686,7 @@ def command_task_ready(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def command_task_claim(args: argparse.Namespace) -> dict[str, Any]:
-    task_name, task_root, _ = resolve_task_root(args.task_name)
+    task_name, task_root, _ = resolve_task_root(args.task_name, args.project_root)
     with task_lock(task_root, args.task_id):
         task = get_task(task_root, args.task_id)
         if task.get("status") != "ready":
@@ -735,7 +740,7 @@ def require_current_run(
 
 
 def command_task_show(args: argparse.Namespace) -> dict[str, Any]:
-    task_name, task_root, _ = resolve_task_root(args.task_name)
+    task_name, task_root, _ = resolve_task_root(args.task_name, args.project_root)
     task, _ = require_current_run(
         task_root, args.task_id, args.run_id, {"running", "submitted", "completed"}
     )
@@ -771,7 +776,7 @@ def command_task_show(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def command_artifact_add(args: argparse.Namespace) -> dict[str, Any]:
-    task_name, task_root, _ = resolve_task_root(args.task_name)
+    task_name, task_root, _ = resolve_task_root(args.task_name, args.project_root)
     source = path_inside_task(args.path, task_root, "artifact")
     data = source.read_bytes()
     digest = hashlib.sha256(data).hexdigest()
@@ -832,7 +837,7 @@ def command_artifact_add(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def command_task_submit(args: argparse.Namespace) -> dict[str, Any]:
-    task_name, task_root, _ = resolve_task_root(args.task_name)
+    task_name, task_root, _ = resolve_task_root(args.task_name, args.project_root)
     summary_path = path_inside_task(args.summary_file, task_root, "summary")
     summary = read_utf8_file(summary_path, "summary")
     with task_lock(task_root, args.task_id):
@@ -860,7 +865,7 @@ def command_task_submit(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def command_task_accept(args: argparse.Namespace) -> dict[str, Any]:
-    task_name, task_root, _ = resolve_task_root(args.task_name)
+    task_name, task_root, _ = resolve_task_root(args.task_name, args.project_root)
     with task_lock(task_root, args.task_id):
         task = get_task(task_root, args.task_id)
         if task.get("status") == "completed" and task.get("accepted_run_id") == args.run_id:
@@ -911,7 +916,7 @@ def command_task_block(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def command_task_unblock(args: argparse.Namespace) -> dict[str, Any]:
-    task_name, task_root, _ = resolve_task_root(args.task_name)
+    task_name, task_root, _ = resolve_task_root(args.task_name, args.project_root)
     with task_lock(task_root, args.task_id):
         task, run = require_current_run(
             task_root, args.task_id, args.run_id, {"blocked"}
@@ -947,7 +952,7 @@ def command_task_fail(args: argparse.Namespace) -> dict[str, Any]:
 def finish_unsuccessful(
     args: argparse.Namespace, run_status: str, *, retryable: bool
 ) -> dict[str, Any]:
-    task_name, task_root, _ = resolve_task_root(args.task_name)
+    task_name, task_root, _ = resolve_task_root(args.task_name, args.project_root)
     reason_path = path_inside_task(args.reason_file, task_root, "reason")
     reason = read_utf8_file(reason_path, "reason")
     with task_lock(task_root, args.task_id):
@@ -974,13 +979,13 @@ def finish_unsuccessful(
 
 
 def command_task_status(args: argparse.Namespace) -> dict[str, Any]:
-    task_name, task_root, _ = resolve_task_root(args.task_name)
+    task_name, task_root, _ = resolve_task_root(args.task_name, args.project_root)
     task = get_task(task_root, args.task_id)
     return {"ok": True, "task_name": task_name, **compact_task(task)}
 
 
 def command_task_list(args: argparse.Namespace) -> dict[str, Any]:
-    task_name, task_root, _ = resolve_task_root(args.task_name)
+    task_name, task_root, _ = resolve_task_root(args.task_name, args.project_root)
     requested: set[str] | None = None
     if args.statuses:
         requested = {item.strip() for item in args.statuses.split(",")}
@@ -995,14 +1000,14 @@ def command_task_list(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def command_artifact_show(args: argparse.Namespace) -> dict[str, Any]:
-    task_name, task_root, _ = resolve_task_root(args.task_name)
+    task_name, task_root, _ = resolve_task_root(args.task_name, args.project_root)
     record = find_artifact(task_root, args.artifact_id)
     verify_artifact(task_root, record)
     return {"ok": True, "task_name": task_name, **record}
 
 
 def command_artifact_list(args: argparse.Namespace) -> dict[str, Any]:
-    task_name, task_root, _ = resolve_task_root(args.task_name)
+    task_name, task_root, _ = resolve_task_root(args.task_name, args.project_root)
     if args.task_id is not None and not TASK_ID_RE.fullmatch(args.task_id):
         raise StateError(f"invalid task ID: {args.task_id}", task_name)
     records = [
@@ -1062,7 +1067,7 @@ def dependency_issues(tasks: list[dict[str, Any]]) -> list[str]:
 
 
 def command_doctor(args: argparse.Namespace) -> dict[str, Any]:
-    task_name, task_root, _ = resolve_task_root(args.task_name)
+    task_name, task_root, _ = resolve_task_root(args.task_name, args.project_root)
     issues: list[str] = []
     try:
         meta = load_json(task_root / "meta.json")
@@ -1181,6 +1186,10 @@ def add_task_name(parser: argparse.ArgumentParser) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = JsonArgumentParser(prog="statemng")
+    parser.add_argument(
+        "--project-root", type=Path,
+        help="Use exactly this project's state directory instead of searching parents.",
+    )
     commands = parser.add_subparsers(dest="command", required=True)
 
     init = commands.add_parser("init")
