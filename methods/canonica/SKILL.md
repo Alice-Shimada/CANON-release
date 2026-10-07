@@ -9,8 +9,8 @@ description: Propose rational current-sector core transformations with CANONICA 
 
 - **Role / stage:** transformation provider, `SEARCH_CORE`.
 - **Activation:** a main direct-DE method selected under
-  [core selection](../../skills/canon-search-core/SKILL.md); a rational DE alone
-  does not authorize skipping the defined-family integral route.
+  [core selection](../../skills/canon-search-core/SKILL.md), justified by the
+  family geometry, available inputs and current evidence.
 - **Boundary:** read the ordered current-sector cut; propose its rational
   gauge transformation without changing `accepted_prefix`.
 - **Attempt:** one `RecursivelyTransformSectors` call with declared degree

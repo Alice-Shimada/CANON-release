@@ -157,7 +157,9 @@ class InitialInterfaceTest(unittest.TestCase):
                 receipt = self.legacy.run_root / f"receipt-{suffix}.wl"
                 path = json.dumps(str(receipt))
                 self.seed.algebra_assert(
-                    f'(Put[{expression},{path}];{{FileType[{path}]===File}})',
+                    f'(CanonMethodCard`WriteWLArtifact[{expression},'
+                    f'{json.dumps(str(receipt.parent))},{json.dumps(receipt.name)}];'
+                    f'{{FileType[{path}]===File}})',
                     files=(("original", evidence),))
                 checked = self.legacy.run_wls(core.ROOT / "mma/CheckUTEvidence.wls",
                     self.legacy.initial_checker_input(f"metadata-{suffix}", provider_id,

@@ -6,7 +6,7 @@ description: Produce a rational single-variable core transformation from explici
 # INITIAL seeded core
 
 - **Role / stage:** direct-DE transformation provider, `SEARCH_CORE`.
-- **Activation:** a core-selection direct-DE exception or explicit request, with
+- **Activation:** selected under [core selection](../../skills/canon-search-core/SKILL.md) or by explicit request, with
   one or a few already normalized UT seeds and a declared rational alphabet.
 - **Scope:** one variable, finite exact rational cut DE, independent selected
   seed projections and a full-rank derivative matrix for the stated allocation.
@@ -122,8 +122,7 @@ Unknown option keys return `ERROR/INVALID_OPTIONS`; there is no default thread
 count or hidden increase of bounds.
 
 ```bash
-"${CANON_WOLFRAM_KERNEL:-WolframKernel}" -noinit -noprompt -script \
-  methods/initial/run.wls INPUT.json NEW_OUTPUT_DIR
+python3 run_step.py INPUT.json NEW_OUTPUT_DIR --method initial
 ```
 
 The output must be new, its parent existing and writable, and outside component

@@ -26,7 +26,8 @@ python3 run_step.py INPUT.json OUTPUT_DIR --defaults
 ```
 
 The request's `step` selects the entry. `SEARCH_CORE` has several existing
-methods, selected explicitly with `--method canonica`, `libra` or `epsilon-zero`.
+methods, selected explicitly with `--method canonica`, `libra`, `initial`,
+`epsilon-zero` or `residue-balance`.
 There is no default search method or automatic fallback. A component package may
 also supply a single `SEARCH_CORE` entry, invoked without `--method`.
 

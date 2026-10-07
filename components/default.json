@@ -212,7 +212,14 @@
     },
     "SEARCH_CORE/initial": {
       "command": ["{wolframscript}", "-file", "{canon}/methods/initial/run.wls"],
-      "instructions": "../methods/initial/SKILL.md"
+      "instructions": "../methods/initial/SKILL.md",
+      "interface": {
+        "inputs": ["sector_basis", "sector_cut_de", "seed_request", "method_options"],
+        "alternatives": [["seed_rows"], ["candidate_ibp_bridge", "prepared_family"]],
+        "optional_inputs": ["declared_alphabet"],
+        "outputs": ["core_candidates"],
+        "scope": "One bounded INITIAL call from explicitly normalized rational single-variable seeds; CHECK_CORE required."
+      }
     },
     "SEARCH_CORE/epsilon-zero": {
       "command": [

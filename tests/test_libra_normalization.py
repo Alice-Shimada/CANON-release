@@ -107,11 +107,11 @@ class LibraNormalizationTest(unittest.TestCase):
         self.assertEqual(self.check_core(output, basis, cut)["code"], "CORE_PASS")
 
     def test_scalar_missing_normalization_closes_core_loop(self) -> None:
-        self.assert_success(*self.provider(), "{{x}}")
+        self.assert_success(*self.provider(), "{{CANON`DEData`x}}")
 
     def test_coupled_jordan_preserves_generic_regulator_and_closes_core_loop(self) -> None:
         result, output, basis, cut = self.provider(kind="jordan")
-        self.assert_success(result, output, basis, cut, "{{x, 0}, {0, 1}}")
+        self.assert_success(result, output, basis, cut, "{{CANON`DEData`x, 0}, {0, 1}}")
         trace = result["summary"]["normalization"]
         self.assertEqual(trace["initial_singularities"][-1]["generic_rank"], 1)
         self.assertEqual(trace["initial_singularities"][-1]["epsilon_zero_rank"], 0)
@@ -145,7 +145,7 @@ class LibraNormalizationTest(unittest.TestCase):
                 evidence = result["summary"]["normalization"]
                 self.assertEqual(evidence["limit_code"], code)
                 self.assertEqual(evidence["steps_used"], 1)
-                self.assertEqual(evidence["transformation"], "{{x}}")
+                self.assertEqual(evidence["transformation"], "{{CANON`DEData`x}}")
                 self.assertFalse((output / "core-candidates.wl").exists())
 
     def test_multiple_balances_publish_complete_cumulative_source_gauge(self) -> None:
@@ -157,7 +157,7 @@ class LibraNormalizationTest(unittest.TestCase):
         accepted = [attempt for attempt in evidence["attempts"] if attempt.get("accepted")]
         self.assertEqual(evidence["steps_used"], 3)
         self.assertEqual(evidence["projectors_tested"], 3)
-        self.assertEqual(evidence["transformation"], "{{x^3}}")
+        self.assertEqual(evidence["transformation"], "{{CANON`DEData`x^3}}")
         self.assertEqual([(a["metric_before"], a["metric_after"]) for a in accepted],
                          [(6, 4), (4, 2), (2, 0)])
         self.assertTrue(all(a["source_gauge"] for a in accepted))
@@ -281,7 +281,7 @@ Libra`GetSubspaces[___] := {};''')
 
     @unittest.skipUnless(REAL_ENTRY and Path(REAL_ENTRY).is_file(), "declare CANON_TEST_LIBRA_ENTRY for real public primitives")
     def test_real_libra_scalar_and_jordan_use_public_primitives_then_check_core(self) -> None:
-        for kind, transform in (("scalar", "{{x}}"), ("jordan", "{{x, 0}, {0, 1}}")):
+        for kind, transform in (("scalar", "{{CANON`DEData`x}}"), ("jordan", "{{CANON`DEData`x, 0}, {0, 1}}")):
             with self.subTest(kind=kind):
                 self.assert_success(*self.provider(kind=kind, entry=Path(REAL_ENTRY)), transform)
 
@@ -313,7 +313,7 @@ Libra`GetSubspaces[___] := {};''')
         evidence = result["summary"]["normalization"]
         self.assertEqual(result["code"], "METHOD_EXHAUSTED")
         self.assertEqual(evidence["limit_code"], "STEP_BUDGET")
-        self.assertEqual(evidence["transformation"], "{{x}}")
+        self.assertEqual(evidence["transformation"], "{{CANON`DEData`x}}")
         self.assertEqual(evidence["steps_used"], 1)
         self.assertFalse((output / "core-candidates.wl").exists())
 
@@ -327,7 +327,7 @@ Libra`GetSubspaces[___] := {};''')
         result, output, basis, cut = self.provider(kind="jordan", entry=Path(REAL_ENTRY),
             options={"dependent_row_strategy": "sector-de-closure"}, hierarchy=hierarchy)
         self.assertEqual(result["code"], "CANDIDATE_TRANSFORMATION")
-        self.assertEqual(result["summary"]["normalization"]["transformation"], "{{x, 0}, {0, 1}}")
+        self.assertEqual(result["summary"]["normalization"]["transformation"], "{{CANON`DEData`x, 0}, {0, 1}}")
         dependent_rows = result["summary"]["dependent_rows"]
         self.assertEqual(dependent_rows["dependent_row_strategy"], "sector-de-closure")
         self.assertEqual(dependent_rows["hierarchy_stage"], "post-fuchsify-residue-matrices")

@@ -30,9 +30,11 @@ DE matrix small enough for headless `Fuchsify` followed by `FactorOut`.
 The runner uses Mathematica with ``Libra`$LibraUseFermat = False``.
 Fermatica, `BirkhoffGrothendieck`, interactive visual operations, algebraic
 roots, and physical boundary conditions are outside this card's scope.
-For defined-family UT or canonical integral-basis discovery, respect the bounded
-[workflow entry](../../skills/canon-workflow/SKILL.md); an available rational
-DE alone is not a reason to skip integral candidates.
+For defined-family UT or canonical integral-basis discovery, justify the chosen
+construction from geometry, available inputs and current evidence under
+[core selection](../../skills/canon-search-core/SKILL.md). Select integral
+proposals or a direct-DE construction for that scope; a bounded DlogBasis search
+is optional.
 
 Multivariable input returns `INCONCLUSIVE/OUT_OF_SCOPE`. For work on extending
 the adapter, read [multivariable capabilities and limits](references/multivariable.md);
