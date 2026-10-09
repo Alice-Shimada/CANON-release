@@ -601,6 +601,11 @@ incompatible identities/order return an explicit `ERROR`. Reuse failures retain
 reducer. Successful reuse returns the same `CANDIDATES_REDUCED` bridge/target
 artifacts. These checks establish closure relative to the supplied rules; their
 IBP truth and symbolic scope remain the caller's pinned scientific inputs.
+An artifact returned by a nested reducer goes through the same checks before
+attachment, even when the child reports `PASS`. Its descriptor is resolved from
+the child result file and honors an optional SHA-256. Input or target-write
+failure stops before reducer dispatch; failed attachment publishes no passing
+`candidate_ibp_bridge`.
 
 Input candidates are the linear combinations of `j[family,a1,...,an]` supplied by
 the DlogBasis-refine adapter. The bridge maps them to the declared Kira topology

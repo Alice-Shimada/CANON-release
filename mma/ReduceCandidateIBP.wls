@@ -12,6 +12,9 @@ task = CanonMethodCard`ReadTask[inputPath, "REDUCE_CANDIDATE_IBP"];
   CanonMethodCard`LoadArtifact[task, inputPath, #] & /@
     {"integral_candidates", "prepared_family", "master_basis", "prepared_derivatives"}
 ];
+invalid = SelectFirst[{candidates, preparedFamily, masterBasis, preparedDerivatives}, FailureQ, None];
+If[FailureQ[invalid],
+  CanonMethodCard`WriteResult[task, outputDir, "ERROR", invalid[[1]], <||>, invalid[[2]]]; Exit[1]];
 compiled = CANON`CandidateIBPBridge`CompileCandidateIBPTargets[
   candidates, preparedFamily, masterBasis, preparedDerivatives,
   Lookup[task["payload"], "derivative_operator_selection", "enhanced-first"]
@@ -24,16 +27,13 @@ targetsPath = CanonMethodCard`WriteWLArtifact[<|
   "family_ref" -> compiled["family_ref"], "basis_ref" -> compiled["basis_ref"],
   "targets" -> (#1["integral"] & /@ compiled["reducer_targets"]),
   "masters" -> compiled["masters"]|>, outputDir, "reduction-targets.wl"];
+If[!StringQ[targetsPath],
+  CanonMethodCard`WriteResult[task, outputDir, "ERROR", "ARTIFACT_WRITE_FAILED", <||>,
+    <|"reason" -> "Could not write the current reduction targets."|>]; Exit[1]];
 bridgeArtifacts = <|"reduction_targets" -> <|"type" -> "mathematica-expression",
   "path" -> FileNameTake[targetsPath]|>|>;
 If[KeyExistsQ[task["payload"], "ibp_reduction"],
-  reduction = CanonMethodCard`LoadArtifact[task, inputPath, "ibp_reduction"];
-  If[!FailureQ[reduction],
-    reduction = CANON`CandidateIBPBridge`ValidateCandidateIBPReduction[compiled, reduction]];
-  If[FailureQ[reduction],
-    incomplete = reduction[[1]] === "INCOMPLETE_REDUCTION";
-    CanonMethodCard`WriteResult[task, outputDir, If[incomplete, "INCONCLUSIVE", "ERROR"],
-      reduction[[1]], bridgeArtifacts, reduction[[2]]]; Exit[If[incomplete, 0, 1]]],
+  reduction = CanonMethodCard`LoadArtifact[task, inputPath, "ibp_reduction"],
   If[compiled["reducer_targets"] === {},
     reduction = <|"masters" -> compiled["masters"], "rules" -> {}|>,
   ibpRequestPath = FileNameJoin[{outputDir, "ibp-input.json"}];
@@ -67,12 +67,23 @@ If[KeyExistsQ[task["payload"], "ibp_reduction"],
   If[process["ExitCode"] =!= 0,
     CanonMethodCard`WriteResult[task, outputDir, "ERROR", "REDUCTION_FAILED", bridgeArtifacts, process];
     Exit[1]];
-  ibpResultPath = FileNameJoin[{ibpOutput, ibpResult["artifacts", "ibp_reduction", "path"]}];
-  reduction = Block[{$Context = "CANON`DEData`", $ContextPath = {"System`"}}, Get[ibpResultPath]];
+  ibpResultPath = FileNameJoin[{ibpOutput, "result.json"}];
+  reduction = CanonMethodCard`LoadArtifact[
+    <|"payload" -> ibpResult["artifacts"]|>, ibpResultPath, "ibp_reduction"];
   ]
 ];
+(* A returned artifact and a reused artifact have the same closure contract. *)
+If[!FailureQ[reduction],
+  reduction = CANON`CandidateIBPBridge`ValidateCandidateIBPReduction[compiled, reduction]];
+If[FailureQ[reduction],
+  incomplete = reduction[[1]] === "INCOMPLETE_REDUCTION";
+  CanonMethodCard`WriteResult[task, outputDir, If[incomplete, "INCONCLUSIVE", "ERROR"],
+    reduction[[1]], bridgeArtifacts, reduction[[2]]]; Exit[If[incomplete, 0, 1]]];
 result = CANON`CandidateIBPBridge`AttachCandidateIBPReduction[compiled, reduction];
 artifactPath = CanonMethodCard`WriteWLArtifact[result, outputDir, "candidate-ibp-bridge.wl"];
+If[!StringQ[artifactPath],
+  CanonMethodCard`WriteResult[task, outputDir, "ERROR", "ARTIFACT_WRITE_FAILED", bridgeArtifacts,
+    <|"reason" -> "Could not write the candidate reduction bridge."|>]; Exit[1]];
 bridgeArtifacts["candidate_ibp_bridge"] = <|"type" -> "mathematica-expression",
   "path" -> FileNameTake[artifactPath]|>;
 CanonMethodCard`WriteResult[task, outputDir, "PASS", "CANDIDATES_REDUCED", bridgeArtifacts, <|

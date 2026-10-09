@@ -84,6 +84,10 @@ remain supplied inputs. A passing reuse call launches no reducer. Missing or
 unreduced targets return `INCONCLUSIVE/INCOMPLETE_REDUCTION` with readable target
 diagnostics; incompatible inputs return an explicit `ERROR`. Both retain the
 current `reduction_targets` and never silently dispatch a replacement reduction.
+The same checks apply to an artifact returned by the selected reducer, including
+its optional SHA-256. A child `PASS` does not bypass the bridge's source-basis and
+target-closure contract. Missing, incompatible or incomplete returned data cannot
+publish `CANDIDATES_REDUCED`.
 
 The result is `PASS/CANDIDATES_REDUCED` with `candidate_ibp_bridge` and
 `reduction_targets` descriptors. The bridge compiles targets and forwards config
