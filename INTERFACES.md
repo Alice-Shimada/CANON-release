@@ -392,11 +392,16 @@ groups sectors in their existing order and preserves source order inside each
 sector. It uses the explicit canonical `integral_head` when present; a native
 program's family identifier is a separate adapter mapping.
 Neutral expression consumers and native importers interpret unqualified heads
-and coordinates in the common ``CANON`DEData` `` context. The legacy default
-discovery step still parses master text in ``Global` `` when `integral_head` is
-declared; without it the reader uses ``CANON`DEData` ``. Use qualified WL names
+and coordinates in the common ``CANON`DEData` `` context. Default discovery also
+uses this context for unqualified master text, with or without `integral_head`.
+Use qualified WL names
 in declarations and supplied expressions when an explicit context is required;
 data readers preserve those names.
+Default discovery checks the selected source hash, unique integer-index masters,
+declared arity, physical slots and integral head before building sector records.
+Nested master, derivative and DlogBasis family references also honor any declared
+SHA-256. `ResolveArtifactPath` exposes this file check without requiring a WL
+Association payload, so master text and derivative readers share the same rule.
 
 Reduction returns fully reduced `masters`/`rules`. When the consumer supplies a
 source basis, reordered identical masters can be aligned, but a different basis

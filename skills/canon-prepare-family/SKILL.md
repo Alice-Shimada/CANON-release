@@ -19,6 +19,9 @@ optional. Native reducer configuration belongs to its selected adapter. The scri
 preserves those identities and writes their paths and SHA-256 values to
 `prepared-family.wl`, with paths relative to that artifact; downstream code must not infer the regulator from a
 symbol name.
+The optional `operator_source_symbol_map` is preserved for derivative consumers.
+Missing source files and failed output writes return an error without publishing
+a usable prepared-family reference.
 
 Relative artifact paths are resolved from the input JSON directory; resource
 paths inside the family spec are resolved from the spec directory. Kira config,

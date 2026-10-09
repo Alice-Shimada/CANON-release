@@ -35,7 +35,8 @@ class DLogRegularSampleIntegrationTest(unittest.TestCase):
             '"current_basis_id" -> "fixture/raw", "accepted_prefix_id" -> Null, '
             '"coefficient_domain" -> "exact-rational-functions", '
             '"source_basis" -> {j}, "variables" -> {x,y,z,w}, "regulator" -> eps, '
-            '"alphabet" -> {z-x-y}, "convention" -> "old=T.new"'
+            '"alphabet" -> {z-x-y}, '
+            '"convention" -> "old_prefix_basis = full_transformation . candidate_prefix_basis"'
         )
         matrices = "{" + ",".join("{{" + value + "}}" for value in coefficients) + "}"
         full = self.directory / "full.wl"

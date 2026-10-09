@@ -40,8 +40,10 @@ prepared = Join[KeyTake[family, {"family_ref", "basis_ref", "chart_id", "topolog
     "available_inputs" -> <|"prepared_derivatives" -> True, "ordered_masters" -> KeyExistsQ[spec, "ordered_masters"]|>|>];
 If[KeyExistsQ[spec, "operator_source_symbol_map"], prepared["operator_source_symbol_map"] = spec["operator_source_symbol_map"]];
 Do[If[KeyExistsQ[spec, name],
-  raw = If[StringQ[spec[name]], spec[name], spec[name]["path"]];
-  prepared[name] = reference[preparedPath, CanonMethodCard`ResolveInputPath[specPath, raw],
+  raw = If[StringQ[spec[name]], <|"path" -> spec[name]|>, spec[name]];
+  sourcePath = CanonMethodCard`ResolveArtifactPath[specPath, raw];
+  If[FailureQ[sourcePath], fail[sourcePath]];
+  prepared[name] = reference[preparedPath, sourcePath,
     If[name === "ordered_masters", "text", "mathematica-expression"]]
 ], {name, {"ordered_masters"}}];
 save[prepared, "prepared-family.wl"];

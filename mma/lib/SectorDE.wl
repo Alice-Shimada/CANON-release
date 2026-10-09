@@ -71,8 +71,9 @@ LoadPreparedDerivatives[prepared_, preparedPath_String, masterBasis_, derivative
   If[source === Automatic,
     descriptor = Lookup[prepared, "prepared_derivatives", <||>];
     If[!AssociationQ[descriptor] || !StringQ[Lookup[descriptor, "path", None]], Return[invalid]];
-    source = CanonMethodCard`ResolveInputPath[preparedPath, descriptor["path"]]
+    source = CanonMethodCard`ResolveArtifactPath[preparedPath, descriptor]
   ];
+  If[FailureQ[source], Return[source]];
   If[!StringQ[source], Return[invalid]];
   value = Quiet @ Check[CanonMethodCard`ReadWLData[source] /. symbolRules, $Failed];
   (* ReplaceAll maps Association values; operator keys need the declared map too. *)

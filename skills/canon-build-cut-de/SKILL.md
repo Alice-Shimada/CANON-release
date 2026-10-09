@@ -18,6 +18,9 @@ An optional `prepared_derivatives` descriptor selects a separately stored source
 resolved from the request. Otherwise use the prepared family's embedded
 descriptor, resolved from that artifact. Target preparation and DE construction
 share this source loading and normalization.
+The selected descriptor's optional SHA-256 is checked before loading. An explicit
+descriptor overrides the embedded source; the unused embedded reference is not
+loaded or checked.
 
 The script converts the accepted affine denominator records to the one
 `DEBuilder` family object and calls `BuildDifferentialEquations` exactly once on

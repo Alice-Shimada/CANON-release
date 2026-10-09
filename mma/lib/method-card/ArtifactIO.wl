@@ -98,18 +98,24 @@ ParseSymbolRules[_] := $Failed;
 ReadWLData[path_String] := Block[
   {$Context = "CANON`DEData`", $ContextPath = {"System`"}}, Get[path]];
 
-LoadArtifact[task_Association, inputPath_String, name_String] := Module[
-  {descriptor, path, value},
-  descriptor = Lookup[Lookup[task, "payload", <||>], name, Missing[name]];
-  If[!AssociationQ[descriptor], Return[failure["MISSING_ARTIFACT", name]]];
+ResolveArtifactPath[inputPath_String, descriptor_] := Module[{path},
+  If[!AssociationQ[descriptor], Return[failure["MISSING_ARTIFACT", "missing file descriptor"]]];
   path = artifactPath[inputPath, descriptor];
   If[path === $Failed || FileType[path] =!= File,
-    Return[failure["MISSING_ARTIFACT", name <> " path is not a file"]]
+    Return[failure["MISSING_ARTIFACT", "declared path is not a file"]]
   ];
   If[KeyExistsQ[descriptor, "sha256"] &&
       (!StringQ[descriptor["sha256"]] ||
         ToLowerCase[descriptor["sha256"]] =!= FileHash[path, "SHA256", "HexString"]),
-    Return[failure["SOURCE_HASH_MISMATCH", name <> " does not match its declared SHA-256"]]];
+    Return[failure["SOURCE_HASH_MISMATCH", path <> " does not match its declared SHA-256"]]];
+  path
+];
+
+LoadArtifact[task_Association, inputPath_String, name_String] := Module[
+  {descriptor, path, value},
+  descriptor = Lookup[Lookup[task, "payload", <||>], name, Missing[name]];
+  path = ResolveArtifactPath[inputPath, descriptor];
+  If[FailureQ[path], Return[path]];
   value = Quiet @ Check[ReadWLData[path], $Failed];
   If[!AssociationQ[value], Return[failure["INVALID_ARTIFACT", name <> " is not an Association"]]];
   value

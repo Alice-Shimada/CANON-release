@@ -8,6 +8,7 @@ SectorDEArtifacts::usage = "SectorDEArtifacts[orderedDE, sectorManifest, sectorR
 ReadTask::usage = "ReadTask[path, step] reads and validates a script input envelope.";
 ScriptArguments::usage = "ScriptArguments[] returns arguments following the active WL script.";
 LoadArtifact::usage = "LoadArtifact[task, inputPath, name] reads one WL Association artifact.";
+ResolveArtifactPath::usage = "ResolveArtifactPath[declaringFile, descriptor] resolves an existing source file and checks its optional SHA-256 before reading; returns a path or Failure.";
 ParseSymbolRules::usage = "ParseSymbolRules[mapping] decodes declared source/target name pairs in the data context, preserves explicit contexts, and returns rules or $Failed.";
 ReadWLData::usage = "ReadWLData[path] reads WL data with unqualified symbols in CANON`DEData` and preserves explicitly qualified symbols.";
 ResolveInputPath::usage = "ResolveInputPath[inputFile, path] resolves a path relative to the file that declares it.";
