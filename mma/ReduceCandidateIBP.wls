@@ -34,6 +34,8 @@ If[KeyExistsQ[task["payload"], "ibp_reduction"],
     incomplete = reduction[[1]] === "INCOMPLETE_REDUCTION";
     CanonMethodCard`WriteResult[task, outputDir, If[incomplete, "INCONCLUSIVE", "ERROR"],
       reduction[[1]], bridgeArtifacts, reduction[[2]]]; Exit[If[incomplete, 0, 1]]],
+  If[compiled["reducer_targets"] === {},
+    reduction = <|"masters" -> compiled["masters"], "rules" -> {}|>,
   ibpRequestPath = FileNameJoin[{outputDir, "ibp-input.json"}];
   ibpOutput = FileNameJoin[{outputDir, "ibp"}];
   rebase[descriptor_] := Join[descriptor, <|"path" -> CanonMethodCard`RelativeArtifactPath[
@@ -67,6 +69,7 @@ If[KeyExistsQ[task["payload"], "ibp_reduction"],
     Exit[1]];
   ibpResultPath = FileNameJoin[{ibpOutput, ibpResult["artifacts", "ibp_reduction", "path"]}];
   reduction = Block[{$Context = "CANON`DEData`", $ContextPath = {"System`"}}, Get[ibpResultPath]];
+  ]
 ];
 result = CANON`CandidateIBPBridge`AttachCandidateIBPReduction[compiled, reduction];
 artifactPath = CanonMethodCard`WriteWLArtifact[result, outputDir, "candidate-ibp-bridge.wl"];

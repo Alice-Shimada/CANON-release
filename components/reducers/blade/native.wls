@@ -13,8 +13,11 @@ entry = CanonMethodCard`ResolveInputPath[context["backend"], cfg["package_entry"
 Get[entry];
 If[!And @@ ((Names[#] =!= {}) & /@ {"Blade`BLFamilyDefine", "Blade`BLReduce", "Blade`BLDifferentialEquation"}), Exit[3]];
 SetDirectory[context["output"]];
-f = data["family"]; nativeFamily = data["encoding", "family"];
 parse[text_] := Block[{$Context = "Global`", $ContextPath = {"System`"}}, ToExpression[text, InputForm]];
+(* Match the native geometry's symbol frame for regulator, derivatives, points
+   and integral encodings as well. Explicit foreign contexts remain explicit. *)
+native[value_] := value /. (s_Symbol /; Context[s] === "CANON`DEData`" :> parse[SymbolName[s]]);
+f = native[data["family"]]; nativeFamily = native[data["encoding", "family"]];
 If[!And @@ (KeyExistsQ[f, #] & /@ {"propagators", "loop_momenta", "external_momenta", "scalar_products", "top_level_sectors"}) || Length[f["top_level_sectors"]] =!= 1,
   Print["This native template requires the neutral reducer_family and one declared top-level sector."]; Exit[4]];
 propagators = (parse[#["momentum"]]^2 - parse[#["mass_squared"]]) & /@ f["propagators"];
@@ -24,8 +27,8 @@ top = Reverse[IntegerDigits[First[f["top_level_sectors"]], 2, Length[propagators
 Blade`BLNthreads = cfg["threads"];
 Blade`BLSSolveNthreads = cfg["threads"];
 Blade`BLFamilyDefine[nativeFamily, f["dimension"] /. f["dimension_rule"], propagators, parse /@ f["loop_momenta"],
-  parse /@ f["external_momenta"], parse /@ Lookup[f, "momentum_conservation", {}], scalarProducts, top, data["point"]];
-preferred = data["native_masters"]; targets = data["native_targets"];
+  parse /@ f["external_momenta"], parse /@ Lookup[f, "momentum_conservation", {}], scalarProducts, top, native[data["point"]]];
+preferred = native[data["native_masters"]]; targets = native[data["native_targets"]];
 If[targets === {}, targets = Lookup[settings, "discovery_targets", {}]];
 If[targets === {} && data["step"] =!= "BUILD_CUT_DE", Print["Supply explicit discovery or reduction targets."]; Exit[4]];
 write[value_, name_] := Block[{$Context = "Global`", $ContextPath = {"System`"}}, Put[value, FileNameJoin[{context["output"], name}]]];

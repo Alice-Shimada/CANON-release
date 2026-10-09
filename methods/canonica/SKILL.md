@@ -68,7 +68,8 @@ Success writes `canon-neu/core-candidates/v1` using
 sector boundaries, alphabet, and provider epsilon-form result.
 `mma/CheckSectorCore.wls` independently recomputes the acceptance conditions.
 Provider success is `PROVISIONAL/CANDIDATE_TRANSFORMATION`; exhausted stages
-return `INCONCLUSIVE/METHOD_EXHAUSTED`; invalid or nonflat input returns
+return `INCONCLUSIVE/METHOD_EXHAUSTED`. A caught abort returns
+`ERROR/EXECUTION_INTERRUPTED` and is not evidence of ansatz exhaustion; invalid or nonflat input returns
 `ERROR/INVALID_DIFFERENTIAL_SYSTEM`. The card never returns `PASS` or a
 mathematical rejection `FAIL`. Exhaustion concerns this method, not the family.
 

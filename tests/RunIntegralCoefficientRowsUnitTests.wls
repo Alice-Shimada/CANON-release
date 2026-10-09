@@ -46,6 +46,8 @@ validate[rules_, overrides_ : <||>] := CANON`CandidateIBPBridge`ValidateCandidat
   compiled, Join[<|"masters" -> compiled["masters"], "rules" -> rules|>, overrides]];
 failure[value_, code_] := FailureQ[value] && value[[1]] === code;
 check["closure/one-substitution", failure[validate[{G[3] -> G[4], G[4] -> G[1]}], "INCOMPLETE_REDUCTION"]];
+check["closure/inexact-coefficient", failure[validate[{G[3] -> 1.0 G[1]}], "INVALID_REDUCTION"]];
+check["closure/transcendental-coefficient", failure[validate[{G[3] -> Sin[x] G[1]}], "INVALID_REDUCTION"]];
 check["closure/malformed-left", failure[validate[{G[a_] :> G[1]}], "INVALID_REDUCTION"]];
 check["closure/duplicate-left", failure[validate[{G[3] -> G[1], G[3] -> G[2]}], "INVALID_REDUCTION"]];
 check["closure/source-immutable", failure[validate[{G[1] -> 2 G[1], G[3] -> G[2]}], "MASTER_BASIS_MISMATCH"]];

@@ -16,7 +16,7 @@ FULL_DE = r'''With[{raw = {{{0,0,0},{0,0,0},{TAIL,0,0}}}},
 "sector"-><|"id"->7,"propagator_count"->3|>, "current_basis_id"->"fixture/7",
 "accepted_prefix_id"->"fixture/lower", "source_basis"->{j1,j2,j3},
 "source_matrices"->raw, "variables"->{x}, "regulator"->eps, "alphabet"->{},
-"convention"->"old=T.new", "block_boundaries"-><|"lower_dimension"->2,"current_dimension"->1|>,
+"convention"->"old_prefix_basis = full_transformation . candidate_prefix_basis", "block_boundaries"-><|"lower_dimension"->2,"current_dimension"->1|>,
 "candidates"->{<|"candidate_id"->"fixture", "member_candidate_ids"->{"fixture"},
 "new_basis_rows"->IdentityMatrix[3], "full_transformation"->IdentityMatrix[3],
 "transformed_matrices"->raw|>}|>]
@@ -133,7 +133,7 @@ def main():
         case = work / name
         case.mkdir()
         (case / "full.wl").write_text(FULL_DE.replace("TAIL", tail))
-        (case / "core.wl").write_text('<|"candidate_id"->"fixture"|>\n')
+        (case / "core.wl").write_text('<|"schema"->"canon-neu/core-transform/v1","candidate_id"->"fixture","basis_id"->"fixture/7","basis"->{j3},"family_id"->"tail-diagnostic-fixture","sector"-><|"id"->7,"propagator_count"->3|>,"variables"->{x},"regulator"->eps,"checks"-><|"pass"->True|>|>\n')
         if name in ("off-diagonal-failure", "epsilon-failure", "backend-success"):
             (case / "CANONICA.m").write_text(BACKEND.replace("MODE", name))
         request = case / "request.json"

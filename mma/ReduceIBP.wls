@@ -73,7 +73,10 @@ If[ValueQ[targetData],
   If[MemberQ[rows, $Failed] ||
       !AllTrue[(result["masters"] /. dispatch) - result["masters"], Together[#] === 0 &],
     CanonMethodCard`WriteResult[task, outputDir, "INCONCLUSIVE", "INCOMPLETE_REDUCTION", <||>,
-      <|"reason" -> "Targets do not reduce completely in the declared source basis."|>]; Exit[0]]
+      <|"reason" -> "Targets do not reduce completely in the declared source basis."|>]; Exit[0]];
+  If[!AllTrue[Flatten[rows], CanonMethodCard`ExactRationalExpressionQ],
+    CanonMethodCard`WriteResult[task, outputDir, "ERROR", "INVALID_REDUCTION", <||>,
+      <|"reason" -> "Native coefficients must be finite exact rational functions."|>]; Exit[1]]
 ];
 artifactPath = CanonMethodCard`WriteWLArtifact[result, outputDir, "ibp-reduction.wl"];
 CanonMethodCard`WriteResult[task, outputDir, "PASS", "IBP_REDUCED",

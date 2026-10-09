@@ -3,7 +3,10 @@
 $HistoryLength = 0;
 repoRoot = DirectoryName[DirectoryName[ExpandFileName[$InputFileName]]];
 fixtureRoot = FileNameJoin[{repoRoot, "tests", "fixtures", "final-check"}];
-temporary = CreateDirectory[];
+Get[FileNameJoin[{repoRoot, "mma", "lib", "MethodCardCore.wl"}]];
+Begin["CANON`DEData`"];
+temporary = If[StringQ[Environment["CANON_TEST_WORK"]],
+  CreateDirectory[Environment["CANON_TEST_WORK"]], CreateDirectory[]];
 ClearAll[l0, l1, j0, eps, x, y];
 
 put[name_, expression_] := Module[{path = FileNameJoin[{temporary, name <> ".wl"}]},
@@ -33,9 +36,14 @@ seal[prefix_] := With[{body = KeyDrop[prefix, "prefix_id"]},
 sameMatrices[left_, right_] := And @@ MapThread[
   And @@ (TrueQ[Together[#] === 0] & /@ Flatten[#1 - #2]) &, {left, right}];
 
-acceptedPath = FileNameJoin[{fixtureRoot, "accepted-prefix.wl"}];
+historicalAcceptedPath = FileNameJoin[{fixtureRoot, "accepted-prefix.wl"}];
 orderedPath = FileNameJoin[{fixtureRoot, "ordered-master-de.wl"}];
-accepted = Get[acceptedPath];
+historicalAccepted = Get[historicalAcceptedPath];
+(* Keep the historical bytes, including their unresolved l1 abbreviation,
+   intact. A publishable basis contains explicit original-master definitions. *)
+accepted = seal @ Join[historicalAccepted, <|"basis" ->
+  Inverse[historicalAccepted["transformation"]].historicalAccepted["source_basis"]|>];
+acceptedPath = put["explicit-accepted", accepted];
 ordered = Get[orderedPath];
 prepared = <|"schema" -> "canon-neu/prepared-family/v1",
   "family_ref" -> ordered["family_id"], "basis_ref" -> ordered["basis_id"],
@@ -52,6 +60,8 @@ positivePayload = payload[
   preparedPath, masterPath, manifestPath, orderedPath, acceptedPath];
 positiveA = runFinal["positive-a", positivePayload];
 positiveB = runFinal["positive-b", positivePayload];
+unresolvedBasis = runFinal["unresolved-historical-basis", payload[
+  preparedPath, masterPath, manifestPath, orderedPath, historicalAcceptedPath]];
 canonicalBasis = artifact[positiveA, "canonical_basis"];
 canonicalDE = artifact[positiveA, "canonical_de"];
 
@@ -167,6 +177,11 @@ Get[FileNameJoin[{repoRoot, "mma", "lib", "MethodCardCore.wl"}]];
 
 tests = {
   VerificationTest[
+    unresolvedBasis["result", "code"] === "FULL_SYSTEM_FAIL" &&
+    !TrueQ[unresolvedBasis["result", "summary", "checks", "basis_definition"]] &&
+    TrueQ[unresolvedBasis["result", "summary", "checks", "exact_global_gauge"]],
+    True, TestID -> "matrix-certificate-does-not-certify-unresolved-basis-abbreviations"],
+  VerificationTest[
     CanonMethodCard`FlatConnectionQ[stationaryMatrices, {x, y}],
     False, TestID -> "flatness-is-a-symbolic-identity-not-a-fixed-point-test"],
   VerificationTest[
@@ -188,7 +203,7 @@ tests = {
     rootCanonical["residue_matrices"] === {{{1}}, {{1}}}, True,
     TestID -> "algebraic-letters-have-shared-constant-residues-without-rationalization"],
   VerificationTest[
-    FileHash[acceptedPath, "SHA256"] ===
+    FileHash[historicalAcceptedPath, "SHA256"] ===
       FromDigits["fc1e2e951d10ca0951827ddd18e2425f863836be06ca68a49fe7bd40d4245ded", 16] &&
     FileHash[orderedPath, "SHA256"] ===
       FromDigits["9a75821301b6895cb8daac453ea1a951d5329b4e679795192fe3a06dd4e5ae81", 16] &&
@@ -270,5 +285,5 @@ Print[InputForm[<|"total" -> report["TestsSucceededCount"] +
     report["TestsFailedCount"], "succeeded" -> report["TestsSucceededCount"],
   "failed" -> report["TestsFailedCount"]|>]];
 If[report["TestsFailedCount"] =!= 0, Print[InputForm[report["TestsFailed"]]]];
-DeleteDirectory[temporary, DeleteContents -> True];
+If[!StringQ[Environment["CANON_TEST_WORK"]], DeleteDirectory[temporary, DeleteContents -> True]];
 Exit[If[report["TestsFailedCount"] === 0, 0, 1]];

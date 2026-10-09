@@ -14,5 +14,7 @@ records = <|"LoopMomenta" -> (parse /@ f["loop_momenta"]), "ExternalMomenta" -> 
   "GenericPoint" -> parse[cfg["generic_point"]], "GenericD" -> parse[cfg["generic_dimension"]]|>;
 text = StringRiffle[KeyValueMap[#1 <> "=" <> ToString[#2, InputForm] <> ";" &, records], "\n"] <> "\n";
 Export[FileNameJoin[{context["output"], "kinematics.txt"}], text, "Text"];
-Put[data["native_targets"], FileNameJoin[{context["output"], "targetIntegrals.txt"}]];
+(* The neutral reader's data context is not NeatIBP's native integral head. *)
+nativeTargets = data["native_targets"] /. data["encoding", "head"] -> parse[cfg["encoding", "head"]];
+Put[nativeTargets, FileNameJoin[{context["output"], "targetIntegrals.txt"}]];
 CopyFile[CanonMethodCard`ResolveInputPath[context["backend"], cfg["native_config"]], FileNameJoin[{context["output"], "config.txt"}]];

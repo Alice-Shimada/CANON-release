@@ -59,7 +59,7 @@ hierarchyValidationReason[hierarchy_, cut_] := Module[
     Return["Invalid dependent_row_hierarchy hierarchy_id"]
   ];
   If[
-    Lookup[hierarchy, "sector", None] =!= cut["sector"] ||
+    !CanonMethodCard`SameSectorQ[Lookup[hierarchy, "sector", None], cut["sector"]] ||
       Lookup[hierarchy, "family_id", None] =!= cut["family_id"] ||
       Lookup[hierarchy, "basis_id", None] =!= cut["basis_id"] ||
       Lookup[hierarchy, "basis", None] =!= cut["basis"],
@@ -135,8 +135,7 @@ If[
   ]
 ];
 If[
-  sectorBasis["sector"] =!= task["sector"] ||
-    cut["sector"] =!= task["sector"] ||
+  !CanonMethodCard`SameSectorQ[sectorBasis["sector"], cut["sector"], task["sector"]] ||
     sectorBasis["family_id"] =!= cut["family_id"] ||
     sectorBasis["basis_id"] =!= cut["basis_id"] ||
     sectorBasis["basis"] =!= cut["basis"],

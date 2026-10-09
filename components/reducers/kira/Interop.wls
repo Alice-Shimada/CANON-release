@@ -96,6 +96,7 @@ If[action === "prepare",
     rows = CanonMethodCard`IntegralCoefficientRows[reduced, masters, head];
     need[FreeQ[rows, $Failed], "NATIVE_RULES_NOT_LINEAR"];
     coefficients = Flatten[rows];
+    need[AllTrue[coefficients, CanonMethodCard`ExactRationalExpressionQ], "INVALID_NATIVE_COEFFICIENT_DOMAIN"];
     allowed = DeleteDuplicates @ Cases[
       Join[parse /@ (#["name"] & /@ family["invariants"]), {parse[family["dimension"]]}],
       s_Symbol /; Context[s] =!= "System`", Infinity, Heads -> True];

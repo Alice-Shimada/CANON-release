@@ -57,8 +57,7 @@ If[
   ]
 ];
 If[
-  sectorBasis["sector"] =!= task["sector"] ||
-    cut["sector"] =!= task["sector"] ||
+  !CanonMethodCard`SameSectorQ[sectorBasis["sector"], cut["sector"], task["sector"]] ||
     sectorBasis["family_id"] =!= cut["family_id"] ||
     sectorBasis["basis_id"] =!= cut["basis_id"] ||
     sectorBasis["basis"] =!= cut["basis"],
@@ -95,7 +94,10 @@ result = Quiet @ CheckAbort[
   ],
   $Aborted
 ];
-If[result === $Aborted || !ListQ[result] || Length[result] < 2,
+If[result === $Aborted,
+  writeFailure["ERROR", "EXECUTION_INTERRUPTED", "CANONICA was interrupted before completing its search"]
+];
+If[!ListQ[result] || Length[result] < 2,
   writeFailure["INCONCLUSIVE", "METHOD_EXHAUSTED", "CANONICA produced no transformation"]
 ];
 

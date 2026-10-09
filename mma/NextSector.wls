@@ -10,6 +10,12 @@ accepted = If[task["payload", "accepted_prefix"] === Null, Null,
   CanonMethodCard`LoadArtifact[task, inputPath, "accepted_prefix"]];
 
 trace = If[accepted === Null, {}, accepted["sector_trace"]];
+expectedTrace = KeyTake[#, {"id", "propagator_count"}] & /@ manifest["sectors"];
+If[!TrueQ[ListQ[trace] && Length[trace] <= Length[expectedTrace] &&
+    DuplicateFreeQ[Lookup[expectedTrace, "id"]] &&
+    CanonMethodCard`SameSectorTraceQ[trace, Take[expectedTrace, Length[trace]]]],
+  CanonMethodCard`WriteResult[task, outputDir, "ERROR", "INVALID_SECTOR_TRACE", <||>,
+    <|"reason" -> "The accepted trace is not a prefix of the resident sector order."|>]; Quit[1]];
 remaining = Drop[manifest["sectors"], Length[trace]];
 cursor = <|
   "schema" -> "canon-neu/sector-cursor/v1",

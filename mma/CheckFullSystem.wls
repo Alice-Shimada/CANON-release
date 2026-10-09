@@ -11,16 +11,40 @@ manifest = CanonMethodCard`LoadArtifact[task, inputPath, "sector_manifest"];
 ordered = CanonMethodCard`LoadArtifact[task, inputPath, "ordered_master_de"];
 accepted = CanonMethodCard`LoadArtifact[task, inputPath, "accepted_prefix"];
 
+fail[reason_] := (CanonMethodCard`WriteResult[task, outputDir, "ERROR",
+  "INVALID_FINAL_INPUT", <||>, <|"reason" -> reason|>]; Quit[1]);
+If[!AllTrue[{prepared, masterBasis, manifest, ordered, accepted}, AssociationQ] ||
+  Lookup[ordered, "schema", None] =!= "canon-neu/ordered-master-de/v1" ||
+  Lookup[accepted, "schema", None] =!= "canon-neu/accepted-prefix/v1" ||
+  !ListQ[Lookup[ordered, "basis", None]] || ordered["basis"] === {},
+  fail["Final checking requires the complete original DE and accepted prefix."]];
+
 sameMatrices[left_, right_] := And @@ MapThread[
   CanonMethodCard`ZeroMatrixQ[Map[Together, #1 - #2, {2}]] &, {left, right}];
 variables = ordered["variables"];
 regulator = ordered["regulator"];
 declaredAlphabet = accepted["alphabet"];
+dimension = Length[ordered["basis"]];
+transformation = accepted["transformation"];
+If[!TrueQ[CanonMethodCard`ValidMatrixSystemQ[ordered["matrices"], variables, regulator, dimension] &&
+    CanonMethodCard`ValidMatrixSystemQ[accepted["matrices"], variables, regulator, dimension] &&
+    MatrixQ[transformation] && Dimensions[transformation] === {dimension, dimension} &&
+    AllTrue[Flatten[transformation], CanonMethodCard`ExactAlgebraicExpressionQ] &&
+    ListQ[accepted["basis"]] && Length[accepted["basis"]] === dimension &&
+    ListQ[declaredAlphabet] && AllTrue[declaredAlphabet, CanonMethodCard`ExactAlgebraicExpressionQ] &&
+    ListQ[manifest["sectors"]] && AllTrue[manifest["sectors"], AssociationQ] &&
+    ListQ[accepted["sector_trace"]] && ListQ[accepted["candidate_trace"]]],
+  fail["Invalid matrix dimensions, exact coefficient domain, alphabet or trace."]];
+invertible = Together[Det[transformation]] =!= 0;
+If[!TrueQ[invertible],
+  CanonMethodCard`WriteResult[task, outputDir, "FAIL", "FULL_SYSTEM_FAIL", <||>,
+    <|"checks" -> <|"invertible_cumulative_transformation" -> False|>|>]; Quit[0]];
 expectedTrace = KeyTake[#, {"id", "propagator_count"}] & /@
   manifest["sectors"];
 trace = accepted["sector_trace"];
 remaining = Drop[expectedTrace, Length[trace]];
 backend = Lookup[Lookup[task["payload"], "method_options", <||>], "gauge_backend", "wolfram"];
+If[!MemberQ[{"wolfram", "fermat"}, backend], fail["Unknown gauge_backend; select wolfram or fermat."]];
 gaugeBackend = <|"name" -> backend|>;
 If[backend === "fermat",
   package = CanonMethodCard`ResolveMethodPackage[task, inputPath, "Fermatica`"];
@@ -42,6 +66,13 @@ If[backend === "fermat",
 residueMatrices = CanonMethodCard`DLogResidues[
   computed, variables, regulator, declaredAlphabet];
 
+(* Check the published integral definitions without forming a common denominator
+   over different integrals, or a second inverse of the cumulative matrix. *)
+basisRows = CanonMethodCard`IntegralCoefficientRows[accepted["basis"],
+  ordered["basis"], Head[First[ordered["basis"]]]];
+basisDefinition = !MemberQ[basisRows, $Failed] && CanonMethodCard`ZeroMatrixQ[
+  Normal[SparseArray[transformation].SparseArray[basisRows] - IdentityMatrix[dimension, SparseArray]]];
+
 checks = <|
   "artifact_identity" -> (
     SameQ[prepared["family_ref"], masterBasis["family_ref"],
@@ -55,14 +86,16 @@ checks = <|
     accepted["source_basis"] === ordered["basis"] &&
     DuplicateFreeQ[ordered["basis"]]),
   "sector_trace_resident_order" -> (
-    trace === expectedTrace && DuplicateFreeQ[Lookup[expectedTrace, "id"]]),
+    CanonMethodCard`SameSectorTraceQ[trace, expectedTrace] && DuplicateFreeQ[Lookup[expectedTrace, "id"]]),
   "candidate_trace_coverage" ->
-    (Lookup[accepted["candidate_trace"], "sector"] === expectedTrace),
+    CanonMethodCard`SameSectorTraceQ[Lookup[accepted["candidate_trace"], "sector"], expectedTrace],
   "cursor_complete" -> (remaining === {}),
   "accepted_prefix_hash" -> (accepted["prefix_id"] ===
     "sha256:" <> Hash[KeyDrop[accepted, "prefix_id"], "SHA256", "HexString"]),
-  "invertible_cumulative_transformation" ->
-    TrueQ[Together[Det[accepted["transformation"]]] =!= 0],
+  "invertible_cumulative_transformation" -> TrueQ[invertible],
+  "basis_definition" -> TrueQ[basisDefinition],
+  "transformation_convention" -> (accepted["convention"] ===
+    "old_source_basis = transformation . accepted_basis"),
   "exact_global_gauge" -> exactGlobalGauge,
   "flat_connection" -> CanonMethodCard`FlatConnectionQ[computed, variables],
   "epsilon_factorized" ->
@@ -71,7 +104,7 @@ checks = <|
   "constant_residue_dlog" -> residueMatrices =!= $Failed
 |>;
 
-If[!And @@ Values[checks],
+If[!TrueQ[And @@ Values[checks]],
   CanonMethodCard`WriteResult[task, outputDir, "FAIL", "FULL_SYSTEM_FAIL",
     <||>, <|"checks" -> checks|>];
   Quit[0]

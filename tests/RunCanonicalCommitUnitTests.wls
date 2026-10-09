@@ -158,12 +158,15 @@ ordered2 = <|"schema" -> "canon-neu/ordered-master-de/v1",
   "family_id" -> family, "basis_id" -> "fixture/raw-order",
   "coefficient_domain" -> "exact-rational-functions", "basis" -> {l0, j0, k0},
   "variables" -> {x}, "regulator" -> eps, "matrices" -> {raw2}|>;
-coreCandidates2 = <|"source_basis" -> {l0, j0, k0},
+coreCandidates2 = Join[KeyTake[cut2, {"sector", "family_id", "basis_id", "basis", "variables", "regulator"}],
+ <|"schema" -> "canon-neu/core-candidates/v1", "coefficient_domain" -> "exact-rational-functions",
+  "convention" -> "old_basis = transformation . new_basis", "source_basis" -> {l0, j0, k0},
   "candidates" -> {<|"candidate_id" -> "third",
     "member_candidate_ids" -> {"third-member"},
     "construction_rejection" -> None,
-    "full_new_basis_rows" -> {{0, 0, 1}}|>}|>;
-coreTransform2 = <|"candidate_id" -> "third"|>;
+    "full_new_basis_rows" -> {{0, 0, 1}}|>}|>];
+coreTransform2 = Join[KeyTake[cut2, {"sector", "family_id", "basis_id", "basis", "variables", "regulator"}],
+  <|"candidate_id" -> "third", "transformation" -> {{1}}, "checks" -> <|"pass" -> True|>|>];
 alphabet2 = <|"schema" -> "canon-neu/declared-alphabet/v1",
   "letters" -> {x, 1 - x, 1 + x}|>;
 basis2Path = put["basis-2", basis2];

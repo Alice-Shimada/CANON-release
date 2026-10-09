@@ -10,18 +10,36 @@ sectorBasis = CanonMethodCard`LoadArtifact[task, inputPath, "sector_basis"];
 cut = CanonMethodCard`LoadArtifact[task, inputPath, "sector_cut_de"];
 candidates = CanonMethodCard`LoadArtifact[task, inputPath, "core_candidates"];
 
+fail[code_, reason_] := (CanonMethodCard`WriteResult[task, outputDir,
+  "ERROR", code, <||>, <|"reason" -> reason|>]; Quit[1]);
+If[!TrueQ[CanonMethodCard`ValidSectorBasisQ[sectorBasis] &&
+    CanonMethodCard`ValidCutDEQ[cut, True] && CanonMethodCard`ValidCandidatesQ[candidates]],
+  fail["INVALID_INPUT", "Malformed core-check artifacts."]];
+If[!CanonMethodCard`SameSectorQ[task["sector"], cut["sector"], sectorBasis["sector"], candidates["sector"]] ||
+  !AllTrue[{"family_id", "basis_id", "basis"},
+    SameQ[sectorBasis[#], cut[#], candidates[#]] &] ||
+  !AllTrue[{"variables", "regulator"}, cut[#] === candidates[#] &],
+  fail["SOURCE_BASIS_MISMATCH", "Core artifacts must bind the same sector, family, ordered basis, variables and regulator."]];
+pool = Lookup[candidates, "candidate_group_pool", <||>];
+If[!AssociationQ[pool] ||
+  !AllTrue[candidates["candidates"], AssociationQ[#] && StringQ[Lookup[#, "candidate_id", None]] &] ||
+  !DuplicateFreeQ[Lookup[candidates["candidates"], "candidate_id", {}]] ||
+  Lookup[pool, "eligible", None] =!= Length[candidates["candidates"]] ||
+  !IntegerQ[Lookup[pool, "remaining", None]] || pool["remaining"] < 0 ||
+  !MemberQ[{True, False}, Lookup[pool, "pool_exhausted", None]],
+  fail["INVALID_CANDIDATE_POOL", "The declared pool must count the available candidates and identify them uniquely."]];
+
 checks = {};
 accepted = Missing["not-found"];
 Do[
   check = CanonMethodCard`CheckCoreCandidate[
     candidates["candidates"][[index]], cut["matrices"], cut["variables"],
-    cut["regulator"], index];
+    cut["regulator"], index, candidates["coefficient_domain"]];
   AppendTo[checks, check];
   If[TrueQ[check["pass"]], accepted = check; Break[]],
   {index, Length[candidates["candidates"]]}
 ];
 public[entry_] := KeyDrop[entry, {"transformation", "transformed_matrices"}];
-pool = candidates["candidate_group_pool"];
 attemptedIDs = #["candidate_id"] & /@ checks;
 remaining = pool["remaining"] + pool["eligible"] - Length[checks];
 

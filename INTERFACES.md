@@ -573,6 +573,9 @@ failure, including an unknown selection or missing requested operator, returns
 are written.
 The result exposes `candidate_ibp_bridge` in the common artifact map.
 The default bridge calls `REDUCE_IBP` through the selected component package.
+If the compiled non-master target list is empty and no reduction was supplied,
+the bridge uses the already closed master span with empty rules and launches no
+reducer. Supplied IBP coefficients must be finite exact rational functions.
 
 An optional `payload.ibp_reduction: {"path": "rules.wl"}` explicitly selects reuse
 of an already normalized symbolic reduction. No backend configuration is needed
@@ -623,6 +626,18 @@ or a complete master basis.
 
 ### Core, full prefix, and tail
 
+Sector records compare keys and values independently of record-key ordering.
+The order of sectors and masters remains significant; stored prefix hashes are
+computed from the actual artifact without rewriting its records.
+
+`SOLVE_TAIL` binds the passing core to the full prefix by sector, family,
+ordered current basis, variables and regulator. Missing or duplicate selected
+candidates and malformed matrices return `ERROR/INVALID_TAIL_INPUT`.
+Unavailable or invalid backend installations return `ERROR/TOOL_UNAVAILABLE`
+or `ERROR/TOOL_ERROR`; caught aborts return `ERROR/EXECUTION_INTERRUPTED`.
+These outcomes do not exhaust a mathematical ansatz. Backend transformation
+returns must be correctly shaped, exact and invertible before composition.
+
 `RouteCoreCandidates.wls` consumes `prepared_family`, `sector_basis`,
 `sector_cut_de`, and `candidate_ibp_bridge`. After IBP, candidate rows are first
 projected onto resident current-sector masters; an independent basis and its
@@ -631,12 +646,27 @@ remain in `full_new_basis_rows`, whose columns follow the top-level `source_basi
 order. Every group has `T=Inverse[R]` with `old_basis=T.new_basis`. This group pool
 is a bounded selection space; exhausting it does not exhaust all integral representatives.
 
+`CHECK_CORE` binds the task sector, family, ordered basis, variables and regulator
+across all three inputs before evaluating candidates. It checks declared exact
+rational or algebraic coefficients, matrix shapes and unique candidate IDs.
+Generic invertibility still permits zeros or poles at epsilon zero.
+Integral routing records its actual proposal method; a manual/Gram proposal is
+not attributed to DlogBasis merely because it uses the same reduction bridge.
+
 The direct CANONICA/Libra providers use the same `source_basis`,
 `full_new_basis_rows`, and `member_candidate_ids`; their source basis may contain
 only current-sector masters. `BuildFullSectorDE.wls` embeds rows into the raw
 prefix using the explicit source-basis mapping, with zero coefficients for
 missing columns. It reuses the full `ordered_master_de` without repeating IBP or
 DE construction.
+
+By default `BUILD_FULL_DE` constructs only the passing candidate named by
+`core_transform`. Consumers that need every declared candidate can set
+`payload.complete_candidate_pool: true`; each screening component still applies
+its own coefficient-domain and acceptance contract. The builder rejects nonzero candidate
+support or source couplings outside the requested prefix, and checks that the
+full rows reproduce the checked cut transformation. Its block-lower inverse
+requires only the current-sector inverse.
 
 If `old_lower=Tlower.accepted_lower`, first use `T0=diag(Tlower,I)` to obtain the
 mixed prefix DE. The full candidate rows are
@@ -681,6 +711,12 @@ and `statemng`.
 full DE and cumulative transformation. It calls `DLogResidues`, shared with the
 sector checker, to solve jointly for constant residues in all variables and
 reconstruct exactly. Only `ALL_PASS` outputs `canonical_basis` and `canonical_de`.
+The final `basis_definition` check also proves that the published basis consists
+of explicit source-master combinations satisfying `source_basis = T . basis`.
+Unresolved abbreviations require their actual source-master definitions before
+acceptance. `CHECK_CANONICAL` binds the transform to the full source prefix;
+`COMMIT_SECTOR` requires matching passing check flags and the exact checked
+transformation, and `NEXT_SECTOR` rejects traces that are not a resident prefix.
 Exact algebraic expressions use Wolfram differentiation, simplification, and
 `SolveAlways` directly; no additional algebraic-field or branch-management layer
 is constructed.

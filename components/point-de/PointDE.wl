@@ -173,17 +173,19 @@ PreparePoint[family_Association, masterData_Association, candidates_Association,
 
 BuildPointDE[p_Association, rules_List] := Catch[Module[
   {masters = p["masters"], head, n, nv, eps, reduced, missing, row, t, q, ak, r, dr, inv,
-   projection, projectionDerivatives, matrices, sample, report, pointRules},
+   projection, projectionDerivatives, matrices, sample, report, pointRules, dispatch},
   need[p["schema"] === "canon-neu/prepared-point/v1", "INVALID_PREPARED_POINT"];
   need[And @@ (MatchQ[#, _Rule] & /@ rules), "INVALID_REDUCTION_RULES"];
   head = Head[First[masters]]; n = Length[masters]; nv = Length[p["variables"]]; eps = p["regulator"];
   pointRules = rules /. p["point"];
-  reduced = p["targets"] /. Dispatch[pointRules];
+  dispatch = Dispatch[pointRules];
+  reduced = p["targets"] /. dispatch;
   missing = Complement[DeleteDuplicates[Cases[reduced, g_ /; Head[g] === head, Infinity]], masters];
   need[missing === {}, "MISSING_TARGETS", <|"missing" -> missing|>];
-  row[e_] := Module[{value = Expand[e /. Dispatch[pointRules] /. p["dimension_rule"]], v},
-    v = Coefficient[value, #] & /@ masters;
-    need[FreeQ[v, g_ /; Head[g] === head] && zeroQ[value - v . masters] && finiteExactQ[v], "NONLINEAR_OR_INEXACT_REDUCTION"];
+  row[e_] := row[e] = Module[{v},
+    v = First[CanonMethodCard`IntegralCoefficientRows[
+      {e /. dispatch /. p["dimension_rule"]}, masters, head]];
+    need[v =!= $Failed && finiteExactQ[v], "NONLINEAR_OR_INEXACT_REDUCTION"];
     rat[v]];
   (* Check every target, including master derivatives not used by a candidate row. *)
   row /@ p["targets"];

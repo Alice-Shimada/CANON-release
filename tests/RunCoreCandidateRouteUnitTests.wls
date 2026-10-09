@@ -10,7 +10,7 @@ sector = <|"id" -> 3, "propagator_count" -> 2|>;
 basis = <|"schema" -> "canon-neu/sector-basis/v1", "sector" -> sector,
   "family_id" -> "rank-test", "basis_id" -> "rank-test/3", "basis" -> {j, k}|>;
 cut = Join[KeyDrop[basis, "schema"], <|"schema" -> "canon-neu/sector-cut-de/v1",
-  "variables" -> {x}, "regulator" -> eps,
+  "coefficient_domain" -> "exact-rational-functions", "variables" -> {x}, "regulator" -> eps,
   "matrices" -> {{{eps/x, 0}, {0, eps/(1-x)}}}|>];
 bridge = <|"masters" -> {l, j, k}, "tool_provenance" -> <||>,
   "candidate_pool" -> <|"available" -> 4, "remaining" -> 0, "pool_exhausted" -> True|>,
@@ -43,6 +43,8 @@ badRows = Table[CANON`CandidateIBPBridge`BuildCoreCandidates[
   Join[bridge, <|"candidates" -> {<|"candidate_id" -> "bad", "reduced_expression" -> expression|>}|>],
   prepared, basis, cut], {expression, {j^2, j k, Sin[j], 1/j, Sqrt[j], j+1}}];
 tests = {
+  VerificationTest[routed["method", "id"], "integral-candidate-reduced-groups",
+    TestID -> "generic-integral-routing-does-not-claim-a-dlog-search"],
   VerificationTest[AllTrue[badRows, FailureQ[#] && #[[1]] === "SOURCE_BASIS_MISMATCH" &], True,
     TestID -> "external-bridge-nonlinearity-is-not-projected-away"],
   VerificationTest[routed["reduced_rank"], 2, TestID -> "IBP-rank-ignores-dependent-lower-tail-representatives"],

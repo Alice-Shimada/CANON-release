@@ -10,13 +10,13 @@
   "coefficient_domain" -> "exact-rational-functions",
   "dimension" -> 26,
   "basis" -> Join[
-    {G[2, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, -1, 0, 0, 0, 0}]},
-    Table[G[1, {index}], {index, 2, 26}]
+    {Global`G[2, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, -1, 0, 0, 0, 0}]},
+    Table[Global`G[1, {index}], {index, 2, 26}]
   ],
-  "variable" -> x,
-  "regulator" -> eps,
-  "alphabet" -> {x, 1 + x},
-  "ut_seed" -> G[2, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, -1, 0, 0, 0, 0}],
+  "variable" -> Global`x,
+  "regulator" -> Global`eps,
+  "alphabet" -> {Global`x, 1 + Global`x},
+  "ut_seed" -> Global`G[2, {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, -1, 0, 0, 0, 0}],
   "take_row" -> 1,
   "convention" -> "old_basis = transformation . new_basis",
   "source_matrix" -> ConstantArray[0, {26, 26}],

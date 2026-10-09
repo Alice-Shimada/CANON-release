@@ -17,7 +17,9 @@ normalizeReduction[task_, input_, out_, runtime_, cfg_, data_] := Module[
       "NATIVE_MASTER_RELATION", "An imported rule contradicts the declared independent native master basis."]], {i, Length[lhs]}];
   need[AllTrue[data["targets"], MemberQ[lhs, #] || MemberQ[masters, #] &], "MISSING_TARGETS", "Native exports do not cover every declared target."];
   (* Exact linear combinations of checked coefficients/maps are already closed in the source basis. *)
-  rules = Thread[lhs -> (Together /@ ((# . map["matrix"]) . masters & /@ coeffs))];
+  (* Reduce scalar coefficients independently; never form a common denominator
+     across different master integrals. *)
+  rules = Thread[lhs -> (Map[Together, coeffs . map["matrix"], {2}] . masters)];
   targetRules = (# -> If[MemberQ[masters, #], #, # /. rules]) & /@ data["targets"];
   artifacts = write[<|"masters" -> masters, "rules" -> targetRules|>, out, "ibp-reduction.wl", "ibp_reduction"];
   <|"artifacts" -> artifacts, "summary" -> <|"target_count" -> Length[targetRules], "master_count" -> Length[masters], "basis_mapping" -> map["kind"],

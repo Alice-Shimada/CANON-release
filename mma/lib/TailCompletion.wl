@@ -140,17 +140,26 @@ CompleteAlgebraicTail[fullDE_Association, selected_Association] := Module[
    lowerDimension = fullDE["block_boundaries", "lower_dimension"],
    transformation = selected["full_transformation"], matrices = selected["transformed_matrices"],
    alphabet, method = "candidate-completion", dimension, scale, normalization,
-   completion, tailSolved = False},
+   completion, scaled, tailSolved = False},
   dimension = Length[transformation];
   alphabet = DeleteDuplicates @ Join[fullDE["alphabet"],
     CanonMethodCard`DLogAlphabet[matrices, variables, regulator]];
   If[!CanonMethodCard`EpsilonFactorizedQ[matrices, regulator],
     scale = commonTailScale[
-      matrices[[All, lowerDimension + 1 ;; dimension, 1 ;; lowerDimension]], variables, regulator];
+      matrices[[All, lowerDimension + 1 ;; dimension, 1 ;; lowerDimension]], variables, regulator]/regulator;
     normalization = DiagonalMatrix[Join[ConstantArray[1, lowerDimension],
       ConstantArray[scale, dimension - lowerDimension]]];
+    scaled = CanonMethodCard`GaugeTransform[matrices, variables, normalization];
+    (* A common regulator factor can already give epsilon form. Keep the old
+       affine normalization only when residual epsilon dependence remains. *)
+    If[CanonMethodCard`EpsilonFactorizedQ[scaled, regulator],
+      matrices = scaled; method = "epsilon-tail-normalization",
+      scale = Together[regulator scale];
+      normalization = DiagonalMatrix[Join[ConstantArray[1, lowerDimension],
+        ConstantArray[scale, dimension - lowerDimension]]];
+      matrices = CanonMethodCard`GaugeTransform[matrices, variables, normalization]
+    ];
     transformation = Map[Together, transformation.normalization, {2}];
-    matrices = CanonMethodCard`GaugeTransform[matrices, variables, normalization]
   ];
   completion = scalarRootPrimitive[fullDE["source_matrices"], variables, regulator,
     lowerDimension, transformation, matrices, alphabet, method];
@@ -201,6 +210,11 @@ backendFailure[stage_String, candidateID_, packageEntry_String, backendReturn_Ho
       "initial_transformation" -> initialTransformation, "matrices" -> backendMatrices,
       "options" -> {CANONICA`VerbosityLevel -> 0}|>|>;
 
+backendTransformationQ[result_, dimension_] := ListQ[result] && Length[result] > 0 &&
+  MatrixQ[First[result]] && Dimensions[First[result]] === {dimension, dimension} &&
+  AllTrue[Flatten[First[result]], CanonMethodCard`ExactRationalExpressionQ] &&
+  TrueQ[Together[Det[First[result]]] =!= 0];
+
 CompleteRationalTail[fullDE_Association, candidateID_, solution_Association, packageEntry_String] := Module[
   {variables = fullDE["variables"], regulator = fullDE["regulator"],
    lowerDimension = fullDE["block_boundaries", "lower_dimension"],
@@ -208,7 +222,10 @@ CompleteRationalTail[fullDE_Association, candidateID_, solution_Association, pac
    dimension, dependencies, active, activeLower, boundaries, backendMatrices,
    result, embedding, lifted, backendTransformation, alphabet},
   dimension = Length[transformation];
-  Get[packageEntry];
+  If[!TrueQ[Quiet @ Check[Get[packageEntry]; True, False]] ||
+      DownValues[CANONICA`TransformOffDiagonalBlock] === {} ||
+      DownValues[CANONICA`TransformDlogToEpsForm] === {},
+    Return[Failure["TOOL_ERROR", <|"Message" -> "CANONICA failed to load its required tail interfaces."|>]]];
   dependencies = Table[Union @@ (Flatten[Position[#[[i]],
       x_ /; x =!= 0, {1}, Heads -> False]] & /@ matrices), {i, dimension}];
   active = FixedPoint[Union[#, Flatten[dependencies[[#]]]] &,
@@ -220,7 +237,7 @@ CompleteRationalTail[fullDE_Association, candidateID_, solution_Association, pac
   result = CANONICA`TransformOffDiagonalBlock[
     variables, boundaries, IdentityMatrix[Length[active]],
     backendMatrices, CANONICA`VerbosityLevel -> 0];
-  If[!MatrixQ[result[[1]]], Return[Join[solution,
+  If[!TrueQ[backendTransformationQ[result, Length[active]]], Return[Join[solution,
     <|"method" -> "canonica-off-diagonal", "backend_failure" -> backendFailure[
       "TransformOffDiagonalBlock", candidateID, packageEntry,
       Extract[OwnValues[result], {1, 2}, HoldComplete], variables, active, boundaries,
@@ -234,7 +251,7 @@ CompleteRationalTail[fullDE_Association, candidateID_, solution_Association, pac
     {{1, lowerDimension}, {lowerDimension + 1, dimension}}];
   result = CANONICA`TransformDlogToEpsForm[
     variables, boundaries, lifted, backendMatrices, CANONICA`VerbosityLevel -> 0];
-  If[!MatrixQ[result[[1]]], Return[Join[solution,
+  If[!TrueQ[backendTransformationQ[result, dimension]], Return[Join[solution,
     <|"method" -> "canonica-off-diagonal", "backend_failure" -> backendFailure[
       "TransformDlogToEpsForm", candidateID, packageEntry,
       Extract[OwnValues[result], {1, 2}, HoldComplete], variables, Range[dimension],

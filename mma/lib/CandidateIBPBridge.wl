@@ -237,6 +237,9 @@ ValidateCandidateIBPReduction[compiled_, reduction_Association] := Module[
     "reason" -> "Compiled targets do not reduce completely and linearly to the declared masters in one substitution.",
     "unresolved_targets" -> (ToString[#, InputForm] & /@ targets[[unresolved]]),
     "target_images" -> (ToString[#, InputForm] & /@ images[[unresolved]])|>]]];
+  If[!AllTrue[Flatten[rows], CanonMethodCard`ExactRationalExpressionQ],
+    Return[Failure["INVALID_REDUCTION", <|"reason" ->
+      "Supplied IBP coefficients must be finite exact rational functions."|>]]];
   reduction
 ];
 
@@ -295,7 +298,8 @@ BuildCoreCandidates[bridge_, preparedFamily_, sectorBasis_, cut_] := Module[
     "source_basis" -> sourceBasis, "basis" -> basis,
     "variables" -> cut["variables"], "regulator" -> cut["regulator"],
     "convention" -> "old_basis = transformation . new_basis",
-    "method" -> <|"id" -> "dlogbasis-refine-reduced-groups",
+    "method" -> <|"id" -> "integral-candidate-reduced-groups",
+      "proposal_method" -> Lookup[Lookup[bridge, "method_evidence", <||>], "method_id", None],
       "tool_provenance" -> bridge["tool_provenance"]|>,
     "candidate_group_pool" -> pool,
     "reduced_rank" -> Length[base], "required_rank" -> Length[basis],

@@ -128,13 +128,16 @@ runDerivativeCase[name_, diagonal_:False] := Module[
  selected=<|"candidate_id"->name,"member_candidate_ids"->{name},
    "new_basis_rows"->Inverse[q],"full_transformation"->q,
    "transformed_matrices"->CanonMethodCard`GaugeTransform[raw,{x,y},q]|>;
- full=<|"family_id"->family,"sector"->sector,"current_basis_id"->name,
+ full=<|"schema"->"canon-neu/full-prefix-candidates/v1",
+   "family_id"->family,"sector"->sector,"current_basis_id"->name,
    "accepted_prefix_id"->"unit-lower","source_basis"->{l1,j1,j2},
    "source_matrices"->raw,"variables"->{x,y},"regulator"->eps,
-   "alphabet"->{x,y,y-1},"convention"->"old=T.new",
+   "alphabet"->{x,y,y-1},"convention"->"old_prefix_basis = full_transformation . candidate_prefix_basis",
    "block_boundaries"-><|"lower_dimension"->1,"current_dimension"->2|>,
    "candidates"->{selected}|>;
- core=<|"candidate_id"->name|>;
+ core=Join[KeyTake[full,{"sector","family_id","variables","regulator"}],
+  <|"schema"->"canon-neu/core-transform/v1","candidate_id"->name,"basis_id"->name,
+    "basis"->{j1,j2},"checks"-><|"pass"->True|>|>];
  tail=invoke[name<>"-tail","mma/SolveTail.wls","SOLVE_TAIL",sector,
    <|"full_sector_de"->put[name<>"-full",full],
      "core_transform"->put[name<>"-core",core],
@@ -153,17 +156,19 @@ insufficientDerivative=runDerivativeCase["insufficient-derivative",True];
 (* An unsupported algebraic tail must return useful evidence without loading
    the rational backend. The deliberately absent entry makes that observable. *)
 unsupportedRaw={eps {{0,0},{1/Sqrt[1+x+x^3],0}}};
-unsupportedFull=<|"family_id"->family,"sector"->sector,
+unsupportedFull=<|"schema"->"canon-neu/full-prefix-candidates/v1","family_id"->family,"sector"->sector,
  "current_basis_id"->"cubic-root","accepted_prefix_id"->"unit-lower",
  "source_basis"->{l1,j},"source_matrices"->unsupportedRaw,
  "variables"->{x},"regulator"->eps,"alphabet"->{},
- "convention"->"old=T.new",
+ "convention"->"old_prefix_basis = full_transformation . candidate_prefix_basis",
  "block_boundaries"-><|"lower_dimension"->1,"current_dimension"->1|>,
  "candidates"->{<|"candidate_id"->"cubic-root",
    "full_transformation"->IdentityMatrix[2],"transformed_matrices"->unsupportedRaw|>}|>;
 unsupportedTail=invoke["unsupported-root-tail","mma/SolveTail.wls","SOLVE_TAIL",sector,
  <|"full_sector_de"->put["unsupported-root-full",unsupportedFull],
-   "core_transform"->put["unsupported-root-core",<|"candidate_id"->"cubic-root"|>],
+   "core_transform"->put["unsupported-root-core",Join[KeyTake[unsupportedFull,{"sector","family_id","variables","regulator"}],
+     <|"schema"->"canon-neu/core-transform/v1","candidate_id"->"cubic-root","basis_id"->"cubic-root",
+       "basis"->{j},"checks"-><|"pass"->True|>|>]],
    "method_options"-><|"package_entry"->temporary<>"/absent-CANONICA.m"|>|>];
 
 tests={
