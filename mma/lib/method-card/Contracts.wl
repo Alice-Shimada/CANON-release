@@ -34,6 +34,8 @@ ExactAlgebraicExpressionQ[expr_] := Which[
   Head[expr] === Symbol, Context[expr] =!= "System`",
   Head[expr] === Complex,
     ExactAlgebraicExpressionQ[Re[expr]] && ExactAlgebraicExpressionQ[Im[expr]],
+  MemberQ[{Root, AlgebraicNumber}, Head[expr]],
+    Precision[expr] === Infinity && TrueQ[Element[expr, Algebraics]],
   MemberQ[{Plus, Times}, Head[expr]], AllTrue[List @@ expr, ExactAlgebraicExpressionQ],
   Head[expr] === Power,
     (IntegerQ[Last[expr]] || Head[Last[expr]] === Rational) &&

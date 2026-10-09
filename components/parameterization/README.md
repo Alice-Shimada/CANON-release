@@ -46,7 +46,11 @@ have explicit `invariants` records, each with a WL `name` and integer
 `mass_dimension`; dimensions are never guessed. For a fully numeric point this
 list can be empty. Optional `parameters` is preserved; otherwise it consists
 of the declared dimension, variables and invariants. The regulator and dimension
-remain symbolic. Inexact points and unbound remaining invariant symbols fail.
+remain symbolic. Inexact points and unbound remaining invariant symbols fail, including inexact
+complex numbers. Exact complex rational coefficients remain supported. The
+dimension rule must replace the declared dimension; variables, momentum labels,
+dimension and regulator must not be confused. Sector masks must be nonnegative
+and may set only the declared propagator slots.
 
 The outputs are:
 
@@ -112,3 +116,6 @@ no native reduction process. It verifies arbitrary and indexed charts,
 explicit masses and invariant dimensions, neutral point-DE consumption,
 legacy reader compatibility, and the default discovery/DE consumers after
 relocation. Its generated selection manifest chooses phases independently.
+
+An existing output artifact is never silently reused as a new preparation result.
+A refused artifact write returns `FAIL/ARTIFACT_WRITE_FAILED`.

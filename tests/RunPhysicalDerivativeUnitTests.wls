@@ -58,5 +58,14 @@ algebraic=CANON`PhysicalDerivative`PreparePhysicalDerivatives[Join[bubble,<|"sca
 check["unsupported_algebraic_coefficients_fail_before_v2_output",FailureQ[algebraic]&&algebraic[[1]]==="NONRATIONAL_PHYSICAL_DERIVATIVE"];
 regulator=CANON`PhysicalDerivative`PreparePhysicalDerivatives[Join[bubble,<|"dimension"->d,"regulator"->eps,"variables"->{eps}|>]];
 check["dimension_and_regulator_derivatives_are_out_of_scope",FailureQ[regulator]&&regulator[[1]]==="KINEMATIC_DERIVATIVES_ONLY"];
+complexFamily=<|"loop_momenta"->{q},"external_momenta"->{},"variables"->{m2},
+  "propagator_momenta"->{q},"propagator_masses_squared"->{I m2}|>;
+complexDerivative=CANON`PhysicalDerivative`PreparePhysicalDerivatives[complexFamily];
+check["exact_complex_rational_mass",!FailureQ[complexDerivative] &&
+  complexDerivative["operators",m2]==={<|"constant"->-I,"linear"->{}|>}];
+inexactComplex=CANON`PhysicalDerivative`PreparePhysicalDerivatives[
+  Join[complexFamily,<|"propagator_masses_squared"->{(1.+I)m2}|>]];
+check["inexact_complex_geometry_rejected",FailureQ[inexactComplex] &&
+  inexactComplex[[1]]==="INEXACT_DERIVATIVE_GEOMETRY"];
 Export[receipt,checks,"RawJSON"];
 Exit[If[And@@Values[checks],0,1]];

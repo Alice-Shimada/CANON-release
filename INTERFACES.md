@@ -12,7 +12,9 @@ python3 run_step.py <input.json> <output_dir> [--components PACKAGE.json] [--met
 
 Implemented scripts must write the common result format to `<output_dir>/result.json`.
 Use `.wl` for scientific artifacts where possible; Python passes their paths without
-reading their contents.
+reading their contents. When a WL Association descriptor loaded by the common
+artifact reader includes `sha256`, the file must match that SHA-256 before it is
+evaluated. `LoadArtifact` returns a `SOURCE_HASH_MISMATCH` failure for a mismatch.
 
 The request's `step` selects an implementation from
 [`components/default.json`](components/default.json), optionally overridden by a
@@ -658,7 +660,11 @@ The direct CANONICA/Libra providers use the same `source_basis`,
 only current-sector masters. `BuildFullSectorDE.wls` embeds rows into the raw
 prefix using the explicit source-basis mapping, with zero coefficients for
 missing columns. It reuses the full `ordered_master_de` without repeating IBP or
-DE construction.
+DE construction. Raw supplied reduction rules are checked for linear closure
+and source-master invariance before the default builder performs unit-vector
+substitution; scalar offsets, nonlinear products and ambiguous duplicate rules
+cannot become valid-looking matrix entries. The builder reuses the checked
+coefficient rows instead of repeating their extraction.
 
 By default `BUILD_FULL_DE` constructs only the passing candidate named by
 `core_transform`. Consumers that need every declared candidate can set

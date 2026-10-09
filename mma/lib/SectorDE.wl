@@ -120,7 +120,7 @@ validMatricesQ[matrices_, variables_, size_] := Module[{cache = <||>},
 ];
 
 BuildOrderedMasterDE[prepared_, masterBasis_, reduction_, normalized_] := Module[
-  {masters, variables, dimensionRule, rules, fullDE, matrices, invalid},
+  {masters, variables, dimensionRule, rules, coefficientRows, fullDE, matrices, invalid},
   invalid = failure["INVALID_DIFFERENTIAL_EQUATION",
     "built differential equation is malformed or contains non-rational entries"];
   masters = masterBasis["masters"]; variables = prepared["variables"];
@@ -130,11 +130,21 @@ BuildOrderedMasterDE[prepared_, masterBasis_, reduction_, normalized_] := Module
     Return[failure["INVALID_DIFFERENTIAL_EQUATION", "dimension_rule is invalid"]]];
   If[!AssociationQ[reduction], Return[invalid]];
   rules = Lookup[reduction, "rules", None];
-  If[!ListQ[rules] || !AllTrue[rules, MatchQ[#, _Rule | _RuleDelayed] &] ||
-    Lookup[reduction, "masters", masters] =!= masters, Return[invalid]];
+  If[!DuplicateFreeQ[masters] || !ListQ[rules] ||
+    !AllTrue[rules, MatchQ[#, _Rule | _RuleDelayed] &] ||
+    Lookup[reduction, "masters", masters] =!= masters || !DuplicateFreeQ[First /@ rules] ||
+    AnyTrue[{"family_ref", "basis_ref"}, KeyExistsQ[reduction, #] && reduction[#] =!= prepared[#] &],
+    Return[invalid]];
+  (* Check raw integral linearity before unit-vector substitution can collapse
+     products or broadcast a scalar offset into apparently valid coefficients. *)
+  coefficientRows = CanonMethodCard`IntegralCoefficientRows[Last /@ rules, masters, Head[First[masters]]];
+  If[MemberQ[coefficientRows, $Failed] ||
+    !AllTrue[Select[rules, MemberQ[masters, First[#]] &],
+      CanonMethodCard`ZeroMatrixQ[CanonMethodCard`IntegralCoefficientRows[
+        {Last[#] - First[#]}, masters, Head[First[masters]]]] &], Return[invalid]];
   fullDE = Quiet @ Check[CANON`DEBuilder`BuildDifferentialEquations[
     <|"parameters" -> prepared["parameters"],
-      "operators" -> affineOperators[normalized["derivatives"]]|>, masters, rules], $Failed];
+      "operators" -> affineOperators[normalized["derivatives"]]|>, masters, rules, coefficientRows], $Failed];
   matrices = If[AssociationQ[fullDE] && AssociationQ[Lookup[fullDE, "matrices", None]],
     Lookup[fullDE["matrices"], variables, $Failed] /. dimensionRule, $Failed];
   If[!validMatricesQ[matrices, variables, Length[masters]], Return[invalid]];

@@ -11,6 +11,9 @@ checks["streamed_collection_matches_identity_and_roles"] = !FailureQ[index] &&
   Length[index["training"]] === 2 && Length[index["validation"]] === 1 && index["variables"] === {CANON`DEData`x} && index["regulator"] === CANON`DEData`eps;
 checks["streamed_index_references_resolve"] = And @@ (FileExistsQ[CanonMethodCard`ResolveInputPath[
   FileNameJoin[{tree, "collector-fixtures", "index.wl"}], #["path"]]] & /@ Join[index["training"], index["validation"]]);
+checks["index_pins_each_collected_sample"] = And @@ (#["sha256"] === FileHash[
+  CanonMethodCard`ResolveInputPath[FileNameJoin[{tree,"collector-fixtures","index.wl"}], #["path"]],
+  "SHA256", "HexString"] & /@ Join[index["training"],index["validation"]]);
 directory = FileNameJoin[{tree, "collector-fixtures"}];
 If[!DirectoryQ[directory], CreateDirectory[directory]];
 training = CanonMethodCard`ReadWLData[FileNameJoin[{tree, "training", "de-sample.wl"}]];

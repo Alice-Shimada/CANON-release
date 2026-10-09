@@ -11,6 +11,7 @@ zeroQ[e_] := And @@ (TrueQ[rat[#] === 0] & /@ Flatten[{e}]);
 rationalSyntaxQ[e_] := Which[
   IntegerQ[e] || Head[e] === Rational, True,
   Head[e] === Symbol, Context[e] =!= "System`",
+  Head[e] === Complex, rationalSyntaxQ[Re[e]] && rationalSyntaxQ[Im[e]],
   MemberQ[{Plus, Times}, Head[e]], AllTrue[List @@ e, rationalSyntaxQ],
   Head[e] === Power, IntegerQ[Last[List @@ e]] && rationalSyntaxQ[First[List @@ e]],
   True, False
@@ -49,7 +50,7 @@ PreparePhysicalDerivatives[family_Association] := Catch @ Module[
     Intersection[variables, Join[loops, external]] === {} &&
     ListQ[routing] && routing =!= {} && ListQ[masses] && Length[routing] === Length[masses],
     "INVALID_DERIVATIVE_FAMILY"];
-  need[FreeQ[{routing, masses, scalarProducts}, _Real | Indeterminate | _DirectedInfinity | Undefined],
+  need[FreeQ[{routing, masses, scalarProducts}, _Real | (z_Complex /; Precision[z] =!= Infinity) | Indeterminate | _DirectedInfinity | Undefined],
     "INEXACT_DERIVATIVE_GEOMETRY"];
   need[FreeQ[variables, Lookup[family, "dimension", None] | Lookup[family, "regulator", None]],
     "KINEMATIC_DERIVATIVES_ONLY"];

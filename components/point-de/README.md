@@ -224,3 +224,25 @@ python3 /path/to/point-de/tests/run.py --canon /path/to/CANON --output /path/to/
 coefficient and frame derivatives, external Gram/epsilon atoms, regulated loop
 Gram data, indexed variables, two loops, changed master basis, incomplete
 reductions, mismatched reduction points, rank failure and relocation.
+
+## Input and publication boundaries
+
+Momentum expressions must be homogeneous linear combinations of the declared
+momenta. Constant offsets and undeclared or nonlinear terms in routing and
+supported numerator atoms are rejected, rather than discarded during coefficient
+extraction. Coefficient rows are cached within the preparation call.
+
+A supplied prepared point must contain all derivative directions and a complete
+target union. Reduction rule left sides must be unique fixed integrals. If a
+reduction Association declares masters or family/basis identities, they must
+match the prepared source after the explicitly selected integral-head mapping.
+That mapping acts on integral expressions only; a scalar with the same printed
+name is preserved.
+Point coefficients may contain the regulator and exact algebraic constants;
+unresolved kinematic symbols and inexact complex coefficients are rejected.
+
+A supplied `sha256` on a sample reference is checked before reading it. The
+collected index pins every sample by SHA-256 so later reconstruction rejects a
+sample changed after collection. Refused
+artifact writes return `ARTIFACT_WRITE_FAILED`, so a file left by an earlier
+attempt cannot be reported as newly produced.

@@ -2,7 +2,7 @@ BeginPackage["CANON`DEBuilder`"];
 
 BuildDifferentialEquations::usage =
   "BuildDifferentialEquations[family, masters, rules] constructs exact ordered " <>
-  "master-integral differential-equation matrices entirely in memory.";
+  "master-integral differential-equation matrices entirely in memory. An optional fourth argument reuses caller-checked coefficient rows in rule order and master order.";
 
 Begin["`Private`"];
 
@@ -18,10 +18,11 @@ masterDerivative[master_, operator_] := Module[
   ]
 ];
 
-vectorizedRules[masters_, rules_] := Module[{basis, vectors, zero},
+vectorizedRules[masters_, rules_, coefficientRows_ : Automatic] := Module[{basis, vectors, zero},
   zero = ConstantArray[0, Length[masters]];
   basis = Thread[masters -> IdentityMatrix[Length[masters]]];
-  vectors = Replace[(Last /@ rules) /. basis, 0 -> zero, {1}];
+  vectors = If[coefficientRows === Automatic,
+    Replace[(Last /@ rules) /. basis, 0 -> zero, {1}], coefficientRows];
   Dispatch @ Join[basis, Thread[(First /@ rules) -> vectors]]
 ];
 
@@ -50,10 +51,10 @@ curvatureRecord[matrices_, parameters_, pair_] := Module[
     "zero" -> And @@ (# === 0 & /@ Flatten[residual])|>
 ];
 
-BuildDifferentialEquations[family_, masters_, rules_] := Module[
+BuildDifferentialEquations[family_, masters_, rules_, coefficientRows_ : Automatic] := Module[
   {variables, replacements, zero, matrices, records},
   variables = Keys[family["operators"]];
-  replacements = vectorizedRules[masters, rules];
+  replacements = vectorizedRules[masters, rules, coefficientRows];
   zero = ConstantArray[0, Length[masters]];
   matrices = AssociationMap[Function[variable, Replace[
       (masterDerivative[#, family["operators", variable]] /. replacements) & /@

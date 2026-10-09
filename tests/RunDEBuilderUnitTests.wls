@@ -40,6 +40,10 @@ manyVariableResult = BuildDifferentialEquations[
     "operators" -> AssociationMap[{{0, 1/#}} &, manyVariables]|>, {f[1]}, {}];
 
 tests = {
+  VerificationTest[BuildDifferentialEquations[
+    <|"parameters"->{d,x,y},"operators"-><|x->{{1,0}},y->{{2,0}}|>|>,
+    masters,rules,{{d,d,1}}] === twoVariableResult,
+    True,TestID->"checked-coefficient-row-reuse-preserves-the-complete-result"],
   VerificationTest[Values[manyVariableResult["matrices"]] === ({{-1/#}} & /@ manyVariables) &&
     TrueQ[manyVariableResult["validity", "flat"]] &&
     Length[manyVariableResult["validity", "pairs"]] === 21,

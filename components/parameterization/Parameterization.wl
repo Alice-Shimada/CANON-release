@@ -4,7 +4,7 @@ Begin["`Private`"];
 need[q_, tag_, details_: <||>] := If[!TrueQ[q], Throw[Failure[tag, details]]];
 rat[e_] := Cancel[Together[e]];
 zeroQ[e_] := And @@ (TrueQ[rat[#] === 0] & /@ Flatten[{e}]);
-exactQ[e_] := FreeQ[e, _Real | Indeterminate | _DirectedInfinity];
+exactQ[e_] := FreeQ[e, _Real | (z_Complex /; Precision[z] =!= Infinity) | Indeterminate | _DirectedInfinity | Undefined];
 str[e_] := StringReplace[ToString[e, InputForm], " " -> ""];
 variableQ[v_] := MatchQ[v, _Symbol | _Symbol[__Integer]];
 
@@ -21,13 +21,17 @@ ParameterizeFamily[spec_Association] := Catch[Module[
   need[ListQ[loops] && Length[loops] > 0 && ListQ[ext] &&
     And @@ (MatchQ[#, _Symbol] & /@ Join[loops, ext]) && DuplicateFreeQ[Join[loops, ext]] &&
     ListQ[vars] && And @@ (variableQ /@ vars) && DuplicateFreeQ[vars] &&
-    MatchQ[dim, _Symbol] && MatchQ[eps, _Symbol] && MatchQ[spec["dimension_rule"], _Rule], "INVALID_DECLARED_SYMBOLS"];
+    MatchQ[dim, _Symbol] && MatchQ[eps, _Symbol] && dim =!= eps &&
+    FreeQ[vars, dim | eps | Alternatives @@ Join[loops, ext]] &&
+    MatchQ[spec["dimension_rule"], _Rule] && First[spec["dimension_rule"]] === dim &&
+    exactQ[Last[spec["dimension_rule"]]], "INVALID_DECLARED_SYMBOLS"];
   routing = spec["propagator_momenta"]; masses = spec["propagator_masses_squared"];
   indexOrder = spec["index_order"]; slots = spec["propagator_slots"];
   need[ListQ[routing] && Length[routing] > 0 && ListQ[masses] &&
     Length[routing] === Length[masses] === Length[indexOrder] && DuplicateFreeQ[indexOrder] &&
     VectorQ[slots, IntegerQ] && DuplicateFreeQ[slots] && SubsetQ[Range[Length[routing]], slots] &&
-    VectorQ[spec["top_level_sectors"], IntegerQ], "INVALID_PROPAGATOR_ORDER"];
+    VectorQ[spec["top_level_sectors"], IntegerQ] &&
+    AllTrue[spec["top_level_sectors"], # >= 0 && BitAnd[#, Total[2^(slots - 1)]] === # &], "INVALID_PROPAGATOR_ORDER"];
   point = Lookup[spec, "point", {}]; invariants = Lookup[spec, "invariants", {}];
   need[ListQ[invariants] && And @@ (AssociationQ[#] && variableQ[Lookup[#, "name", None]] &&
     IntegerQ[Lookup[#, "mass_dimension", None]] & /@ invariants), "INVALID_INVARIANT_DECLARATION"];
