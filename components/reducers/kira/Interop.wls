@@ -84,17 +84,18 @@ If[action === "prepare",
     rules = decode[Import[rulesPath, "Text"]] /. CANONKiraImport`Integral -> head;
     need[ListQ[rules] && AllTrue[rules, MatchQ[#, _Rule] &], "INVALID_NATIVE_RULES"];
     need[AllTrue[First /@ rules, integralQ] && DuplicateFreeQ[First /@ rules], "INVALID_NATIVE_RULE_TARGETS"];
-    (* Kira's dimension symbol is d; map it to the declared scientific dimension. *)
-    rules = rules /. CANON`DEData`d -> parse[family["dimension"]];
+    (* Restore native invariants and Kira's dimension in one simultaneous map. *)
+    aliases = Lookup[interop, "invariant_aliases", {}];
+    rules = rules /. Join[(parse[#["native"]] -> parse[#["scientific"]]) & /@ aliases,
+      {CANON`DEData`d -> parse[family["dimension"]]}];
     reduced = targets /. rules;
     remaining = Complement[DeleteDuplicates @ Cases[reduced, g_ /; Head[g] === head, Infinity], importedMasters];
     need[remaining === {}, "UNREDUCED_NATIVE_OUTPUT", <|"unreduced" -> remaining|>];
     sourceImages = masters /. rules;
     need[And @@ MapThread[Together[#1 - #2] === 0 &, {sourceImages, masters}], "SOURCE_BASIS_CHANGED"];
-    zz = Array[Unique["source$"] &, Length[masters]];
-    polynomials = reduced /. Thread[masters -> zz];
-    need[And @@ (PolynomialQ[#, zz] && Together[# - Sum[Coefficient[#, zz[[j]]] zz[[j]], {j, Length[zz]}]] === 0 & /@ polynomials), "NATIVE_RULES_NOT_LINEAR"];
-    coefficients = Flatten[Table[Coefficient[p, z], {p, polynomials}, {z, zz}]];
+    rows = CanonMethodCard`IntegralCoefficientRows[reduced, masters, head];
+    need[FreeQ[rows, $Failed], "NATIVE_RULES_NOT_LINEAR"];
+    coefficients = Flatten[rows];
     allowed = DeleteDuplicates @ Cases[
       Join[parse /@ (#["name"] & /@ family["invariants"]), {parse[family["dimension"]]}],
       s_Symbol /; Context[s] =!= "System`", Infinity, Heads -> True];

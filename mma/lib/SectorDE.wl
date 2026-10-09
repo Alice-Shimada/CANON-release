@@ -10,23 +10,6 @@ Begin["`Private`"];
 
 failure[code_, reason_] := Failure[code, <|"Message" -> reason|>];
 
-symbolFromName[name_String] := Module[{held},
-  held = Quiet @ Check[Block[{$Context = "CANON`DEData`", $ContextPath = {"System`"}},
-    ToExpression[name, InputForm, HoldComplete]], $Failed];
-  If[MatchQ[held, HoldComplete[_Symbol]], First[held], $Failed]
-];
-
-declaredSymbolRules[value_Association] := Module[{mapping, rules},
-  mapping = Lookup[value, "operator_source_symbol_map", <||>];
-  If[!AssociationQ[mapping], Return[$Failed]];
-  rules = KeyValueMap[Function[{source, target}, Module[{from, to},
-    If[!StringQ[source] || !StringQ[target], Return[$Failed, Module]];
-    from = symbolFromName[source]; to = symbolFromName[target];
-    If[from === $Failed || to === $Failed, $Failed, from -> to]
-  ]], mapping];
-  If[MemberQ[rules, $Failed], $Failed, rules]
-];
-
 validLinearTermQ[item_, count_] := AssociationQ[item] &&
   KeyExistsQ[item, "coefficient"] && KeyExistsQ[item, "denominator"] &&
   CanonMethodCard`ExactRationalExpressionQ[item["coefficient"]] &&
@@ -78,7 +61,7 @@ LoadPreparedDerivatives[prepared_, preparedPath_String, masterBasis_, derivative
   variables = Lookup[prepared, "variables", None];
   indexOrder = Lookup[prepared, "index_order", None];
   masters = Lookup[masterBasis, "masters", None];
-  symbolRules = declaredSymbolRules[prepared];
+  symbolRules = CanonMethodCard`ParseSymbolRules[Lookup[prepared, "operator_source_symbol_map", <||>]];
   If[!ListQ[variables] || variables === {} || !AllTrue[variables, MatchQ[#, _Symbol] &] ||
     !DuplicateFreeQ[variables] || !ListQ[indexOrder] || indexOrder === {} ||
     !ListQ[masters] || masters === {} ||

@@ -67,13 +67,11 @@ If[KeyExistsQ[task["payload"], "master_basis"],
 ];
 If[ValueQ[targetData],
   head = Head[First[result["masters"]]];
-  completeQ[expression_] := Module[{value = Expand[expression /. Dispatch[result["rules"]]], coefficients},
-    coefficients = Coefficient[value, #] & /@ result["masters"];
-    FreeQ[coefficients, g_ /; Head[g] === head] &&
-      TrueQ[Together[value - coefficients . result["masters"]] === 0]
-  ];
-  If[!AllTrue[Join[targetData["targets"], result["masters"]], completeQ] ||
-      !AllTrue[(result["masters"] /. Dispatch[result["rules"]]) - result["masters"], Together[#] === 0 &],
+  dispatch = Dispatch[result["rules"]];
+  rows = CanonMethodCard`IntegralCoefficientRows[
+    Join[targetData["targets"], result["masters"]] /. dispatch, result["masters"], head];
+  If[MemberQ[rows, $Failed] ||
+      !AllTrue[(result["masters"] /. dispatch) - result["masters"], Together[#] === 0 &],
     CanonMethodCard`WriteResult[task, outputDir, "INCONCLUSIVE", "INCOMPLETE_REDUCTION", <||>,
       <|"reason" -> "Targets do not reduce completely in the declared source basis."|>]; Exit[0]]
 ];

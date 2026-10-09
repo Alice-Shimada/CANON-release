@@ -22,7 +22,7 @@ If[FailureQ[compiled],
 targetsPath = CanonMethodCard`WriteWLArtifact[<|
   "schema" -> "canon-neu/reduction-targets/v1",
   "family_ref" -> compiled["family_ref"], "basis_ref" -> compiled["basis_ref"],
-  "targets" -> Lookup[compiled["reducer_targets"], "integral"],
+  "targets" -> (#1["integral"] & /@ compiled["reducer_targets"]),
   "masters" -> compiled["masters"]|>, outputDir, "reduction-targets.wl"];
 bridgeArtifacts = <|"reduction_targets" -> <|"type" -> "mathematica-expression",
   "path" -> FileNameTake[targetsPath]|>|>;

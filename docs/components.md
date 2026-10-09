@@ -265,6 +265,7 @@ existing contexts and APIs. Distribute the whole library directory with them.
 |---|---|
 | `mma/lib/MethodCardCore.wl` | `method-card/`: artifact IO, contracts, prepared-basis routing, sectors, gauge checks, dlog algebra and structured repair |
 | `mma/lib/SectorDE.wl` | Prepared derivative loading/normalization, construction and slicing input boundaries |
+| `mma/lib/TailCompletion.wl` | Explicit algebraic completion and backend inputs; `mma/SolveTail.wls` handles CLI loading and artifact publication |
 | `components/reducers/native-adapter/NativeAdapter.wl` | `lib/`: scientific inputs/encoding, basis conversion, discovery, reduction, DEs and normalization dispatch |
 
 External input checks belong at each callable boundary. Internal helpers consume

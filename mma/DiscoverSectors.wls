@@ -15,8 +15,7 @@ masterLines = Select[
   ],
   # =!= "" && !StringStartsQ[#, "#"] &
 ];
-masterContext = If[KeyExistsQ[prepared, "integral_head"], "Global`", "CANON`DEData`"];
-masters = Block[{$Context = masterContext, $ContextPath = {"System`"}},
+masters = Block[{$Context = "CANON`DEData`", $ContextPath = {"System`"}},
   ToExpression["{" <> StringRiffle[masterLines, ","] <> "}", InputForm]
 ];
 formatted = CanonMethodCard`FormatMasterArtifacts[prepared, masters, prepared["ordered_masters", "sha256"]];

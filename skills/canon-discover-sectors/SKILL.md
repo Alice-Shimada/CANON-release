@@ -18,9 +18,10 @@ the declared `propagator_slots` and actual master indices. Bits use the full
 integral-index order, with ISP slots zero; `a1` is the least significant bit.
 The manifest includes `sector_bits` and `master_count`, with no literature
 manifest or fixed propagator count.
-With explicit `integral_head`, unqualified master names use the WL `Global`
-context to match the neutral family and reduction artifacts. Old prepared
-families without that field retain the historical ``"CANON`DEData`"`` context.
+Unqualified master names use the common ``CANON`DEData` `` data context,
+matching the default reduction reader, whether or not `integral_head` is present.
+Explicitly qualified names retain their contexts; names from different contexts
+are never identified by basename.
 
 Success writes `sector-manifest.wl`, `master-basis.wl`, and `result.json` with
 code `SECTORS_READY`. The script does not run master discovery or modify research

@@ -22,7 +22,9 @@ null`. Payload artifacts are `{ "path": "relative/file.wl" }`, optionally with a
 `CHECK_RECONSTRUCTION` takes the same original `sample_set` and `raw_letters`, plus
 `reconstruction`. The checker uses the reconstruction's frozen arithmetic; an
 explicit checker arithmetic value must match it. Descriptors copied from results
-retain their SHA-256. Trusted WL input expressions are evaluated by `Get`.
+retain their SHA-256. Trusted WL input expressions use CANON's public
+`ReadWLData`, sharing the public writer's data context for unqualified symbols.
+Explicit qualified symbols keep their declared contexts.
 
 The `canon-neu/de-sample-set/v1` Association contains shared identity fields
 `family_id`, `basis_id`, `chart_id`, `frame_id`, `scope`, ordered symbolic

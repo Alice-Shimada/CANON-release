@@ -3,7 +3,8 @@ $HistoryLength = 0;
 repoRoot = DirectoryName[DirectoryName[ExpandFileName[$InputFileName]]];
 Get[repoRoot <> "/mma/lib/MethodCardCore.wl"];
 Get[repoRoot <> "/mma/lib/CandidateIBPBridge.wl"];
-temporary = CreateDirectory[];
+temporary = If[StringQ[Environment["CANON_TEST_WORK"]],
+  CreateDirectory[Environment["CANON_TEST_WORK"]], CreateDirectory[]];
 ClearAll[l, j, k, x, eps];
 sector = <|"id" -> 3, "propagator_count" -> 2|>;
 basis = <|"schema" -> "canon-neu/sector-basis/v1", "sector" -> sector,
@@ -25,20 +26,25 @@ run[name_, selectedBridge_] := Module[{input, output, payload, process, route, c
   input = temporary <> "/" <> name <> ".json"; output = temporary <> "/" <> name;
   Export[input, <|"schema" -> "canon-neu/script-input/v1", "task_id" -> name,
     "step" -> "ROUTE_CORE_CANDIDATES", "sector" -> sector, "payload" -> payload|>, "RawJSON"];
-  process = RunProcess[{"wolframscript", "-file", repoRoot <> "/mma/RouteCoreCandidates.wls", input, output}];
+  process = RunProcess[{"python3", repoRoot <> "/run_step.py", input, output}];
   route = Get[output <> "/core-candidates.wl"];
   checkInput = temporary <> "/" <> name <> "-check.json"; checkOut = output <> "-check";
   Export[checkInput, <|"schema" -> "canon-neu/script-input/v1", "task_id" -> name <> "-check",
     "step" -> "CHECK_CORE", "sector" -> sector, "payload" -> Join[payload,
       <|"core_candidates" -> put[name <> "-core", route]|>]|>, "RawJSON"];
-  RunProcess[{"wolframscript", "-file", repoRoot <> "/mma/CheckSectorCore.wls", checkInput, checkOut}];
+  RunProcess[{"python3", repoRoot <> "/run_step.py", checkInput, checkOut}];
   {route, Import[checkOut <> "/result.json", "RawJSON"]}
 ];
 {routed, checked} = run["full-rank", bridge];
 {short, rejected} = run["short-rank", Join[bridge, <|"candidates" -> Take[bridge["candidates"],2]|>]];
 withTail = Select[routed["candidates"], MemberQ[#["member_candidate_ids"], "2"] &];
 selected = SelectFirst[routed["candidates"], #["candidate_id"] === checked["summary", "selected_candidate_id"] &];
+badRows = Table[CANON`CandidateIBPBridge`BuildCoreCandidates[
+  Join[bridge, <|"candidates" -> {<|"candidate_id" -> "bad", "reduced_expression" -> expression|>}|>],
+  prepared, basis, cut], {expression, {j^2, j k, Sin[j], 1/j, Sqrt[j], j+1}}];
 tests = {
+  VerificationTest[AllTrue[badRows, FailureQ[#] && #[[1]] === "SOURCE_BASIS_MISMATCH" &], True,
+    TestID -> "external-bridge-nonlinearity-is-not-projected-away"],
   VerificationTest[routed["reduced_rank"], 2, TestID -> "IBP-rank-ignores-dependent-lower-tail-representatives"],
   VerificationTest[And @@ (Det[#["new_basis_rows"]] =!= 0 & /@ routed["candidates"]), True,
     TestID -> "every-routed-basis-is-independent"],
@@ -55,5 +61,5 @@ tests = {
 report=TestReport[tests];
 Print[InputForm[<|"total"->Length[tests],"succeeded"->report["TestsSucceededCount"],"failed"->report["TestsFailedCount"]|>]];
 If[report["TestsFailedCount"]>0,Print[InputForm[report["TestsFailed"]]]];
-DeleteDirectory[temporary,DeleteContents->True];
+If[!StringQ[Environment["CANON_TEST_WORK"]], DeleteDirectory[temporary,DeleteContents->True]];
 Exit[If[report["TestsFailedCount"]===0,0,1]];

@@ -2,8 +2,26 @@
 $HistoryLength = 0;
 repoRoot = DirectoryName[DirectoryName[ExpandFileName[$InputFileName]]];
 Get[repoRoot <> "/mma/lib/MethodCardCore.wl"];
-packageEntry = ExpandFileName[Last[CanonMethodCard`ScriptArguments[]]];
+scriptArgs = CanonMethodCard`ScriptArguments[];
+packageEntry = ExpandFileName[First[scriptArgs]];
+snapshotPath = If[Length[scriptArgs] > 1, ExpandFileName[scriptArgs[[2]]], None];
 temporary = CreateDirectory[];
+tailComponent = temporary <> "/tail-components.json";
+testSteps = <|
+  "SEARCH_CORE/canonica" -> {"methods/canonica/run.wls","methods/canonica/SKILL.md"},
+  "CHECK_CORE" -> {"mma/CheckSectorCore.wls","skills/canon-check-core/SKILL.md"},
+  "BUILD_FULL_DE" -> {"mma/BuildFullSectorDE.wls","skills/canon-build-full-de/SKILL.md"},
+  "SOLVE_TAIL" -> {"mma/SolveTail.wls","skills/canon-solve-tail/SKILL.md"},
+  "CHECK_CANONICAL" -> {"mma/CheckCanonical.wls","skills/canon-check-canonical/SKILL.md"},
+  "COMMIT_SECTOR" -> {"mma/CommitSector.wls","skills/canon-commit-sector/SKILL.md"},
+  "FINAL_CHECK" -> {"mma/CheckFullSystem.wls","skills/canon-final-check/SKILL.md"}|>;
+Export[tailComponent, <|"schema" -> "canon-neu/components/v1",
+  "steps" -> Association @ KeyValueMap[#1 -> <|"command" -> {"{wolframscript}","-file",
+      repoRoot <> "/" <> First[#2]}, "instructions" -> repoRoot <> "/" <> Last[#2]|> &,
+    testSteps]|>, "RawJSON"];
+componentFlags = Flatten[({"--components", #} & /@
+  {repoRoot <> "/components/profiles/custom-kira.json",
+   repoRoot <> "/components/local-jobs/components.json", tailComponent})];
 ClearAll[l1,l2,j,x,y,eps];
 family="general-tail";
 sector=<|"id"->7,"propagator_count"->3|>;
@@ -14,7 +32,13 @@ invoke[name_,script_,step_,sectorValue_,payload_]:=Module[{input,output,p},
  input=temporary<>"/"<>name<>".json";output=temporary<>"/"<>name;
  Export[input,<|"schema"->"canon-neu/script-input/v1","task_id"->name,
    "step"->step,"sector"->sectorValue,"payload"->payload|>,"RawJSON"];
- p=RunProcess[{"wolframscript","-file",repoRoot<>"/"<>script,input,output}];
+ If[step === "SOLVE_TAIL" && snapshotPath =!= None && !ValueQ[tailDescription],
+   tailDescription = RunProcess[Join[{"python3",repoRoot<>"/run_step.py",input,output},
+     componentFlags,{"--describe"}]];
+   Export[snapshotPath<>".selection.json",
+     ImportString[tailDescription["StandardOutput"],"RawJSON"],"RawJSON"]];
+ p=RunProcess[Join[{"python3",repoRoot<>"/run_step.py",input,output},componentFlags,
+   If[step === "SEARCH_CORE", {"--method","canonica"}, {}]]];
  <|"output"->output,"result"->Import[output<>"/result.json","RawJSON"],"process"->p|>];
 ref[run_,key_]:=<|"type"->"mathematica-expression",
  "path"->run["output"]<>"/"<>run["result","artifacts",key,"path"]|>;
@@ -187,6 +211,47 @@ tests={
    normalization["prefix","transformation"].normalization["prefix","basis"]-{l1,l2,j}}],True,
   TestID->"final-integral-basis-reproduces-the-raw-master-vector"]
 };
+(* Two frames in one kernel must not reuse another call's primitive or script globals. *)
+If[FileExistsQ[repoRoot <> "/mma/lib/TailCompletion.wl"],
+  Get[repoRoot <> "/mma/lib/TailCompletion.wl"];
+  isolationCase[coordinate_, epsilon_] := Module[{raw, candidate, full},
+    raw = {{{0,0},{1 + epsilon/coordinate,0}}};
+    candidate = <|"full_transformation" -> IdentityMatrix[2], "transformed_matrices" -> raw|>;
+    full = <|"variables" -> {coordinate}, "regulator" -> epsilon,
+      "block_boundaries" -> <|"lower_dimension" -> 1|>, "alphabet" -> {},
+      "source_matrices" -> raw|>;
+    CanonTailCompletion`CompleteAlgebraicTail[full,candidate]
+  ];
+  firstFrame = isolationCase[x,eps];
+  otherFrame = Block[{variables={"stale"},regulator="stale",transformation="stale",
+      matrices="stale",fullDE="stale",selected="stale",alphabet="stale",method="stale"},
+    isolationCase[y,eta]];
+  repeatFrame = isolationCase[x,eps];
+  tests = Join[tests, {
+    VerificationTest[({#["transformation"],#["matrices"],#["method"]} & /@ {firstFrame,otherFrame}),
+      {{{{1,0},{x,1}},{{{0,0},{eps/x,0}}},"affine-epsilon-primitive"},
+       {{{1,0},{y,1}},{{{0,0},{eta/y,0}}},"affine-epsilon-primitive"}},
+      TestID->"tail-completion-uses-explicit-coordinate-and-regulator-frame"],
+    VerificationTest[repeatFrame,firstFrame,TestID->"tail-completion-is-isolated-between-calls"]
+  }]
+];
+If[snapshotPath =!= None,
+  CanonMethodCard`WriteWLArtifact[<|"cases" -> Association @ MapThread[Rule,
+    {{"polynomial","normalization","algebraic-affine","incoming-normalization",
+      "algebraic-letter-discovery","algebraic-root-pole"},
+     (<|"results" -> (#["result"] & /@ #["runs"]),
+        "prefix" -> #["prefix"], "canonical" -> #["canonical"],
+        "tail" -> #["tail"], "full" -> #["full"]|> & /@
+       {polynomial,normalization,algebraic,incomingCase,oddAlphabetCase,rootPoleCase})}],
+    "coupled-derivative" -> <|"tail_result" -> coupledDerivative["tail","result"],
+      "check_result" -> coupledDerivative["check","result"],
+      "transformation" -> coupledDerivative["transformation"]|>,
+    "insufficient-derivative" -> <|"tail_result" -> insufficientDerivative["tail","result"],
+      "check_result" -> insufficientDerivative["check","result"],
+      "transformation" -> insufficientDerivative["transformation"]|>,
+    "unsupported-result" -> unsupportedTail["result"]|>,
+    DirectoryName[snapshotPath],FileNameTake[snapshotPath]]
+];
 report=TestReport[tests];
 Print[InputForm[<|"total"->Length[tests],"succeeded"->report["TestsSucceededCount"],"failed"->report["TestsFailedCount"],"workspace"->temporary|>]];
 If[report["TestsFailedCount"]>0,Print[InputForm[report["TestsFailed"]]],DeleteDirectory[temporary,DeleteContents->True]];

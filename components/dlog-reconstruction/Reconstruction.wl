@@ -16,7 +16,7 @@ validIdentity[a_] := AssociationQ[a] && And @@ (KeyExistsQ[a, #] & /@ $identityK
 sha[path_] := FileHash[path, "SHA256", "HexString"];
 digest[expr_] := Hash[expr, "SHA256", "HexString"];
 sourceRef[declaring_, path_] := <|"path" -> CanonMethodCard`RelativeArtifactPath[declaring, path], "sha256" -> sha[path]|>;
-read[path_] := Module[{a = Quiet @ Check[Get[path], $Failed]}, require[AssociationQ[a], "INVALID_ARTIFACT", <|"path" -> path|>]; a];
+read[path_] := Module[{a = Quiet @ Check[CanonMethodCard`ReadWLData[path], $Failed]}, require[AssociationQ[a], "INVALID_ARTIFACT", <|"path" -> path|>]; a];
 load[task_, input_, key_] := Module[{d, path},
   d = Lookup[task["payload"], key, <||>];
   require[AssociationQ[d] && StringQ[Lookup[d, "path", None]], "MISSING_ARTIFACT", <|"artifact" -> key|>];

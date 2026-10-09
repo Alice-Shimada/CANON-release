@@ -1,4 +1,5 @@
 BeginPackage["CanonMethodCard`"];
+IntegralCoefficientRows::usage = "IntegralCoefficientRows[expressions, basis, head] returns exact ordered integral rows by unit-vector substitution, or $Failed for each expression outside the homogeneous linear span.";
 
 SectorBits::usage = "SectorBits[integral, propagatorSlots] returns the full index-order sector mask, with ISP slots set to zero.";
 FormatMasterArtifacts::usage = "FormatMasterArtifacts[prepared, masters, sourceHash] groups ordered masters into the standard sector manifest and master basis.";
@@ -7,6 +8,7 @@ SectorDEArtifacts::usage = "SectorDEArtifacts[orderedDE, sectorManifest, sectorR
 ReadTask::usage = "ReadTask[path, step] reads and validates a script input envelope.";
 ScriptArguments::usage = "ScriptArguments[] returns arguments following the active WL script.";
 LoadArtifact::usage = "LoadArtifact[task, inputPath, name] reads one WL Association artifact.";
+ParseSymbolRules::usage = "ParseSymbolRules[mapping] decodes declared source/target name pairs in the data context, preserves explicit contexts, and returns rules or $Failed.";
 ReadWLData::usage = "ReadWLData[path] reads WL data with unqualified symbols in CANON`DEData` and preserves explicitly qualified symbols.";
 ResolveInputPath::usage = "ResolveInputPath[inputFile, path] resolves a path relative to the file that declares it.";
 RelativeArtifactPath::usage = "RelativeArtifactPath[declaringFile, target] stores a relocatable reference to target from declaringFile.";
@@ -42,6 +44,7 @@ With[{directory = FileNameJoin[{DirectoryName[$InputFileName], "method-card"}]},
   Get[FileNameJoin[{directory, "ArtifactIO.wl"}]];
   Get[FileNameJoin[{directory, "Contracts.wl"}]];
   Get[FileNameJoin[{directory, "PreparedBasis.wl"}]];
+  Get[FileNameJoin[{directory, "IntegralBasis.wl"}]];
   Get[FileNameJoin[{directory, "Sectors.wl"}]];
   Get[FileNameJoin[{directory, "GaugeChecks.wl"}]];
   Get[FileNameJoin[{directory, "DLogAlgebra.wl"}]];

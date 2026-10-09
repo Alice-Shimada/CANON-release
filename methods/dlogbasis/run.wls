@@ -240,6 +240,12 @@ artifact = <|
   "pool_exhausted" -> poolExhausted,
   "candidate_unit" -> payload["candidate_unit"],
   "normalization_policy" -> payload["normalization_policy"],
+  "coefficient_frame" -> Join[KeyTake[prepared, {"family_ref", "chart_id", "variables", "regulator"}],
+    If[Lookup[prepared, "parameters", {}] === {}, <||>, <|
+      "dimension" -> First[prepared["parameters"]],
+      "constants" -> Select[prepared["parameters"],
+        !MemberQ[Join[prepared["variables"], {prepared["regulator"], First[prepared["parameters"]]}], #] &]
+    |>]],
   "candidates" -> candidateRecords,
   "method_evidence" -> <|
     "method_id" -> methodId,

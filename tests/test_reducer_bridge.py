@@ -42,7 +42,10 @@ assert 'G[2]' in (project/'targets').read_text()
 result=project/'results/G'; result.mkdir(parents=True)
 mode=sys.argv[1]
 (result/'masters.final').write_text('G[3]\\n' if mode=='basis' else 'G[1]\\n')
-(result/'kira_targets.m').write_text('{}' if mode=='missing' else '{G[2]->(1-d/2)/x G[1]}')
+rhs = {'legacy-square':'G[1]^2', 'legacy-function':'Sin[G[1]]',
+       'legacy-offset':'G[1]+x', 'legacy-chain':'G[3]',
+       'legacy-cancellation':'((x+1)^2-x^2-2 x-1) G[1]^2+(1-d/2)/x G[1]'}.get(mode,'(1-d/2)/x G[1]')
+(result/'kira_targets.m').write_text('{}' if mode=='missing' else '{G[2]->'+rhs+'}')
 '''
 FAKE_ADAPTER = '''import json,pathlib,sys
 source,output=map(pathlib.Path,sys.argv[1:])
@@ -138,7 +141,8 @@ def main():
                        "instructions": "instructions.md"}}})
     # Keep the evaluated profile, then override only REDUCE_IBP for this fixture.
     write_json(tree / "legacy-selection.json", {"schema": "canon-neu/components/v1", "steps": {
-        "REDUCE_IBP": {"from": str(canon / "components/default.json")}}})
+        "REDUCE_IBP": {"command": ["{wolframscript}", "-file", str(canon / "mma/ReduceIBP.wls")],
+                       "instructions": str(canon / "skills/canon-reduce-ibp/SKILL.md")}}})
     project = tree / "native project"
     project.mkdir()
     (project / "job.yaml").write_text("jobs: []\n")
@@ -146,7 +150,9 @@ def main():
     payload = {key: {"path": name} for key, name in (
         ("prepared_family", "family.wl"), ("master_basis", "masters.wl"),
         ("integral_candidates", "candidates.wl"), ("prepared_derivatives", "derivatives.wl"))}
-    for mode in ("custom", "legacy", "basis", "missing", "custom-incomplete", "custom-invalid-exit",
+    legacy_modes = ("legacy", "basis", "missing", "legacy-square", "legacy-function", "legacy-offset",
+                    "legacy-chain", "legacy-cancellation")
+    for mode in (*legacy_modes, "custom", "custom-incomplete", "custom-invalid-exit",
                  "custom-affine", "custom-invalid-selection", "custom-invalid-selection-type"):
         selected = dict(payload)
         if mode.startswith("custom"):
@@ -170,6 +176,11 @@ def main():
         "reuse-missing": '<|"masters"->{G[1]},"rules"->{}|>',
         "reuse-unreduced": '<|"masters"->{G[1]},"rules"->{G[2]->G[3],G[3]->G[1]}|>',
         "reuse-nonlinear": '<|"masters"->{G[1]},"rules"->{G[2]->G[1]^2}|>',
+        "reuse-function": '<|"masters"->{G[1]},"rules"->{G[2]->Sin[G[1]]}|>',
+        "reuse-reciprocal": '<|"masters"->{G[1]},"rules"->{G[2]->1/G[1]}|>',
+        "reuse-offset": '<|"masters"->{G[1]},"rules"->{G[2]->G[1]+x}|>',
+        "reuse-fractional": '<|"masters"->{G[1]},"rules"->{G[2]->Sqrt[G[1]]}|>',
+        "reuse-cancellation": REDUCTION.replace('(1-d/2)/x G[1]', '((x+1)^2-x^2-2 x-1) G[1]^2+(1-d/2)/x G[1]'),
         "reuse-master-change": REDUCTION.replace('G[2]->', 'G[1]->2 G[1],G[2]->'),
         "reuse-identity": REDUCTION.replace('<|', '<|"family_ref"->"wrong","basis_ref"->"wrong",', 1),
         "reuse-invalid-rules": REDUCTION.replace('G[2]->', 'G[2]->0,G[2]->'),
@@ -194,13 +205,16 @@ def main():
     # Move the custom selection and backend config before their first use.
     moved = work / "relocated tree with spaces"
     tree.rename(moved)
-    for mode in ("legacy", "basis", "missing"):
+    for mode in legacy_modes:
         task = json.loads((moved / f"{mode}.json").read_text())
         task["payload"]["reduction"]["options"][0] = str(moved / "fake_kira.py")
         write_json(moved / f"{mode}.json", task)
     environment = dict(os.environ)
     environment.pop("CANON_COMPONENTS", None)
     expected = {"custom": "CANDIDATES_REDUCED", "legacy": "CANDIDATES_REDUCED",
+                "legacy-square": "INCOMPLETE_REDUCTION", "legacy-function": "INCOMPLETE_REDUCTION",
+                "legacy-offset": "INCOMPLETE_REDUCTION", "legacy-chain": "INCOMPLETE_REDUCTION",
+                "legacy-cancellation": "CANDIDATES_REDUCED",
                 "basis": "MASTER_BASIS_MISMATCH", "missing": "INCOMPLETE_REDUCTION",
                 "custom-incomplete": "EXPLICIT_CONVERSION_NEEDED", "custom-invalid-exit": "REDUCTION_FAILED",
                 "custom-affine": "CANDIDATES_REDUCED",
@@ -209,6 +223,9 @@ def main():
                 "reuse": "CANDIDATES_REDUCED", "reuse-tail": "CANDIDATES_REDUCED",
                 "reuse-missing": "INCOMPLETE_REDUCTION", "reuse-unreduced": "INCOMPLETE_REDUCTION",
                 "reuse-nonlinear": "INCOMPLETE_REDUCTION", "reuse-master-change": "MASTER_BASIS_MISMATCH",
+                "reuse-function": "INCOMPLETE_REDUCTION", "reuse-reciprocal": "INCOMPLETE_REDUCTION",
+                "reuse-offset": "INCOMPLETE_REDUCTION", "reuse-fractional": "INCOMPLETE_REDUCTION",
+                "reuse-cancellation": "CANDIDATES_REDUCED",
                 "reuse-identity": "SOURCE_BASIS_MISMATCH", "reuse-order": "MASTER_BASIS_MISMATCH",
                 "reuse-invalid-rules": "INVALID_REDUCTION"}
     components = [path.resolve() for path in args.components] or [canon / "components/profiles/custom-kira.json"]

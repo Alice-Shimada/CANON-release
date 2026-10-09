@@ -80,6 +80,21 @@ ResolveMethodPackage[task_Association, inputPath_String, context_String] := Modu
   <|"entry" -> ExpandFileName[path], "source" -> source|>
 ];
 
+symbolFromName[name_String] := Module[{held},
+  held = Quiet @ Check[Block[{$Context = "CANON`DEData`", $ContextPath = {"System`"}},
+    ToExpression[name, InputForm, HoldComplete]], $Failed];
+  If[MatchQ[held, HoldComplete[_Symbol]], First[held], $Failed]
+];
+
+ParseSymbolRules[mapping_Association] := Module[{rules},
+  rules = KeyValueMap[Function[{source, target},
+    If[!StringQ[source] || !StringQ[target], $Failed,
+      With[{from = symbolFromName[source], to = symbolFromName[target]},
+        If[from === $Failed || to === $Failed, $Failed, from -> to]]]], mapping];
+  If[MemberQ[rules, $Failed], $Failed, rules]
+];
+ParseSymbolRules[_] := $Failed;
+
 ReadWLData[path_String] := Block[
   {$Context = "CANON`DEData`", $ContextPath = {"System`"}}, Get[path]];
 

@@ -219,7 +219,7 @@ CollectSamples[roles_Association, requestFile_String, outputFile_String] := Catc
   paths = CanonMethodCard`ResolveInputPath[requestFile, #["path"]] & /@ entries;
   need[DuplicateFreeQ[Lookup[entries, "id"]] && DuplicateFreeQ[paths], "OVERLAPPING_SAMPLE_ROLES"];
   Do[
-    sample = Get[paths[[i]]];
+    sample = CanonMethodCard`ReadWLData[paths[[i]]];
     need[AssociationQ[sample] && Lookup[sample, "schema", None] === "canon-neu/de-sample/v1", "INVALID_SAMPLE"];
     If[i === 1,
       reference = Lookup[sample, identityKeys]; shape = Dimensions[sample["matrices"]];
