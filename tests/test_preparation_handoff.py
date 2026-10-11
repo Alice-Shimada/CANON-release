@@ -92,9 +92,9 @@ def main():
         p = work / (name + '.txt'); p.write_text(text)
         source = {**prepared,'ordered_masters':pin({'path':str(p)})}
         run('discover-'+name,'DISCOVER',{'prepared_family':artifact(name,source)},'INVALID_MASTER_SOURCE',True)
-    masters = artifact('basis',dict(family_ref='handoff',basis_ref='raw',masters=WL('{B[1]}')))
+    masters = artifact('basis',dict(family_ref='handoff',basis_ref='raw',index_order=['D1'],masters=WL('{B[1]}')))
     sectors = artifact('sectors',dict(family_ref='handoff',propagator_slots=[1],sectors=[dict(id=1,propagator_count=1,sector_bits=[1])]))
-    reduction = artifact('reduction',WL('<|"masters"->{B[1]},"rules"->{B[2]->eps/x B[1]}|>'))
+    reduction = artifact('reduction',WL('<|"masters"->{B[1]},"rules"->{B[2]->d/x B[1]}|>'))
     mapped_derivative = artifact('mapped-derivatives',WL(Path(derivative['path']).read_text().replace('x->','Source`sx->')))
     mapped_spec = artifact('mapped-spec',{**spec,'prepared_derivatives':mapped_derivative['path'],
         'operator_source_symbol_map':{'Source`sx':'x'}})

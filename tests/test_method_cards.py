@@ -2262,7 +2262,10 @@ Quit[If[derived === automatic, 0, 1]];
             "result = DlogBasis`DlogBasisSearch[",
             runner,
         )
-        self.assertIn('prepared["family_data", "path"]', runner)
+        self.assertIn(
+            'CanonMethodCard`ResolveArtifactPath[preparedPath, Lookup[prepared, "family_data", None]]',
+            runner,
+        )
         self.assertIn('methodOptions["loop_order"]', runner)
         self.assertIn('methodOptions["loop_dimensions"]', runner)
         for forbidden in (
