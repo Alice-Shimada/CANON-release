@@ -13,6 +13,6 @@
   },
   "ibp_reduction": {
     "path": "default-binder-reduction.wl",
-    "sha256": "cf75e07589b3e13f9ccc869d1800b96fd25687ab0f7a27bca54fadcb27deb861"
+    "sha256": "70b9bcd755ed15bddd8c253ed0849374b161d1548e63902d703d17b74335d3b0"
   }
 }

@@ -94,6 +94,7 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--canon",required=True,type=Path)
     parser.add_argument("--work",required=True,type=Path)
+    parser.add_argument("--components",type=Path,action="append",default=[])
     parser.add_argument("--native-kira",help="run only one real native bubble smoke instead of fixture cases")
     args=parser.parse_args()
     canon,work=args.canon.resolve(),args.work.resolve()
@@ -139,9 +140,10 @@ def main():
         payload.update(payload_changes or {})
         request=tree/(name+".json")
         write(request,{"schema":"canon-neu/script-input/v1","task_id":"KIRA-ADAPTER-"+name,"step":step,"sector":None,"payload":payload})
-        command=[sys.executable,str(canon/"run_step.py"),str(request),str(destination),
-                 "--components",str(canon/"components/profiles/custom-kira.json"),
-                 "--components",str(package/"components.json")]
+        command=[sys.executable,str(canon/"run_step.py"),str(request),str(destination)]
+        for manifest in args.components or [canon/"components/profiles/custom-kira.json"]:
+            command += ["--components",str(manifest.resolve())]
+        command += ["--components",str(package/"components.json")]
         return command,destination
 
     def run(name,step,expected,mode="normal",changes=None,payload_changes=None):

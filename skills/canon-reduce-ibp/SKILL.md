@@ -110,6 +110,10 @@ produced reductions. These
 failures retain current `reduction_targets` and never dispatch a replacement
 reduction. Audit failures also retain an `ibp_audit` diagnostic artifact.
 
+The same checks apply to artifacts returned by the selected reducer, including
+their optional SHA-256. A child PASS cannot bypass the bridge source-basis or
+target-closure contract and cannot publish a passing bridge from invalid data.
+
 The result is `PASS/CANDIDATES_REDUCED` with `candidate_ibp_bridge`,
 `reduction_targets` and `ibp_audit` descriptors. Invalid `ibp_audit_options` are
 rejected before target compilation or reducer launch. The bridge compiles targets and forwards config

@@ -83,11 +83,11 @@ If[!AssociationQ[candidates] ||
 ];
 declaredDomain = Lookup[candidates, "coefficient_domain", Automatic];
 If[!AssociationQ[Lookup[task, "sector", None]] ||
-    Lookup[task, "sector", None] =!= cut["sector"] ||
+    !CanonMethodCard`SameSectorQ[task["sector"], cut["sector"], sectorBasis["sector"], candidates["sector"]] ||
     !And @@ (Lookup[sectorBasis, #, None] === Lookup[cut, #, None] & /@
-      {"sector", "family_id", "basis_id", "basis"}) ||
+      {"family_id", "basis_id", "basis"}) ||
     !And @@ (Lookup[candidates, #, None] === Lookup[cut, #, None] & /@
-      {"sector", "family_id", "basis_id", "basis", "variables", "regulator"}),
+      {"family_id", "basis_id", "basis", "variables", "regulator"}),
   invalid["INVALID_INPUT", "Task, basis, cut DE, and candidates must agree on sector, family, ordered basis, variables, and regulator"]
 ];
 
@@ -106,6 +106,7 @@ If[!And @@ (nonemptyStringQ /@ candidateIDs) || !DuplicateFreeQ[candidateIDs],
   invalid["INVALID_INPUT", "Candidate IDs must be nonempty and unique within the ordered pool"]
 ];
 pool = Lookup[candidates, "candidate_group_pool", None];
+If[AssociationQ[pool], pool = Join[<|"unconsumed_candidates" -> 0|>, pool]];
 If[!AssociationQ[pool] ||
     !And @@ (IntegerQ[Lookup[pool, #, None]] && Lookup[pool, #, -1] >= 0 & /@
       {"declared", "eligible", "remaining", "unconsumed_candidates"}) ||

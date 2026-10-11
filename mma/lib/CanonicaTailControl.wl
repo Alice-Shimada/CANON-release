@@ -58,9 +58,14 @@ RunBackend[task_, inputPath_, full_, core_, baseT_, matrices_, options_] := Modu
   failure[reason_, error_:False, extra_:<||>] := Join[<|"success" -> False,
     "reason" -> reason, "input_error" -> error, "diagnostics" -> diagnostics|>, extra];
   package = CanonMethodCard`ResolveMethodPackage[task, inputPath, "CANONICA`"];
-  If[FailureQ[package], Return[failure["canonica_package_unavailable", True]]];
+  If[FailureQ[package], Return[failure["canonica_package_unavailable", True,
+    <|"error_code" -> If[package[[1]] === "METHOD_PACKAGE_UNAVAILABLE",
+      "TOOL_UNAVAILABLE", package[[1]]]|>]]];
   entry = package["entry"]; entryHash = FileHash[entry, "SHA256", "HexString"];
-  Get[entry];
+  If[!TrueQ[Quiet @ Check[Get[entry]; True, False]] ||
+      DownValues[CANONICA`TransformOffDiagonalBlock] === {} ||
+      DownValues[CANONICA`TransformDlogToEpsForm] === {},
+    Return[failure["missing_public_tail_API", True, <|"error_code" -> "TOOL_ERROR"|>]]];
   variables = full["variables"]; regulator = full["regulator"];
   backendFailure[reason_, callStage_, initial_, positions_, callBounds_,
       callMatrices_, callOptions_, heldReturn_] := failure[reason, False, <|

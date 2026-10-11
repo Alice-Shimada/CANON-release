@@ -29,7 +29,10 @@ FULL = '''Module[{target, known, raw},
  "member_candidate_ids"->{"seed"},"new_basis_rows"->IdentityMatrix[3],
  "full_transformation"->IdentityMatrix[3],"transformed_matrices"->{raw}|>}|>]
 '''
-CORE = '<|"schema"->"canon-neu/core-transform/v1","candidate_id"->"candidate"|>'
+CORE = '''<|"schema"->"canon-neu/core-transform/v1","candidate_id"->"candidate",
+ "family_id"->"tail-control","basis_id"->"current","basis"->{j},
+ "sector"-><|"id"->7,"propagator_count"->3|>,"variables"->{x},"regulator"->eps,
+ "checks"-><|"pass"->True|>|>'''
 
 @unittest.skipUnless(KERNEL.is_file() and ENTRY, "requires configured kernel and CANON_TEST_CANONICA_ENTRY")
 class TailControlsTest(unittest.TestCase):
@@ -52,9 +55,9 @@ class TailControlsTest(unittest.TestCase):
         return {"type": "mathematica-expression", "path": str(path), **extra}
 
     def call(self, options, checkpoint=None, full=None, expected=("PASS", "TAIL_READY"), ansatz=None,
-             entry=None):
+             entry=None, core_file=None):
         self.index += 1
-        payload = {"full_sector_de": self.ref(full or self.full), "core_transform": self.ref(self.core),
+        payload = {"full_sector_de": self.ref(full or self.full), "core_transform": self.ref(core_file or self.core),
                    "method_options": {"package_entry": str(entry or ENTRY), **options}}
         if checkpoint:
             payload["tail_checkpoint"] = checkpoint
@@ -149,8 +152,10 @@ class TailControlsTest(unittest.TestCase):
         self.check_canonical(result, output)
         other = self.directory / "other.wl"
         other.write_text(FULL.replace('"tail-control"', '"different-family"'))
+        other_core = self.directory / "other-core.wl"
+        other_core.write_text(CORE.replace('"tail-control"', '"different-family"'))
         rejected, _ = self.call({"tail_strategy": "subsector"}, checkpoint, other,
-                                 expected=("ERROR", "INVALID_INPUT"))
+                                 expected=("ERROR", "INVALID_INPUT"), core_file=other_core)
         self.assertEqual(rejected["summary"]["reason"], "tail_checkpoint_source_mismatch")
 
     def test_checkpoint_hash_and_matrix_shape_rejected(self):
@@ -190,6 +195,8 @@ class TailControlsTest(unittest.TestCase):
 
     def test_malformed_backend_matrices_stop_before_lift_or_publication(self):
         two_current = self.directory / "two-current.wl"
+        two_current_core = self.directory / "two-current-core.wl"
+        two_current_core.write_text(CORE.replace('"basis"->{j}', '"basis"->{j1,j2}'))
         two_current.write_text('''Module[{target, known, raw},
  target = eps {{1,0,0,0},{2,3,0,0},{4,5,6,0},{7,8,0,9}}/x;
  known = {{1,0,0,0},{0,1,0,0},{1/(x (1+eps)),1/((x-1) (1+2 eps)),1,0},
@@ -227,7 +234,8 @@ TransformDlogToEpsForm[v_,b_,t_,a_,___] := {Switch["''' + mode + '''",
 EndPackage[];
 ''')
                 result, output = self.call({"tail_strategy": strategy}, full=full, entry=fake,
-                                          expected=("INCONCLUSIVE", "TAIL_UNSOLVED"))
+                                          expected=("INCONCLUSIVE", "TAIL_UNSOLVED"),
+                                          core_file=two_current_core if full == two_current else None)
                 self.assertEqual(result["summary"]["reason"], reason)
                 self.assertIn("invalid_provider_result", result["summary"]["backend"]["diagnostics"][-1]["diagnostic_classes"])
                 self.assertNotIn("sector_transform", result["artifacts"])

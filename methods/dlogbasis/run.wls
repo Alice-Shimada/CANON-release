@@ -11,6 +11,10 @@ args = CanonMethodCard`ScriptArguments[];
 If[Length[args] =!= 2, Print["usage: run.wls <input.json> <output_dir>"]; Quit[2]];
 {inputPath, outputDir} = ExpandFileName /@ args;
 task = CanonMethodCard`ReadTask[inputPath, "PROPOSE_INTEGRAL_CANDIDATES"];
+fail[result_Failure] := (
+  CanonMethodCard`WriteProviderResult[task, outputDir, "ERROR", result[[1]], <||>,
+    <|"reason" -> result[[2, "Message"]]|>]; Quit[0]
+);
 (* Operational evidence is separate from result.json. Close each append so a
    cancelled provider leaves the last entered/returned boundary on disk. *)
 If[!DirectoryQ[outputDir], CreateDirectory[outputDir, CreateIntermediateDirectories -> True]];
@@ -33,7 +37,11 @@ recordPhase["request", "read", <|
 |>];
 recordPhase["prepared_family_load", "entered"];
 prepared = CanonMethodCard`LoadArtifact[task, inputPath, "prepared_family"];
+If[FailureQ[prepared], fail[prepared]];
 recordPhase["prepared_family_load", "returned"];
+preparedPath = CanonMethodCard`ResolveInputPath[inputPath, task["payload", "prepared_family", "path"]];
+familyDataPath = CanonMethodCard`ResolveArtifactPath[preparedPath, Lookup[prepared, "family_data", None]];
+If[FailureQ[familyDataPath], fail[familyDataPath]];
 payload = task["payload"];
 methodOptions = payload["method_options"];
 package = CanonMethodCard`ResolveMethodPackage[task, inputPath, "DlogBasis`"];
@@ -51,8 +59,6 @@ Get[entry];
 recordPhase["package_load", "returned"];
 
 (* Sector bits follow the full propagator/ISP index order. *)
-preparedPath = CanonMethodCard`ResolveInputPath[inputPath, task["payload", "prepared_family", "path"]];
-familyDataPath = CanonMethodCard`ResolveInputPath[preparedPath, prepared["family_data", "path"]];
 recordPhase["family_load", "entered", <|
   "prepared_family_path" -> preparedPath,
   "prepared_family_sha256" -> FileHash[preparedPath, "SHA256", "HexString"],
@@ -240,6 +246,12 @@ artifact = <|
   "pool_exhausted" -> poolExhausted,
   "candidate_unit" -> payload["candidate_unit"],
   "normalization_policy" -> payload["normalization_policy"],
+  "coefficient_frame" -> Join[KeyTake[prepared, {"family_ref", "chart_id", "variables", "regulator"}],
+    If[Lookup[prepared, "parameters", {}] === {}, <||>, <|
+      "dimension" -> First[prepared["parameters"]],
+      "constants" -> Select[prepared["parameters"],
+        !MemberQ[Join[prepared["variables"], {prepared["regulator"], First[prepared["parameters"]]}], #] &]
+    |>]],
   "candidates" -> candidateRecords,
   "method_evidence" -> <|
     "method_id" -> methodId,

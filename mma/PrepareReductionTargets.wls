@@ -12,10 +12,12 @@ fail[result_Failure] := (
     <|"reason" -> result[[2, "Message"]]|>]; Exit[1]
 );
 prepared = CanonMethodCard`LoadArtifact[task, inputPath, "prepared_family"];
+If[FailureQ[prepared], fail[prepared]];
 preparedPath = CanonMethodCard`ResolveInputPath[inputPath, task["payload", "prepared_family", "path"]];
 masterBasis = CanonMethodCard`LoadArtifact[task, inputPath, "master_basis"];
+If[FailureQ[masterBasis], fail[masterBasis]];
 derivativePath = If[KeyExistsQ[task["payload"], "prepared_derivatives"],
-  CanonMethodCard`ResolveInputPath[inputPath, task["payload", "prepared_derivatives", "path"]], Automatic];
+  CanonMethodCard`ResolveArtifactPath[inputPath, task["payload", "prepared_derivatives"]], Automatic];
 normalized = CANON`SectorDE`LoadPreparedDerivatives[prepared, preparedPath, masterBasis, derivativePath];
 If[FailureQ[normalized], fail[normalized]];
 targets = CANON`CandidateIBPBridge`MasterDerivativeTargets[

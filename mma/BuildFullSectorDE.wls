@@ -9,29 +9,29 @@ ordered = CanonMethodCard`LoadArtifact[task, inputPath, "ordered_master_de"];
 cut = CanonMethodCard`LoadArtifact[task, inputPath, "sector_cut_de"];
 coreCandidates = CanonMethodCard`LoadArtifact[task, inputPath, "core_candidates"];
 coreTransform = CanonMethodCard`LoadArtifact[task, inputPath, "core_transform"];
-invalid[code_String, reason_String, details_:<||>] := (
-  CanonMethodCard`WriteResult[task, outputDir, "ERROR", code, <||>,
-    Join[<|"reason" -> reason, "preferred_next_route" -> "FIX_INPUT"|>, details]];
-  Quit[1]);
-If[!AssociationQ[coreTransform] || !AssociationQ[coreCandidates] ||
-    !AssociationQ[cut] ||
-    Lookup[coreTransform, "schema", None] =!= "canon-neu/core-transform/v1" ||
-    !And @@ (Lookup[coreTransform, #, Missing["core"]] ===
-      Lookup[cut, #, Missing["cut"]] & /@
-      {"sector", "family_id", "basis_id", "basis", "variables", "regulator"}) ||
-    !And @@ (Lookup[coreCandidates, #, Missing["candidates"]] ===
-      Lookup[cut, #, Missing["cut"]] & /@
-      {"sector", "family_id", "basis_id", "basis", "variables", "regulator"}) ||
-    !ListQ[Lookup[coreCandidates, "candidates", None]],
-  invalid["INVALID_INPUT", "The checked core and candidate pool must bind the same cut"]];
-selectedID = Lookup[coreTransform, "candidate_id", None];
-If[!StringQ[selectedID] || Count[Lookup[coreCandidates["candidates"], "candidate_id", None],
-    selectedID] =!= 1,
-  invalid["INVALID_INPUT", "The checked core must identify one candidate in the supplied pool"]];
 alphabet = If[task["payload", "declared_alphabet"] === Null, {},
   CanonMethodCard`LoadArtifact[task, inputPath, "declared_alphabet"]["letters"]];
 accepted = If[task["payload", "accepted_prefix"] === Null, Null,
   CanonMethodCard`LoadArtifact[task, inputPath, "accepted_prefix"]];
+
+invalid[code_, reason_] := (CanonMethodCard`WriteResult[task, outputDir, "ERROR",
+  code, <||>, <|"reason" -> reason, "preferred_next_route" -> "FIX_INPUT"|>]; Quit[1]);
+fail[reason_] := (CanonMethodCard`WriteResult[task, outputDir, "ERROR",
+  "INVALID_FULL_DE_INPUT", <||>, <|"reason" -> reason|>]; Quit[1]);
+If[!AllTrue[{ordered, cut, coreCandidates, coreTransform}, AssociationQ] ||
+  !TrueQ[CanonMethodCard`ValidCutDEQ[cut, True] && CanonMethodCard`ValidCandidatesQ[coreCandidates]] ||
+  !AllTrue[{"family_id", "basis_id", "basis", "variables", "regulator"},
+    SameQ[cut[#], coreCandidates[#], coreTransform[#]] &] ||
+  !CanonMethodCard`SameSectorQ[task["sector"], cut["sector"], coreCandidates["sector"], coreTransform["sector"]] ||
+  ordered["family_id"] =!= cut["family_id"] ||
+  ordered["variables"] =!= cut["variables"] || ordered["regulator"] =!= cut["regulator"],
+  fail["The original DE, cut, candidate pool and core check must bind the same inputs."]];
+selected = Select[coreCandidates["candidates"], #["candidate_id"] === coreTransform["candidate_id"] &];
+If[Length[selected] =!= 1 || !TrueQ[Lookup[Lookup[coreTransform, "checks", <||>], "pass", False]],
+  fail["Supply the unique candidate selected by a passing core check."]];
+If[accepted =!= Null && (!AssociationQ[accepted] ||
+  !AllTrue[{"family_id", "variables", "regulator"}, accepted[#] === cut[#] &]),
+  fail["The accepted prefix belongs to different scientific inputs."]];
 
 currentBasis = cut["basis"];
 currentDimension = Length[currentBasis];
@@ -42,7 +42,19 @@ If[accepted === Null,
 ];
 lowerDimension = Length[lowerBasis];
 rawBasis = Join[lowerSourceBasis, currentBasis];
+If[!ListQ[ordered["basis"]] || !DuplicateFreeQ[ordered["basis"]] ||
+  rawBasis =!= Take[ordered["basis"], UpTo[Length[rawBasis]]] ||
+  !ListQ[coreCandidates["source_basis"]] || !DuplicateFreeQ[coreCandidates["source_basis"]] ||
+  !SubsetQ[ordered["basis"], coreCandidates["source_basis"]] ||
+  !TrueQ[ListQ[ordered["matrices"]] && Length[ordered["matrices"]] === Length[cut["variables"]] &&
+    AllTrue[ordered["matrices"], MatrixQ[#] && Dimensions[#] ===
+      {Length[ordered["basis"]], Length[ordered["basis"]]} &]],
+  fail["The source basis must extend the resident prefix without reordering or duplication."]];
 positions = (First @ FirstPosition[ordered["basis"], #]) & /@ rawBasis;
+omitted = Complement[Range[Length[ordered["basis"]]], positions];
+If[omitted =!= {} && !AllTrue[ordered["matrices"],
+    CanonMethodCard`ZeroMatrixQ[#[[positions, omitted]]] &],
+  fail["The requested prefix still couples to omitted source masters."]];
 rawMatrices = (#[[positions, positions]] &) /@ ordered["matrices"];
 T0 = If[lowerDimension === 0, IdentityMatrix[currentDimension], ArrayFlatten[{
   {lowerTransformation, ConstantArray[0, {lowerDimension, currentDimension}]},
@@ -60,52 +72,54 @@ sourceMatrices = If[accepted === Null, rawMatrices,
 sourceProjection = Table[Boole[source === target],
   {source, coreCandidates["source_basis"]}, {target, rawBasis}];
 
-rejectedCompletion[candidate_, reason_] := <|
-  "candidate_id" -> candidate["candidate_id"],
-  "member_candidate_ids" -> Lookup[candidate, "member_candidate_ids", {}],
-  "completion_rejection" -> "INVALID_CORE_COMPLETION", "reason" -> reason,
-  "full_transformation" -> None, "transformed_matrices" -> {}|>;
-completion[candidate_] := Module[{rows, currentRows, fullRows, transformation, proposedRows, proposedT},
+completion[candidate_] := Module[{rows, currentRows, fullRows, transformation, inverse, lowerRows, outside, proposedT},
   If[StringQ[candidate["construction_rejection"]], Return[<|
     "candidate_id" -> candidate["candidate_id"],
     "member_candidate_ids" -> candidate["member_candidate_ids"],
     "full_transformation" -> None, "transformed_matrices" -> {}|>]];
-  proposedRows = Lookup[candidate, "full_new_basis_rows", None];
-  proposedT = Lookup[candidate, "transformation", None];
-  If[!MatrixQ[proposedRows] ||
-      Dimensions[proposedRows] =!= {currentDimension, Length[coreCandidates["source_basis"]]} ||
-      !MatrixQ[proposedT] || Dimensions[proposedT] =!= {currentDimension, currentDimension} ||
-      !And @@ (CanonMethodCard`ExactAlgebraicExpressionQ /@ Flatten[{proposedRows, proposedT}]),
-    Return[rejectedCompletion[candidate, "Invalid full row or core transformation shape/domain"]]];
-  rows = proposedRows.sourceProjection;
+  rows = candidate["full_new_basis_rows"];
+  If[!TrueQ[MatrixQ[rows] && Dimensions[rows] ===
+      {currentDimension, Length[coreCandidates["source_basis"]]} &&
+      AllTrue[Flatten[rows], CanonMethodCard`ExactAlgebraicExpressionQ]],
+    fail["Candidate rows do not have the declared exact source-basis shape."]];
+  outside = Flatten @ Position[MemberQ[rawBasis, #] & /@ coreCandidates["source_basis"], False];
+  If[outside =!= {} && !CanonMethodCard`ZeroMatrixQ[rows[[All, outside]]],
+    fail["A candidate has nonzero coefficients on masters outside the current prefix."]];
+  rows = rows.sourceProjection;
   currentRows = rows[[All, lowerDimension + Range[currentDimension]]];
-  If[!CanonMethodCard`ZeroMatrixQ[currentRows.proposedT - IdentityMatrix[currentDimension]] ||
-      !CanonMethodCard`ZeroMatrixQ[proposedT.currentRows - IdentityMatrix[currentDimension]],
-    Return[rejectedCompletion[candidate, "Full current-sector rows must be the exact inverse of the core transformation"]]];
-  If[candidate["candidate_id"] === selectedID &&
-      (!MatrixQ[Lookup[coreTransform, "transformation", None]] ||
-       Dimensions[coreTransform["transformation"]] =!= {currentDimension, currentDimension} ||
-       !CanonMethodCard`ZeroMatrixQ[proposedT - coreTransform["transformation"]]),
-    Return[rejectedCompletion[candidate, "Selected proposal differs from the independently checked core"]]];
+  proposedT = Lookup[candidate, "transformation", None];
+  If[!MatrixQ[proposedT] || Dimensions[proposedT] =!= {currentDimension, currentDimension} ||
+    !AllTrue[Flatten[proposedT], CanonMethodCard`ExactAlgebraicExpressionQ] ||
+    !CanonMethodCard`ZeroMatrixQ[currentRows.proposedT - IdentityMatrix[currentDimension]] ||
+    !CanonMethodCard`ZeroMatrixQ[proposedT.currentRows - IdentityMatrix[currentDimension]] ||
+    (candidate["candidate_id"] === coreTransform["candidate_id"] &&
+      !TrueQ[MatrixQ[coreTransform["transformation"]] &&
+        Dimensions[coreTransform["transformation"]] === {currentDimension, currentDimension} &&
+        CanonMethodCard`ZeroMatrixQ[proposedT - coreTransform["transformation"]]]),
+    invalid["INVALID_CORE_COMPLETION", "Full integral rows disagree with the independently checked core."]];
+  inverse = proposedT;
+  lowerRows = If[lowerDimension === 0, {}, rows[[All, Range[lowerDimension]]].lowerTransformation];
   fullRows = If[lowerDimension === 0, currentRows, ArrayFlatten[{
     {IdentityMatrix[lowerDimension], ConstantArray[0, {lowerDimension, currentDimension}]},
-    {rows[[All, Range[lowerDimension]]].lowerTransformation, currentRows}
+    {lowerRows, currentRows}
   }]];
-  transformation = Map[Together, Inverse[fullRows], {2}];
+  transformation = If[lowerDimension === 0, inverse, ArrayFlatten[{
+    {IdentityMatrix[lowerDimension], ConstantArray[0, {lowerDimension, currentDimension}]},
+    {Map[Together, -inverse.lowerRows, {2}], inverse}}]];
   <|"candidate_id" -> candidate["candidate_id"],
     "member_candidate_ids" -> candidate["member_candidate_ids"],
     "new_basis_rows" -> fullRows, "full_transformation" -> transformation,
-    "transformed_matrices" -> CanonMethodCard`GaugeTransform[
-      sourceMatrices, cut["variables"], transformation]|>
+    "transformed_matrices" -> MapThread[
+      Map[Together, fullRows.(#1.transformation - D[transformation, #2]), {2}] &,
+      {sourceMatrices, cut["variables"]}]|>
 ];
 
-completions = completion /@ coreCandidates["candidates"];
-selectedCompletion = SelectFirst[completions, #["candidate_id"] === selectedID &];
-If[Lookup[selectedCompletion, "full_transformation", None] === None,
-  invalid["INVALID_CORE_COMPLETION", "The selected checked core has inconsistent full rows",
-    <|"candidate_id" -> selectedID, "completion" ->
-      KeyTake[selectedCompletion, {"completion_rejection", "reason"}]|>]];
-rejectedIDs = Lookup[Select[completions, KeyExistsQ[#, "completion_rejection"] &], "candidate_id", {}];
+(* General tail solving consumes the passing core only. The independent pool
+   screen can explicitly request all completions. *)
+poolSelection = Lookup[task["payload"], "complete_candidate_pool", False];
+If[!MemberQ[{True, False}, poolSelection], fail["complete_candidate_pool must be a Boolean."]];
+selected = If[poolSelection, coreCandidates["candidates"], selected];
+
 fullDE = <|"schema" -> "canon-neu/full-prefix-candidates/v1",
   "sector" -> cut["sector"], "family_id" -> cut["family_id"],
   "current_basis_id" -> cut["basis_id"], "accepted_prefix_id" -> prefixID,
@@ -120,7 +134,7 @@ fullDE = <|"schema" -> "canon-neu/full-prefix-candidates/v1",
   "convention" -> "old_prefix_basis = full_transformation . candidate_prefix_basis",
   "source_matrices" -> sourceMatrices,
   "first_core_candidate_id" -> coreTransform["candidate_id"],
-  "candidates" -> completions|>;
+  "candidates" -> (completion /@ selected)|>;
 path = CanonMethodCard`WriteWLArtifact[fullDE, outputDir, "full-sector-de.wl"];
 CanonMethodCard`WriteResult[task, outputDir, "PASS", "OK",
   <|"full_sector_de" -> <|"type" -> "mathematica-expression",
@@ -128,5 +142,5 @@ CanonMethodCard`WriteResult[task, outputDir, "PASS", "OK",
   <|"source_positions" -> positions, "lower_dimension" -> lowerDimension,
     "current_dimension" -> currentDimension,
     "candidate_ids" -> Lookup[fullDE["candidates"], "candidate_id"],
-    "rejected_completion_ids" -> rejectedIDs,
+    "rejected_completion_ids" -> {},
     "full_de_rebuilt" -> False|>];

@@ -11,6 +11,24 @@ canonical = CanonMethodCard`LoadArtifact[task, inputPath, "canonical_sector_de"]
 previous = If[task["payload", "previous_accepted_prefix"] === Null, Null,
   CanonMethodCard`LoadArtifact[task, inputPath, "previous_accepted_prefix"]];
 
+fail[reason_] := (CanonMethodCard`WriteResult[task, outputDir, "ERROR",
+  "INVALID_COMMIT_INPUT", <||>, <|"reason" -> reason|>]; Quit[1]);
+If[!TrueQ[CanonMethodCard`ValidSectorBasisQ[sectorBasis]] ||
+  !AssociationQ[canonical] || !AssociationQ[sectorTransform] ||
+  Lookup[canonical, "schema", None] =!= "canon-neu/canonical-sector-de/v1" ||
+  !AllTrue[{"family_id", "current_basis_id", "accepted_prefix_id", "source_basis",
+      "variables", "regulator", "convention", "candidate_id", "member_candidate_ids", "transformation"},
+    KeyExistsQ[canonical, #] && KeyExistsQ[sectorTransform, #] && canonical[#] === sectorTransform[#] &] ||
+  !AllTrue[{"exact_gauge", "flat_connection", "epsilon_factorized", "declared_dlog_alphabet", "upper_right_zero"},
+    TrueQ[Lookup[Lookup[canonical, "full_checks", <||>], #, False]] &] ||
+  !CanonMethodCard`SameSectorQ[task["sector"], sectorBasis["sector"], canonical["sector"], sectorTransform["sector"]] ||
+  sectorBasis["family_id"] =!= canonical["family_id"] ||
+  sectorBasis["basis_id"] =!= canonical["current_basis_id"],
+  fail["Commit requires the matching transformation and a complete passing canonical check."]];
+If[previous =!= Null && (!AssociationQ[previous] ||
+    !AllTrue[{"family_id", "variables", "regulator"}, previous[#] === canonical[#] &]),
+  fail["The previous prefix belongs to different scientific inputs."]];
+
 currentBasis = sectorBasis["basis"];
 currentDimension = Length[currentBasis];
 If[previous === Null,
@@ -22,6 +40,18 @@ If[previous === Null,
         "sector_trace", "candidate_trace"}
 ];
 lowerDimension = Length[acceptedLower];
+If[!TrueQ[MatrixQ[sectorTransform["transformation"]] &&
+    Dimensions[sectorTransform["transformation"]] ===
+      {lowerDimension + currentDimension, lowerDimension + currentDimension} &&
+    CanonMethodCard`ValidMatrixSystemQ[canonical["matrices"], canonical["variables"],
+      canonical["regulator"], lowerDimension + currentDimension]],
+  fail["The checked transformation and matrices have inconsistent dimensions."]];
+If[canonical["accepted_prefix_id"] =!= parentID ||
+  canonical["source_basis"] =!= Join[acceptedLower, currentBasis] ||
+  KeySort[canonical["block_boundaries"]] =!= KeySort[<|"lower_dimension" -> lowerDimension,
+    "current_dimension" -> currentDimension|>] ||
+  AnyTrue[sectorTrace, CanonMethodCard`SameSectorQ[#, canonical["sector"]] &],
+  fail["The checked mixed basis does not extend this previous prefix exactly once."]];
 T0 = If[previous === Null, IdentityMatrix[currentDimension], ArrayFlatten[{
   {lowerTransformation, ConstantArray[0, {lowerDimension, currentDimension}]},
   {ConstantArray[0, {currentDimension, lowerDimension}],

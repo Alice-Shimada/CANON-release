@@ -88,8 +88,7 @@ If[
   Lookup[fullPool, "schema", None] =!= "canon-neu/full-prefix-candidates/v1" ||
   Lookup[fullPool, "coefficient_domain", None] =!= "exact-rational-functions" ||
   Lookup[fullPool, "convention", None] =!= "old_prefix_basis = full_transformation . candidate_prefix_basis" ||
-  Lookup[fullPool, "sector", None] =!= task["sector"] ||
-  Lookup[fullPool, "sector", None] =!= cut["sector"] ||
+  !CanonMethodCard`SameSectorQ[Lookup[fullPool, "sector", None], task["sector"], cut["sector"]] ||
   Lookup[fullPool, "family_id", None] =!= cut["family_id"] ||
   Lookup[fullPool, "family_id", None] =!= acceptedPrefix["family_id"] ||
   Lookup[fullPool, "current_basis_id", None] =!= cut["basis_id"] ||
@@ -104,7 +103,7 @@ If[
 ];
 
 If[
-  sectorBasis["sector"] =!= task["sector"] || coreCandidates["sector"] =!= task["sector"] ||
+  !CanonMethodCard`SameSectorQ[sectorBasis["sector"], coreCandidates["sector"], task["sector"]] ||
   sectorBasis["family_id"] =!= cut["family_id"] || coreCandidates["family_id"] =!= cut["family_id"] ||
   sectorBasis["basis_id"] =!= cut["basis_id"] || coreCandidates["basis_id"] =!= cut["basis_id"] ||
   sectorBasis["basis"] =!= cut["basis"] || coreCandidates["basis"] =!= cut["basis"] ||

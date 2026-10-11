@@ -51,18 +51,28 @@ CheckCoreCandidate[
   variables_List,
   regulator_Symbol,
   index_Integer,
-  inverseProposal_:Automatic
+  inverseProposal_:Automatic, domain_:"exact-algebraic-functions"
 ] := Module[
   {candidateID, construction, transformation, declared, computed, residuals,
     invertible, exactGauge, flat, epsilonForm, reasons, certifiedInverse,
-    inverseVerification = "symbolic_inverse"},
+    dimension, coefficientQ, reject, inverseVerification = "symbolic_inverse"},
   candidateID = candidate["candidate_id"];
+  reject[reason_] := <|"candidate_id" -> candidateID, "index" -> index,
+    "pass" -> False, "invertible" -> False, "rejection_signature" -> {reason}|>;
   construction = candidate["construction_rejection"];
   If[StringQ[construction], Return[<|
     "candidate_id" -> candidateID, "index" -> index, "pass" -> False,
     "invertible" -> False, "rejection_signature" -> {construction}|>]];
   transformation = candidate["transformation"];
   declared = candidate["transformed_matrices"];
+  dimension = Length[First[matrices]];
+  If[!squareMatrixQ[transformation, dimension] ||
+    !matrixListShapeQ[declared, Length[variables], dimension],
+    Return[reject["candidate_shape_invalid"]]];
+  coefficientQ = If[domain === "exact-rational-functions",
+    ExactRationalExpressionQ, ExactAlgebraicExpressionQ];
+  If[!AllTrue[Flatten[{transformation, declared}], coefficientQ],
+    Return[reject["coefficient_domain_invalid"]]];
   (* A supplied row matrix is only a proposal. Both exact inverse identities
      must hold before it replaces symbolic determinant/inverse construction. *)
   certifiedInverse = MatrixQ[inverseProposal] &&

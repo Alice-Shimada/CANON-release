@@ -8,17 +8,20 @@ requestFile = FileNameJoin[{tree, "collect.json"}];
 roles = Import[requestFile, "RawJSON"]["payload"];
 index = CanonPointDE`CollectSamples[roles, requestFile, FileNameJoin[{tree, "collector-fixtures", "index.wl"}]];
 checks["streamed_collection_matches_identity_and_roles"] = !FailureQ[index] &&
-  Length[index["training"]] === 2 && Length[index["validation"]] === 1 && index["variables"] === {x};
+  Length[index["training"]] === 2 && Length[index["validation"]] === 1 && index["variables"] === {CANON`DEData`x} && index["regulator"] === CANON`DEData`eps;
 checks["streamed_index_references_resolve"] = And @@ (FileExistsQ[CanonMethodCard`ResolveInputPath[
   FileNameJoin[{tree, "collector-fixtures", "index.wl"}], #["path"]]] & /@ Join[index["training"], index["validation"]]);
+checks["index_pins_each_collected_sample"] = And @@ (#["sha256"] === FileHash[
+  CanonMethodCard`ResolveInputPath[FileNameJoin[{tree,"collector-fixtures","index.wl"}], #["path"]],
+  "SHA256", "HexString"] & /@ Join[index["training"],index["validation"]]);
 directory = FileNameJoin[{tree, "collector-fixtures"}];
 If[!DirectoryQ[directory], CreateDirectory[directory]];
-training = Get[FileNameJoin[{tree, "training", "de-sample.wl"}]];
+training = CanonMethodCard`ReadWLData[FileNameJoin[{tree, "training", "de-sample.wl"}]];
 Put[training, FileNameJoin[{directory, "duplicate.wl"}]];
 duplicateRoles = Join[roles, <|"validation" -> {<|"id" -> "duplicate-point", "path" -> "collector-fixtures/duplicate.wl"|>}|>];
 duplicate = CanonPointDE`CollectSamples[duplicateRoles, requestFile, FileNameJoin[{directory, "duplicate-index.wl"}]];
 checks["distinct_files_with_same_point_rejected"] = FailureQ[duplicate] && duplicate[[1]] === "OVERLAPPING_SAMPLE_POINTS";
-changed = Get[FileNameJoin[{tree, "validation", "de-sample.wl"}]];
+changed = CanonMethodCard`ReadWLData[FileNameJoin[{tree, "validation", "de-sample.wl"}]];
 changed["scope"] = <|"included_sectors" -> {7}|>;
 Put[changed, FileNameJoin[{directory, "changed-scope.wl"}]];
 changedRoles = Join[roles, <|"validation" -> {<|"id" -> "changed-scope", "path" -> "collector-fixtures/changed-scope.wl"|>}|>];

@@ -11,23 +11,6 @@ Begin["`Private`"];
 
 failure[code_, reason_] := Failure[code, <|"Message" -> reason|>];
 
-symbolFromName[name_String] := Module[{held},
-  held = Quiet @ Check[Block[{$Context = "CANON`DEData`", $ContextPath = {"System`"}},
-    ToExpression[name, InputForm, HoldComplete]], $Failed];
-  If[MatchQ[held, HoldComplete[_Symbol]], First[held], $Failed]
-];
-
-declaredSymbolRules[value_Association] := Module[{mapping, rules},
-  mapping = Lookup[value, "operator_source_symbol_map", <||>];
-  If[!AssociationQ[mapping], Return[$Failed]];
-  rules = KeyValueMap[Function[{source, target}, Module[{from, to},
-    If[!StringQ[source] || !StringQ[target], Return[$Failed, Module]];
-    from = symbolFromName[source]; to = symbolFromName[target];
-    If[from === $Failed || to === $Failed, $Failed, from -> to]
-  ]], mapping];
-  If[MemberQ[rules, $Failed], $Failed, rules]
-];
-
 validLinearTermQ[item_, count_] := AssociationQ[item] &&
   KeyExistsQ[item, "coefficient"] && KeyExistsQ[item, "denominator"] &&
   CanonMethodCard`ExactRationalExpressionQ[item["coefficient"]] &&
@@ -79,7 +62,7 @@ LoadPreparedDerivatives[prepared_, preparedPath_String, masterBasis_, derivative
   variables = Lookup[prepared, "variables", None];
   indexOrder = Lookup[prepared, "index_order", None];
   masters = Lookup[masterBasis, "masters", None];
-  symbolRules = declaredSymbolRules[prepared];
+  symbolRules = CanonMethodCard`ParseSymbolRules[Lookup[prepared, "operator_source_symbol_map", <||>]];
   If[!ListQ[variables] || variables === {} || !AllTrue[variables, MatchQ[#, _Symbol] &] ||
     !DuplicateFreeQ[variables] || !ListQ[indexOrder] || indexOrder === {} ||
     !ListQ[masters] || masters === {} ||
@@ -89,8 +72,9 @@ LoadPreparedDerivatives[prepared_, preparedPath_String, masterBasis_, derivative
   If[source === Automatic,
     descriptor = Lookup[prepared, "prepared_derivatives", <||>];
     If[!AssociationQ[descriptor] || !StringQ[Lookup[descriptor, "path", None]], Return[invalid]];
-    source = CanonMethodCard`ResolveInputPath[preparedPath, descriptor["path"]]
+    source = CanonMethodCard`ResolveArtifactPath[preparedPath, descriptor]
   ];
+  If[FailureQ[source], Return[source]];
   If[!StringQ[source], Return[invalid]];
   value = Quiet @ Check[CanonMethodCard`ReadWLData[source] /. symbolRules, $Failed];
   (* ReplaceAll maps Association values; operator keys need the declared map too. *)
@@ -142,7 +126,7 @@ validMatricesQ[matrices_, variables_, size_] := Module[{cache = <||>},
 ];
 
 BuildOrderedMasterDE[prepared_, masterBasis_, reduction_, normalized_] := Module[
-  {masters, variables, dimensionRule, rules, fullDE, matrices, invalid},
+  {masters, variables, dimensionRule, rules, coefficientRows, fullDE, matrices, invalid},
   invalid = failure["INVALID_DIFFERENTIAL_EQUATION",
     "built differential equation is malformed or contains non-rational entries"];
   masters = masterBasis["masters"]; variables = prepared["variables"];
@@ -152,10 +136,20 @@ BuildOrderedMasterDE[prepared_, masterBasis_, reduction_, normalized_] := Module
     Return[failure["INVALID_DIFFERENTIAL_EQUATION", "dimension_rule is invalid"]]];
   If[!AssociationQ[reduction], Return[invalid]];
   rules = Lookup[reduction, "rules", None];
-  If[!ListQ[rules] || !AllTrue[rules, MatchQ[#, _Rule | _RuleDelayed] &] ||
-    Lookup[reduction, "masters", masters] =!= masters, Return[invalid]];
+  If[!DuplicateFreeQ[masters] || !ListQ[rules] ||
+    !AllTrue[rules, MatchQ[#, _Rule | _RuleDelayed] &] ||
+    Lookup[reduction, "masters", masters] =!= masters || !DuplicateFreeQ[First /@ rules] ||
+    AnyTrue[{"family_ref", "basis_ref"}, KeyExistsQ[reduction, #] && reduction[#] =!= prepared[#] &],
+    Return[invalid]];
+  (* Check raw integral linearity before unit-vector substitution can collapse
+     products or broadcast a scalar offset into apparently valid coefficients. *)
+  coefficientRows = CanonMethodCard`IntegralCoefficientRows[Last /@ rules, masters, Head[First[masters]]];
+  If[MemberQ[coefficientRows, $Failed] ||
+    !AllTrue[Select[rules, MemberQ[masters, First[#]] &],
+      CanonMethodCard`ZeroMatrixQ[CanonMethodCard`IntegralCoefficientRows[
+        {Last[#] - First[#]}, masters, Head[First[masters]]]] &], Return[invalid]];
   fullDE = Quiet @ Check[CANON`DEBuilder`BuildDifferentialEquations[
-    DifferentialEquationFamily[prepared, normalized], masters, rules], $Failed];
+    DifferentialEquationFamily[prepared, normalized], masters, rules, coefficientRows], $Failed];
   matrices = If[AssociationQ[fullDE] && AssociationQ[Lookup[fullDE, "matrices", None]],
     Lookup[fullDE["matrices"], variables, $Failed] /. dimensionRule, $Failed];
   If[!validMatricesQ[matrices, variables, Length[masters]], Return[invalid]];

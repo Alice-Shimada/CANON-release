@@ -23,6 +23,7 @@ def main():
     parser.add_argument("--work", required=True, type=Path)
     parser.add_argument("--candidate", required=True, type=Path)
     parser.add_argument("--baseline", type=Path)
+    parser.add_argument("--components", type=Path, action="append", default=[])
     args = parser.parse_args()
     canon, work = args.canon.resolve(), args.work.resolve()
     work.mkdir(parents=True, exist_ok=False)
@@ -42,9 +43,18 @@ def main():
         ("zero", "0", "IBP_REDUCED"),
         ("unknown-integral", "neutral_native[9,9]", "UNREDUCED_NATIVE_OUTPUT"),
         ("nonlinear", "neutral_native[1,1] neutral_native[1,2]", "NATIVE_RULES_NOT_LINEAR"),
+        ("square", "neutral_native[1,1]^2", "NATIVE_RULES_NOT_LINEAR"),
+        ("integral-function", "Sin[neutral_native[1,1]]", "NATIVE_RULES_NOT_LINEAR"),
+        ("fractional-power", "Sqrt[neutral_native[1,1]]", "NATIVE_RULES_NOT_LINEAR"),
+        ("cancelled-polynomial", "(neutral_native[1,1]+neutral_native[1,2])^2-neutral_native[1,1]^2-neutral_native[1,2]^2-2 neutral_native[1,1] neutral_native[1,2] + " + rhs, "IBP_REDUCED"),
+        ("cancelled-scalar", "((x+y)^2-x^2-y^2-2 x y) + " + rhs, "IBP_REDUCED"),
+        ("cancelled-coefficient", "((x+y)^2-x^2-y^2-2 x y) neutral_native[1,1]^2 + " + rhs, "IBP_REDUCED"),
         ("master-denominator", "neutral_native[1,1]/(1+neutral_native[1,2])", "NATIVE_RULES_NOT_LINEAR"),
         ("constant-term", rhs + " + x/(1+y)", "NATIVE_RULES_NOT_LINEAR"),
         ("undeclared-symbol", "rogue neutral_native[1,1]", "UNDECLARED_NATIVE_COEFFICIENT"),
+        ("machine-coefficient", "1.0 neutral_native[1,1]", "INVALID_NATIVE_COEFFICIENT_DOMAIN"),
+        ("transcendental-coefficient", "Sin[x] neutral_native[1,1]", "INVALID_NATIVE_COEFFICIENT_DOMAIN"),
+        ("algebraic-coefficient", "Sqrt[x] neutral_native[1,1]", "INVALID_NATIVE_COEFFICIENT_DOMAIN"),
         ("source-changed", rhs, "SOURCE_BASIS_CHANGED"),
         ("basis-changed", rhs, "NATIVE_BASIS_MISMATCH"),
         ("unused-source", "(d+x)/(1+y) neutral_native[1,1]", "IBP_REDUCED"),
@@ -62,7 +72,7 @@ def main():
         hashes[variant] = {"path": str(interop), "sha256": hashlib.sha256(interop.read_bytes()).hexdigest()}
         override = work / variant / "components.json"
         write(override, {"schema": "canon-neu/components/v1", "steps": {"REDUCE_IBP": {
-            "command": [runtime, "-file", str(interop), "{canon}", "import"],
+            "command": [runtime, "-file", str(interop), str(canon), "import"],
             "instructions": str(canon / "components/reducers/kira/README.md")}}})
         for name, expression, expected in cases:
             case = work / variant / name
@@ -97,9 +107,10 @@ def main():
             write(request, {"schema": "canon-neu/script-input/v1", "task_id": "NEUTRAL-" + name,
                             "step": "REDUCE_IBP", "sector": None,
                             "payload": {"reducer_family": {"path": "family.json"}}})
-            command = [sys.executable, str(canon / "run_step.py"), str(request), str(output),
-                       "--components", str(canon / "components/profiles/custom-kira.json"),
-                       "--components", str(override)]
+            command = [sys.executable, str(canon / "run_step.py"), str(request), str(output)]
+            for manifest in args.components or [canon / "components/profiles/custom-kira.json"]:
+                command += ["--components", str(manifest.resolve())]
+            command += ["--components", str(override)]
             if name == "linear":
                 described = subprocess.run(command + ["--describe"], capture_output=True, text=True, check=True, env=environment)
                 (case / "describe.json").write_text(described.stdout)

@@ -9,11 +9,18 @@ alphabet = If[Lookup[task["payload"], "declared_alphabet", Null] === Null, {},
   CanonMethodCard`LoadArtifact[task, inputPath, "declared_alphabet"]["letters"]];
 variables = cut["variables"]; regulator = cut["regulator"];
 matrices = cut["matrices"]; dimension = Length[cut["basis"]];
-zero = Map[Factor, matrices /. regulator -> 0, {3}];
+prime = Lookup[Lookup[task["payload"], "method_options", <||>], "prime", 2147483647];
+If[!IntegerQ[prime] || !PrimeQ[prime],
+  CanonMethodCard`WriteProviderResult[task, outputDir, "ERROR", "INVALID_METHOD_OPTIONS",
+    <||>, <|"reason" -> "method_options.prime must be a prime integer"|>]; Quit[0]];
+samplingFailures = {};
+zero = Map[Factor[Together[#] /. regulator -> 0] &, matrices, {3}];
 weights = -Diagonal[Map[Together, Total[MapThread[Times, {variables, zero}]], {2}]];
 exhausted[] := (CanonMethodCard`WriteProviderResult[task, outputDir,
-  "INCONCLUSIVE", "METHOD_EXHAUSTED", <||>,
-  <|"method_id" -> "epsilon-zero-polynomial", "reason" -> "bounded horizontal ansatz exhausted",
+  "INCONCLUSIVE", If[samplingFailures === {}, "METHOD_EXHAUSTED", "OUT_OF_SCOPE"], <||>,
+  <|"method_id" -> "epsilon-zero-polynomial", "reason" -> If[samplingFailures === {},
+      "bounded horizontal ansatz exhausted", "regular finite-field sampling incomplete"],
+    "prime" -> prime, "sampling_failures" -> samplingFailures,
     "nonexistence_proved" -> False, "epsilon_singular_completion_max_dimension" -> 2,
     "next_diagnostic" -> "DIAGNOSE_CORE"|>]; Quit[0]);
 
@@ -29,9 +36,22 @@ radicals = DeleteDuplicates @ Cases[{alphabet, polePrefactor},
 characters = Times @@@ Tuples[({1, #} &) /@ radicals];
 prefactors = DeleteDuplicates[Join[1/characters, polePrefactor characters]];
 
-prime = Lookup[Lookup[task["payload"], "method_options", <||>], "prime", 2147483647];
-mod[expr_] := Mod[expr /. q_Rational :>
-  Numerator[q] PowerMod[Denominator[q], -1, prime], prime];
+mod[values_] := If[!MatrixQ[values, IntegerQ[#] || Head[#] === Rational &],
+  Failure[If[FreeQ[values, Indeterminate | _DirectedInfinity],
+    "unsupported_modular_coefficient_domain", "undefined_exact_sample"], <||>],
+  Catch[Mod[values /. q_Rational :> If[Mod[Denominator[q], prime] === 0,
+    Throw[Failure["noninvertible_modular_denominator", <||>], mod],
+    Numerator[q] PowerMod[Denominator[q], -1, prime]], prime], mod]];
+sample[point_] := Module[{data, basis, derivativeValues, operatorValues, failure},
+  data = Quiet[Check[{basisRows, derivatives, operators} /. point, $Failed]];
+  If[data === $Failed, Return[Failure["undefined_exact_sample", <||>]]];
+  basis = mod[data[[1]]];
+  derivativeValues = mod /@ data[[2]]; operatorValues = mod /@ data[[3]];
+  failure = Cases[{basis, derivativeValues, operatorValues}, _Failure, Infinity];
+  If[failure =!= {}, Return[First[failure]]];
+  Join @@ MapThread[Mod[Transpose[#1] + Transpose[#2].Transpose[basis], prime] &,
+    {derivativeValues, operatorValues}]
+];
 reconstruct[a_] := Module[{r0 = prime, r1 = a, s0 = 0, s1 = 1, q},
   While[r1 > Sqrt[prime/2], q = Quotient[r0, r1];
     {r0, r1} = {r1, r0 - q r1}; {s0, s1} = {s1, s0 - q s1}]; r1/s1];
@@ -47,23 +67,47 @@ Do[
     {zero, logarithmicDerivative}];
   derivatives = D[basisRows, #] & /@ variables;
   sampleCount = Ceiling[2 Length[basisRows]/(dimension Max[1, Length[variables] - 1])] + 5;
-  equations = Join @@ Table[
+  equations = {}; regularSamples = 0; attempts = 0; rejectedSamples = {};
+  (* Only finite rational evaluations with invertible modular denominators
+     may enter NullSpace. Keep the required count and bound the point search. *)
+  Do[
+    attempts++;
     point = Thread[variables -> Prime[Range[Length[variables]] + k Length[variables]]];
-    sampledBasis = mod[basisRows /. point];
-    Join @@ MapThread[mod[Transpose[mod[#1 /. point]] +
-        Transpose[mod[#2 /. point]].Transpose[sampledBasis]] &,
-      {derivatives, operators}], {k, 0, sampleCount - 1}];
+    sampled = sample[point];
+    If[FailureQ[sampled], AppendTo[rejectedSamples, First[sampled]]; Continue[]];
+    equations = Join[equations, sampled]; regularSamples++;
+    If[regularSamples === sampleCount, Break[]], {k, 0, 8 sampleCount - 1}];
+  If[regularSamples =!= sampleCount,
+    AppendTo[samplingFailures, <|"prefactor" -> ToString[prefactor, InputForm],
+      "degrees" -> degrees, "requested_sample_count" -> sampleCount,
+      "regular_sample_count" -> regularSamples, "sample_attempts" -> attempts,
+      "rejected_samples" -> Counts[rejectedSamples]|>]; Continue[]];
   polynomials = ((reconstruct /@ #).basisRows &) /@ NullSpace[equations, Modulus -> prime];
   verified = Select[polynomials, Function[row, And @@ Flatten[Table[
     (Together[#] === 0 & /@ (D[row, variables[[i]]] + row.operators[[i]])),
     {i, Length[variables]}]]]];
   rows = Join[rows, (Factor[prefactor #] &) /@ verified];
   AppendTo[evidence, <|"prefactor" -> prefactor, "degrees" -> degrees,
-    "unknown_count" -> Length[basisRows], "exact_horizontal_rows" -> Length[verified]|>],
+    "unknown_count" -> Length[basisRows], "exact_horizontal_rows" -> Length[verified],
+    "regular_sample_count" -> regularSamples, "sample_attempts" -> attempts|>],
   {prefactor, prefactors}];
 selection = Fold[If[MatrixRank[rows[[Append[#1, #2]]]] > Length[#1],
   Append[#1, #2], #1] &, {}, Range[Length[rows]]];
 rows = rows[[selection]];
+
+constructionLimit[reason_] := (CanonMethodCard`WriteProviderResult[task, outputDir,
+  "INCONCLUSIVE", "OUT_OF_SCOPE", <||>,
+  <|"method_id" -> "epsilon-zero-polynomial", "reason" -> reason,
+    "prime" -> prime, "nonexistence_proved" -> False,
+    "epsilon_singular_completion_max_dimension" -> 2|>]; Quit[0]);
+finiteQ[value_] := FreeQ[value,
+  Indeterminate | _DirectedInfinity | Undefined | $Failed | _Failure | _Missing | _Inverse];
+oppositeProfile[entry_] := Module[{leading, value},
+  leading = Quiet[Check[Together[entry /. regulator -> 0], $Failed]];
+  If[leading === 0 || !finiteQ[leading], Return[$Failed]];
+  value = Quiet[Check[Together[entry/leading], $Failed]];
+  If[finiteQ[value] && value =!= 0 && FreeQ[value, Alternatives @@ variables], value, $Failed]
+];
 
 (* A two-dimensional rank defect may require an epsilon-singular completion. *)
 If[dimension === 2 && Length[rows] === 1,
@@ -73,14 +117,20 @@ If[dimension === 2 && Length[rows] === 1,
   frame = CanonMethodCard`GaugeTransform[matrices, variables, Map[Together, Inverse[rows], {2}]];
   primitive = CanonMethodCard`AlgebraicPrimitive[
     -(Together[#[[1, 2]]/regulator] /. regulator -> 0) & /@ frame, variables];
-  entry = SelectFirst[frame[[All, 2, 1]], # =!= 0 &];
-  profile = Together[entry/(entry /. regulator -> 0)];
-  If[primitive === $Failed || !FreeQ[profile, Alternatives @@ variables], exhausted[]];
+  If[!finiteQ[primitive], constructionLimit["leading_primitive_unsupported"]];
+  profile = SelectFirst[oppositeProfile /@ frame[[All, 2, 1]], # =!= $Failed &, $Failed];
+  If[profile === $Failed, constructionLimit["opposite_entry_profile_unsupported"]];
   rows = Map[Together, DiagonalMatrix[{1, regulator/profile}].
     {{1, regulator primitive/profile}, {0, 1}}.rows, {2}];
 ];
 If[Length[rows] =!= dimension, exhausted[]];
-transformation = Map[Together, Inverse[rows], {2}];
+(* Generic invertibility permits determinant zeros or poles at epsilon zero. *)
+If[!MatrixQ[rows] || Dimensions[rows] =!= {dimension, dimension} ||
+    !finiteQ[rows] || Together[Det[rows]] === 0,
+  constructionLimit["invalid_candidate_frame"]];
+transformation = Quiet[Check[Map[Together, Inverse[rows], {2}], $Failed]];
+If[!MatrixQ[transformation] || !finiteQ[transformation],
+  constructionLimit["invalid_candidate_frame"]];
 transformed = CanonMethodCard`GaugeTransform[matrices, variables, transformation];
 value = Join[KeyTake[cut, {"sector", "family_id", "basis_id", "basis", "variables", "regulator"}], <|
   "schema" -> "canon-neu/core-candidates/v1", "source_basis" -> cut["basis"],

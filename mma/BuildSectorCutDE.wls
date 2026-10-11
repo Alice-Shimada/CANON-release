@@ -16,16 +16,20 @@ failClosed[reasonCode_String, reason_String] := fail[Failure["IBP_EXECUTION_FAIL
   <|"reason_code" -> reasonCode, "Message" -> reason|>]];
 
 prepared = CanonMethodCard`LoadArtifact[task, inputPath, "prepared_family"];
+If[FailureQ[prepared], fail[prepared]];
 preparedPath = CanonMethodCard`ResolveInputPath[inputPath, task["payload", "prepared_family", "path"]];
 masterBasis = CanonMethodCard`LoadArtifact[task, inputPath, "master_basis"];
+If[FailureQ[masterBasis], fail[masterBasis]];
 sectorManifest = CanonMethodCard`LoadArtifact[task, inputPath, "sector_manifest"];
+If[FailureQ[sectorManifest], fail[sectorManifest]];
 currentSector = CANON`SectorDE`CurrentSectorRecord[
   <|"family_id" -> prepared["family_ref"], "basis" -> masterBasis["masters"]|>,
   sectorManifest, task["sector"]];
 If[FailureQ[currentSector], fail[currentSector]];
 reduction = CanonMethodCard`LoadArtifact[task, inputPath, "ibp_reduction"];
+If[FailureQ[reduction], fail[reduction]];
 derivativePath = If[KeyExistsQ[task["payload"], "prepared_derivatives"],
-  CanonMethodCard`ResolveInputPath[inputPath, task["payload", "prepared_derivatives", "path"]], Automatic];
+  CanonMethodCard`ResolveArtifactPath[inputPath, task["payload", "prepared_derivatives"]], Automatic];
 normalized = CANON`SectorDE`LoadPreparedDerivatives[prepared, preparedPath, masterBasis, derivativePath];
 If[FailureQ[normalized], fail[normalized]];
 deFamily = CANON`SectorDE`DifferentialEquationFamily[prepared, normalized];

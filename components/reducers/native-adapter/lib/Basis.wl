@@ -6,10 +6,9 @@ coefficientQ[q_, f_] := Module[{allowed = allowedCoefficients[f], symbols, mappe
   symbols = Table[Unique["coefficient$"], {Length[allowed]}]; mapped = q /. Thread[allowed -> symbols];
   CanonMethodCard`DeclaredCoefficientDomainQ[mapped, symbols]
 ];
-linear[q_, masters_, f_] := Module[{variables, p, coefficients},
-  variables = Table[Unique["master$"], {Length[masters]}]; p = Expand[q /. Thread[masters -> variables]];
-  coefficients = Coefficient[p, #] & /@ variables;
-  need[zero[p - coefficients . variables] && AllTrue[coefficients, coefficientQ[#, f] &], "UNRESOLVED_NATIVE_RULES", "A rule is nonlinear, contains undeclared coefficients, or is not reduced to the declared native masters."];
+linear[q_, masters_, f_] := Module[{coefficients},
+  coefficients = First[CanonMethodCard`IntegralCoefficientRows[{q}, masters, Head[First[masters]]]];
+  need[coefficients =!= $Failed && AllTrue[coefficients, coefficientQ[#, f] &], "UNRESOLVED_NATIVE_RULES", "A rule is nonlinear, contains undeclared coefficients, or is not reduced to the declared native masters."];
   coefficients
 ];
 nativeMasters[raw_, format_, e_, f_] := Module[{m = raw},

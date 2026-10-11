@@ -30,7 +30,9 @@ QuadraticRootLetters[matrices_List, variables_List] := Module[
 
 DLogResidues[matrices_List, variables_List, regulator_Symbol, alphabet_List] := Catch[Module[
   {powers, bases, orders, roots, relations, formal, numerator, fieldPowers,
-   fieldBasis, fieldVector, points, logarithmicDerivatives, sampled, coefficientMatrix,
+   fieldBasis, fieldVector, points, point, pointCount, letterValues,
+   logarithmicDerivatives, connectionEntries, connectionValues, logVectors,
+   entryVectors, sampled, sampledEntries, coefficientMatrix,
    pivotPositions, rows, columns, inverse, entry, entryResidues},
   If[!FreeQ[alphabet, regulator] || !EpsilonFactorizedQ[matrices, regulator],
     Return[$Failed]];
@@ -49,22 +51,43 @@ DLogResidues[matrices_List, variables_List, regulator_Symbol, alphabet_List] := 
     If[roots === {}, n, Numerator[Together[Last @ PolynomialReduce[n, relations, roots]]]]];
   fieldPowers = Tuples[Range[0, # - 1] & /@ orders];
   fieldBasis = Times @@ MapThread[Power, {roots, #}] & /@ fieldPowers;
-  fieldVector[expr_, point_] := Module[{q, rel, vector, n, d},
+  fieldVector[expr_, point_] := Quiet[Check[Module[{q, rel, vector, n, d, result},
     q = Together[expr /. point];
+    If[!FreeQ[q, Indeterminate | _DirectedInfinity], Return[$Failed]];
     If[roots === {}, Return[{q}]];
     rel = relations /. point;
     vector[poly_] := With[{rules = CoefficientRules[
         Last @ PolynomialReduce[poly, rel, roots], roots]},
       Replace[fieldPowers, Join[rules, {_List -> 0}], {1}]];
     n = vector[Numerator[q]]; d = Denominator[q];
-    LinearSolve[Transpose[vector[d #] & /@ fieldBasis], n]
-  ];
-  logarithmicDerivatives = Table[formal[Together[D[letter, direction]/letter]],
-    {direction, variables}, {letter, alphabet}];
-  points = Table[Thread[variables -> Prime[Range[Length[variables]] + k Length[variables]]],
-    {k, 0, Ceiling[Length[alphabet]/Max[1, Length[variables] - 1]] + 1}];
-  sampled = Table[Transpose[fieldVector[#, point] & /@ logarithmicDerivatives[[i]]],
-    {point, points}, {i, Length[variables]}];
+    result = LinearSolve[Transpose[vector[d #] & /@ fieldBasis], n];
+    If[VectorQ[result] && FreeQ[result, Indeterminate | _DirectedInfinity], result, $Failed]
+  ], $Failed]];
+  logarithmicDerivatives = Quiet[Check[
+    Table[formal[Together[D[letter, direction]/letter]],
+      {direction, variables}, {letter, alphabet}], $Failed]];
+  If[logarithmicDerivatives === $Failed, Return[$Failed]];
+  connectionEntries = DeleteDuplicates[Flatten[Table[matrices[[All, row, column]],
+    {row, Length[First[matrices]]}, {column, Length[First[matrices]]}], 1]];
+  connectionValues = formal[Together[#/regulator]] & /@ connectionEntries;
+  pointCount = Ceiling[Length[alphabet]/Max[1, Length[variables] - 1]] + 2;
+  points = {}; sampled = {}; sampledEntries = {};
+  (* Reject divisors and singular field inversions before any matrix algebra.
+     Sampling is bounded and only proposes constants, never an identity proof. *)
+  Do[
+    point = Thread[variables -> Prime[Range[Length[variables]] + k Length[variables]]];
+    letterValues = Quiet[Check[alphabet /. point, $Failed]];
+    If[letterValues === $Failed || !FreeQ[letterValues, Indeterminate | _DirectedInfinity] ||
+        MemberQ[letterValues, 0], Continue[]];
+    logVectors = Map[fieldVector[#, point] &, logarithmicDerivatives, {2}];
+    entryVectors = Map[fieldVector[#, point] &, connectionValues, {2}];
+    If[!FreeQ[{logVectors, entryVectors}, $Failed], Continue[]];
+    AppendTo[points, point];
+    AppendTo[sampled, Transpose /@ logVectors];
+    AppendTo[sampledEntries, entryVectors];
+    If[Length[points] === pointCount, Break[]],
+    {k, 0, 8 pointCount - 1}];
+  If[Length[points] =!= pointCount, Return[$Failed]];
   coefficientMatrix = Flatten[sampled, 2];
   pivotPositions[a_] := (First @ FirstPosition[#, x_ /; x =!= 0, Missing[], {1}, Heads -> False] &) /@
     DeleteCases[RowReduce[a], {0..}];
@@ -72,10 +95,10 @@ DLogResidues[matrices_List, variables_List, regulator_Symbol, alphabet_List] := 
   columns = pivotPositions[coefficientMatrix];
   If[columns =!= {}, inverse = Inverse[coefficientMatrix[[rows, columns]]]];
   (* Samples fix candidate constants; every original direction is proved below. *)
-  entry[entries_] := entry[entries] = Module[{values, sampledValues, solution},
-    values = formal[Together[entries/regulator]];
-    sampledValues = Flatten[Table[fieldVector[values[[i]], point],
-      {point, points}, {i, Length[variables]}]];
+  entry[entries_] := entry[entries] = Module[{position, values, sampledValues, solution},
+    position = First @ FirstPosition[connectionEntries, entries, Missing[], {1}];
+    values = connectionValues[[position]];
+    sampledValues = Flatten[sampledEntries[[All, position]]];
     solution = ConstantArray[0, Length[alphabet]];
     If[columns =!= {}, solution[[columns]] = inverse.sampledValues[[rows]]];
     If[Cases[solution, _Symbol, Infinity] =!= {} ||

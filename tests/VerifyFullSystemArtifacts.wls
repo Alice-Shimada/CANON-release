@@ -1,6 +1,7 @@
 #!/usr/bin/env wolframscript
 
 $HistoryLength = 0;
+Begin["CANON`DEData`"];
 {preparedPath, masterPath, manifestPath, orderedPath, acceptedPath,
   outputA, outputB, receiptPath} = ExpandFileName /@ Rest[$ScriptCommandLine];
 prepared = Get[preparedPath];
@@ -40,9 +41,8 @@ expectedTrace = KeyTake[#, {"id", "propagator_count"}] & /@
   manifest["sectors"];
 
 checks = <|
-  "actual_t006_prefix_bytes" ->
-    (sha[acceptedPath] ===
-      "fc1e2e951d10ca0951827ddd18e2425f863836be06ca68a49fe7bd40d4245ded"),
+  "explicit_basis_definition" ->
+    zeroQ[{transformation.accepted["basis"] - accepted["source_basis"]}],
   "actual_t005_ordered_de_bytes" ->
     (sha[orderedPath] ===
       "9a75821301b6895cb8daac453ea1a951d5329b4e679795192fe3a06dd4e5ae81"),

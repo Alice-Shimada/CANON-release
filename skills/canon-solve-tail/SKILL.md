@@ -23,6 +23,9 @@ an exit code of zero alone does not mean success.
 |---|---|
 | `PASS/TAIL_READY` | Pass the returned `sector_transform` and the same `full_sector_de` to CHECK_CANONICAL. Commit only its passing result. |
 | `INCONCLUSIVE/TAIL_UNSOLVED` | Read `summary.reason` and `summary.diagnostics`, then use the evidence table below. Keep the latest accepted prefix and saved full DE. |
+| `ERROR/TOOL_UNAVAILABLE` | Supply the declared backend installation; no mathematical search has been exhausted. |
+| `ERROR/EXECUTION_INTERRUPTED` | Resume or revise the interrupted computation; this is not a failed ansatz. |
+| `ERROR/INVALID_TAIL_INPUT` | Repair the selected-candidate binding before solving. |
 | No result, or a process timeout | Inspect retained stdout/stderr and the last actual stage before changing the budget. Do not infer mathematical failure. |
 
 The returned transform is the complete prefix map, including any changed lower
@@ -80,7 +83,7 @@ The script applies the following proposals to matching input structures.
 
 | Structure | Built-in proposal |
 |---|---|
-| Regulator-only common factors in the tail | Exact rational epsilon normalization, including factors such as `1 - 2 eps`. |
+| Regulator-only common factors in the tail | Try an exact rational normalization directly to epsilon form, including factors such as `1 - 2 eps`; use the affine normalization only if residual epsilon dependence remains. |
 | Affine normalized tail `R0 + eps R1` | An algebraic primitive of `R0` in every variable, followed by a lower-sector shear. |
 | One current master and one supported quadratic root | A neutral lower lift when needed, then a primitive with coefficient `1/(1+2 c eps)` from the scalar radicand residue. This can remove higher poles of a `1/q` primitive. |
 | Several current masters | A bounded completion from the simplest row and its first derivatives; an exact full-rank cut aligns the rows. |
@@ -125,7 +128,8 @@ the stage, candidate, resolved package entry, and immediate call context:
 variables, backend regulator, active positions, sector boundaries, initial
 transformation, matrices, and explicit options. `backend_return` contains the
 actual saved return under `HoldComplete`, so loading the artifact keeps that
-return inert. The diagnostic makes no additional backend call. It preserves
+return inert. Wrong-sized, singular or inexact backend transformations are
+also retained as failed backend returns. The diagnostic makes no additional backend call. It preserves
 `INCONCLUSIVE/TAIL_UNSOLVED` and the bounded backend failure reason; a returned `False`
 does not identify a finer cause or prove that every ansatz is exhausted.
 Non-backend unsolved results omit these backend-specific fields and artifacts.

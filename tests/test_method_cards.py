@@ -272,24 +272,25 @@ $LibraUseFermat = False;
 DependentRowIndices;
 SetAttributes[NewDSystem, HoldFirst];
 NewDSystem[ds_Symbol, rule_Rule] := (
-  ds[Global`x] = Last[rule];
+  ds["variable"] = First[rule];
+  ds[First[rule]] = Last[rule];
   ds["overall"] = IdentityMatrix[Length[Last[rule]]];
   Null
 );
-Fuchsify[ds_Symbol, Global`x] := IdentityMatrix[Length[ds[Global`x]]];
+Fuchsify[ds_Symbol, fakeVariable_] := IdentityMatrix[Length[ds[fakeVariable]]];
 Transform[ds_Symbol, transformation_] := (
-  ds[Global`x] = Together[
+  ds[ds["variable"]] = Together[
     Inverse[transformation].(
-      ds[Global`x].transformation - D[transformation, Global`x]
+      ds[ds["variable"]].transformation - D[transformation, ds["variable"]]
     )
   ];
   ds["overall"] = Together[ds["overall"].transformation];
   Null
 );
 Options[FactorOut] = {{DependentRowIndices -> Automatic}};
-FactorOut[ds_Symbol, Global`x, Global`eps, 1/2, OptionsPattern[]] := (
+FactorOut[ds_Symbol, fakeVariable_, fakeRegulator_, 1/2, OptionsPattern[]] := (
   Put[OptionValue[DependentRowIndices], "{capture}"];
-  {{{{1, Global`x}}, {{0, 1}}}}
+  {{{{1, fakeVariable}}, {{0, 1}}}}
 );
 PolesInfo[___] := {{{{0, 0}}}};
 LeadingSeriesCoefficient[___] := IdentityMatrix[2];
@@ -1022,6 +1023,38 @@ EndPackage[];
                     else:
                         self.assertTrue(load_marker.is_file())
                     self.assertFalse(call_marker.exists())
+
+    def test_search_core_accepts_sector_record_key_order(self) -> None:
+        for method, entry, code in (
+            ("libra", self.successful_fake_libra_entry(self.run_root / "key-order.wl"), "CANDIDATE_TRANSFORMATION"),
+            ("canonica", self.fake_canonica_entry(), "METHOD_EXHAUSTED"),
+        ):
+            with self.subTest(method=method):
+                request = self.provider_input(method, entry)
+                value = json.loads(request.read_text())
+                value["sector"] = dict(reversed(list(value["sector"].items())))
+                request.write_text(json.dumps(value))
+                result = self.run_wls(ROOT / "methods" / method / "run.wls", request,
+                                      self.run_root / (method + "-record-key-order"))
+                self.assertEqual(result["code"], code)
+
+    def test_tail_screen_accepts_sector_record_key_order(self) -> None:
+        request = self.tail_screen_input("T-KEY-ORDER", FIXTURES / "tail-full-prefix-candidates.wl", 2)
+        value = json.loads(request.read_text())
+        value["sector"] = dict(reversed(list(value["sector"].items())))
+        request.write_text(json.dumps(value))
+        result = self.run_wls(ROOT / "methods/full-prefix-tail-screen/run.wls", request,
+                              self.run_root / "tail-screen-key-order")
+        self.assertEqual((result["status"], result["code"]), ("PASS", "TAIL_SCREEN_PASS"))
+
+    def test_libra_hierarchy_accepts_sector_record_key_order(self) -> None:
+        hierarchy = self.mutated_wl(FIXTURES / "libra-dependent-row-hierarchy.wl", "key-order-hierarchy",
+            (('"id" -> 3, "propagator_count" -> 2', '"propagator_count" -> 2, "id" -> 3'),))
+        entry = self.successful_fake_libra_entry(self.run_root / "hierarchy-key-order.wl")
+        request = self.provider_input("libra", method_options={"package_entry":str(entry),
+            "dependent_row_strategy":"sector-de-closure"}, dependent_row_hierarchy=hierarchy)
+        result = self.run_wls(ROOT / "methods/libra/run.wls", request, self.run_root / "hierarchy-key-order")
+        self.assertEqual(result["code"], "CANDIDATE_TRANSFORMATION")
 
     def test_provider_method_exhaustion_is_inconclusive(self) -> None:
         for method, entry in (

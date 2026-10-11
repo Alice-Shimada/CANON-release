@@ -873,6 +873,10 @@ OptionsPattern[]] :=
 				] &, CalculateDlogForm[c, invariants, alphabet], {3}
 			];
 
+		If[ eDlog === False || cDlog === False,
+			Return[False];
+		];
+
 		dfacInitLetters =
 			Table[Map[Function[list, Select[list, #[[1]] === nLetter &]], dfacInit, {2}], {nLetter, 1, Length@alphabet}];
 
@@ -2270,6 +2274,10 @@ FindD[e_List, c_List, b_List, alphabet_List, invariants_List, userProvidedAnsatz
 				Message[FindD::invansatz];
 				Return[False];
 			];
+		];
+
+		If[ indepFactors === False,
+			Return[False];
 		];
 
 		nmin = Sort[Flatten[Exponent[bhat, eps, Min]]][[1]];

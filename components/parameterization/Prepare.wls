@@ -12,6 +12,8 @@ reducerPath = FileNameJoin[{outputDir, "reducer-family.json"}];
 preparedPath = FileNameJoin[{outputDir, "prepared-family.wl"}];
 fail[value_] := (CanonMethodCard`WriteResult[task, outputDir, "FAIL", value[[1]], <||>,
   <|"reason" -> ToString[value[[2]], InputForm]|>]; Exit[1]);
+save[data_, name_] := Module[{path = CanonMethodCard`WriteWLArtifact[data, outputDir, name]},
+  If[!StringQ[path], fail[Failure["ARTIFACT_WRITE_FAILED", <|"path" -> name|>]]]; path];
 reference[from_, path_, type_] := (If[!FileExistsQ[path], fail[Failure["MISSING_SOURCE_ARTIFACT", <|"path" -> path|>]]];
   <|"type" -> type, "path" -> CanonMethodCard`RelativeArtifactPath[from, path],
     "sha256" -> FileHash[path, "SHA256", "HexString"]|>);
@@ -24,9 +26,9 @@ If[KeyExistsQ[spec, "prepared_derivatives"], fail[Failure["DERIVATIVES_GENERATED
 family = result["family"];
 derivatives = CANON`PhysicalDerivative`PreparePhysicalDerivatives[family];
 If[FailureQ[derivatives], fail[derivatives]];
-derivativePath = CanonMethodCard`WriteWLArtifact[derivatives, outputDir, "prepared-derivatives.wl"];
+derivativePath = save[derivatives, "prepared-derivatives.wl"];
 family["sources"] = <|"family_spec" -> reference[familyPath, specPath, "mathematica-expression"]|>;
-CanonMethodCard`WriteWLArtifact[family, outputDir, "family-data.wl"];
+save[family, "family-data.wl"];
 reducer = Join[result["reducer"], <|"family_data" -> reference[reducerPath, familyPath, "mathematica-expression"]|>];
 If[Export[reducerPath, reducer, "RawJSON"] === $Failed,
   fail[Failure["REDUCER_FAMILY_EXPORT_FAILED", <|"path" -> reducerPath|>]]];
@@ -38,11 +40,13 @@ prepared = Join[KeyTake[family, {"family_ref", "basis_ref", "chart_id", "topolog
     "available_inputs" -> <|"prepared_derivatives" -> True, "ordered_masters" -> KeyExistsQ[spec, "ordered_masters"]|>|>];
 If[KeyExistsQ[spec, "operator_source_symbol_map"], prepared["operator_source_symbol_map"] = spec["operator_source_symbol_map"]];
 Do[If[KeyExistsQ[spec, name],
-  raw = If[StringQ[spec[name]], spec[name], spec[name]["path"]];
-  prepared[name] = reference[preparedPath, CanonMethodCard`ResolveInputPath[specPath, raw],
+  raw = If[StringQ[spec[name]], <|"path" -> spec[name]|>, spec[name]];
+  sourcePath = CanonMethodCard`ResolveArtifactPath[specPath, raw];
+  If[FailureQ[sourcePath], fail[sourcePath]];
+  prepared[name] = reference[preparedPath, sourcePath,
     If[name === "ordered_masters", "text", "mathematica-expression"]]
 ], {name, {"ordered_masters"}}];
-CanonMethodCard`WriteWLArtifact[prepared, outputDir, "prepared-family.wl"];
+save[prepared, "prepared-family.wl"];
 CanonMethodCard`WriteResult[task, outputDir, "PASS", "PARAMETERIZATION_READY", <|
   "family_data" -> <|"type" -> "mathematica-expression", "path" -> "family-data.wl"|>,
   "reducer_family" -> <|"type" -> "json", "path" -> "reducer-family.json"|>,

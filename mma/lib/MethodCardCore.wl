@@ -1,4 +1,5 @@
 BeginPackage["CanonMethodCard`"];
+IntegralCoefficientRows::usage = "IntegralCoefficientRows[expressions, basis, head] returns exact ordered integral rows by unit-vector substitution, or $Failed for each expression outside the homogeneous linear span.";
 
 SectorBits::usage = "SectorBits[integral, propagatorSlots] returns the full index-order sector mask, with ISP slots set to zero.";
 FormatMasterArtifacts::usage = "FormatMasterArtifacts[prepared, masters, sourceHash] groups ordered masters into the standard sector manifest and master basis.";
@@ -7,6 +8,8 @@ SectorDEArtifacts::usage = "SectorDEArtifacts[orderedDE, sectorManifest, sectorR
 ReadTask::usage = "ReadTask[path, step] reads and validates a script input envelope.";
 ScriptArguments::usage = "ScriptArguments[] returns arguments following the active WL script.";
 LoadArtifact::usage = "LoadArtifact[task, inputPath, name] reads one WL Association artifact.";
+ResolveArtifactPath::usage = "ResolveArtifactPath[declaringFile, descriptor] resolves an existing source file and checks its optional SHA-256 before reading; returns a path or Failure.";
+ParseSymbolRules::usage = "ParseSymbolRules[mapping] decodes declared source/target name pairs in the data context, preserves explicit contexts, and returns rules or $Failed.";
 ReadWLData::usage = "ReadWLData[path] reads WL data with unqualified symbols in CANON`DEData` and preserves explicitly qualified symbols.";
 ResolveInputPath::usage = "ResolveInputPath[inputFile, path] resolves a path relative to the file that declares it.";
 RelativeArtifactPath::usage = "RelativeArtifactPath[declaringFile, target] stores a relocatable reference to target from declaringFile.";
@@ -14,7 +17,9 @@ ResolveMethodPackage::usage = "ResolveMethodPackage[task, inputPath, context] re
 WriteWLArtifact::usage = "WriteWLArtifact[expr, outputDir, fileName] writes a new WL artifact.";
 WriteResult::usage = "WriteResult[task, outputDir, status, code, artifacts, summary] writes result.json.";
 WriteProviderResult::usage = "WriteProviderResult[task, outputDir, status, code, artifacts, summary] writes a provider result that cannot claim PASS or FAIL.";
-ValidCutDEQ::usage = "ValidCutDEQ[expr] checks the sector-cut-DE artifact shape.";
+ValidCutDEQ::usage = "ValidCutDEQ[expr, allowAlgebraic:False] checks the exact cut-DE contract. Rational providers retain the default; the independent checker can also accept a declared algebraic cut.";
+SameSectorQ::usage = "SameSectorQ[sectors] compares sector records by keys and values, independently of association key order.";
+SameSectorTraceQ::usage = "SameSectorTraceQ[left, right] preserves sector sequence order while ignoring record key order.";
 ValidSectorBasisQ::usage = "ValidSectorBasisQ[expr] checks the sector-basis artifact shape.";
 ValidCandidatesQ::usage = "ValidCandidatesQ[expr] checks the core-candidates artifact shape.";
 ValidatePreparedBasis::usage = "ValidatePreparedBasis[expr] validates canon-neu/prepared-basis/v1 and returns the input or a deterministic Failure.";
@@ -32,6 +37,7 @@ AlgebraicPrimitive::usage = "AlgebraicPrimitive[components, variables] solves a 
 DLogConnectionQ::usage = "DLogConnectionQ[matrices, variables, eps, alphabet] tests the exact shared-residue dlog form across all directions.";
 ExactRationalExpressionQ::usage = "ExactRationalExpressionQ[expr] accepts only finite exact rational functions.";
 ExactAlgebraicExpressionQ::usage = "ExactAlgebraicExpressionQ[expr] accepts finite exact rational functions, algebraic numbers, radicals and polynomial Root functions.";
+ValidMatrixSystemQ::usage = "ValidMatrixSystemQ[matrices, variables, regulator, dimension] checks an exact algebraic matrix list and its independent differentiation coordinates at an external boundary.";
 ValidateStructuredRepairInput::usage = "ValidateStructuredRepairInput[prepared, route, request] validates the frozen-prefix Libra repair contract.";
 DeclaredCoefficientDomainQ::usage = "DeclaredCoefficientDomainQ[expr, symbols] checks exact rational syntax and rejects undeclared coefficient symbols.";
 StructuredRepairPublicationGate::usage = "StructuredRepairPublicationGate[request, candidate] applies only the provider's minimal structural publication gate.";
@@ -43,6 +49,7 @@ With[{directory = FileNameJoin[{DirectoryName[$InputFileName], "method-card"}]},
   Get[FileNameJoin[{directory, "ArtifactIO.wl"}]];
   Get[FileNameJoin[{directory, "Contracts.wl"}]];
   Get[FileNameJoin[{directory, "PreparedBasis.wl"}]];
+  Get[FileNameJoin[{directory, "IntegralBasis.wl"}]];
   Get[FileNameJoin[{directory, "Sectors.wl"}]];
   Get[FileNameJoin[{directory, "GaugeChecks.wl"}]];
   Get[FileNameJoin[{directory, "DLogAlgebra.wl"}]];

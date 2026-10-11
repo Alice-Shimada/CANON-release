@@ -68,16 +68,16 @@ If[KeyExistsQ[task["payload"], "master_basis"],
 ];
 If[ValueQ[targetData],
   head = Head[First[result["masters"]]];
-  completeQ[expression_] := Module[{value = Expand[expression /. Dispatch[result["rules"]]], coefficients},
-    coefficients = Coefficient[value, #] & /@ result["masters"];
-    FreeQ[coefficients, g_ /; Head[g] === head] &&
-      TrueQ[Together[value - coefficients . result["masters"]] === 0]
-  ];
-  If[!AllTrue[Join[targetData["targets"], result["masters"]], completeQ] ||
-      !AllTrue[(result["masters"] /. Dispatch[result["rules"]]) - result["masters"], Together[#] === 0 &],
+  dispatch = Dispatch[result["rules"]];
+  rows = CanonMethodCard`IntegralCoefficientRows[
+    Join[targetData["targets"], result["masters"]] /. dispatch, result["masters"], head];
+  If[MemberQ[rows, $Failed] ||
+      !AllTrue[(result["masters"] /. dispatch) - result["masters"], Together[#] === 0 &],
     CanonMethodCard`WriteResult[task, outputDir, "FAIL", "IBP_CHECK_FAILED", <||>,
-      <|"reason_code" -> "INCOMPLETE_REDUCTION",
-        "reason" -> "Targets do not reduce completely in the declared source basis."|>]; Exit[1]]
+      <|"reason_code" -> "INCOMPLETE_REDUCTION", "reason" -> "Targets do not reduce completely in the declared source basis."|>]; Exit[1]];
+  If[!AllTrue[Flatten[rows], CanonMethodCard`ExactRationalExpressionQ],
+    CanonMethodCard`WriteResult[task, outputDir, "ERROR", "INVALID_REDUCTION", <||>,
+      <|"reason" -> "Native coefficients must be finite exact rational functions."|>]; Exit[1]]
 ];
 artifactPath = CanonMethodCard`WriteWLArtifact[result, outputDir, "ibp-reduction.wl"];
 CanonMethodCard`WriteResult[task, outputDir, "PASS", "IBP_REDUCED",

@@ -68,6 +68,56 @@ def native_identifier(value):
     return value
 
 
+def invariant_aliases(family, saved=None, legacy=False):
+    names = [item["name"] for item in family["invariants"]]
+    symbol = r"(?:[A-Za-z$][A-Za-z0-9$]*`)*[A-Za-z$][A-Za-z0-9$]*"
+    if any(not isinstance(name, str) or re.fullmatch(symbol, name) is None for name in names):
+        raise ValueError("invariant names must be scientific symbols")
+    identities = [name if "`" in name else "CANON`DEData`" + name for name in names]
+    if len(set(identities)) != len(names):
+        raise ValueError("invariant names must be distinct")
+    native_reserved = {"d", family["topology"], *family["loop_momenta"], *family["external_momenta"]}
+    reserved = set(native_reserved)
+    compatible = lambda name: re.fullmatch(r"[a-z][a-z0-9]*", name) is not None
+    if saved is not None:
+        if not isinstance(saved, list) or [item["scientific"] for item in saved] != names:
+            raise ValueError("saved invariant aliases differ from the neutral family")
+        native = [item["native"] for item in saved]
+        if len(set(native)) != len(native) or any(not compatible(name) or name in reserved for name in native):
+            raise ValueError("saved invariant aliases are not distinct backend-safe names")
+        return saved
+    if legacy:
+        if any(not compatible(name) or name in reserved for name in names):
+            raise ValueError("import_from requires saved invariant aliases for these scientific names")
+        return [{"scientific": name, "native": name} for name in names]
+    reserved.update(name for name in names if compatible(name))
+    aliases = []
+    for name in names:
+        native = name
+        if not compatible(name) or name in native_reserved:
+            number = len(aliases) + 1
+            native = f"canonkira{number}"
+            while native in reserved:
+                number += 1
+                native = f"canonkira{number}"
+        reserved.add(native)
+        aliases.append({"scientific": name, "native": native})
+    return aliases
+
+
+def native_expression(expression, aliases):
+    replacements = {}
+    for item in aliases:
+        name = item["scientific"]
+        replacements[name] = item["native"]
+        if "`" not in name:
+            replacements["CANON`DEData`" + name] = item["native"]
+        elif name.startswith("CANON`DEData`"):
+            replacements[name.removeprefix("CANON`DEData`")] = item["native"]
+    return re.sub(r"[A-Za-z$][A-Za-z0-9_$]*(?:`[A-Za-z$][A-Za-z0-9_$]*)*",
+                  lambda token: replacements.get(token[0], token[0]), expression)
+
+
 def project_path(project, value):
     path = Path(value)
     if path.is_absolute() or ".." in path.parts:
@@ -106,15 +156,19 @@ def recovery_source(source, family, family_path):
     paths = {"native_masters":project_path(project,backend.get("native_masters",f"results/{topology}/masters.final")),
              "native_rules":project_path(project,backend.get("native_rules",f"results/{topology}/kira_targets.m"))}
     context = read(source / "interop.json")
+    aliases = invariant_aliases(family, saved.get("invariant_aliases"), legacy=True)
+    if context.get("invariant_aliases", aliases) != aliases:
+        raise ValueError("import_from invariant alias binding differs")
     for key, path in paths.items():
         if resolve(source / "interop.json",context[key]) != path.resolve():
             raise ValueError("import_from native export binding differs")
         if key in saved.get("native_outputs", {}) and digest(path) != saved["native_outputs"][key]["sha256"]:
             raise ValueError("import_from native export has changed")
-    return receipt_path, previous, paths
+    return receipt_path, previous, paths, aliases
 
 
-def prepare_project(family, backend, config_path, project, step):
+def prepare_project(family, backend, config_path, project, step, aliases=None):
+    aliases = invariant_aliases(family) if aliases is None else aliases
     topology = native_identifier(family["topology"])
     for name in [*family["loop_momenta"], *family["external_momenta"]]:
         native_identifier(name)
@@ -126,17 +180,17 @@ def prepare_project(family, backend, config_path, project, step):
                     "    loop_momenta: " + json.dumps(family["loop_momenta"]),
                     "    top_level_sectors: " + json.dumps(family["top_level_sectors"]),
                     "    propagators:"]
-    family_lines += ["      - " + json.dumps([item["momentum"], item["mass_squared"]])
+    family_lines += ["      - " + json.dumps([native_expression(item[key], aliases) for key in ("momentum", "mass_squared")])
                      for item in family["propagators"]]
     (config / "integralfamilies.yaml").write_text("\n".join(family_lines) + "\n")
-    invariants = [[native_identifier(item["name"]), item["mass_dimension"]] for item in family["invariants"]]
+    invariants = [[alias["native"], item["mass_dimension"]] for item, alias in zip(family["invariants"], aliases)]
     if not all(isinstance(item[1], int) for item in invariants):
         raise ValueError("invariant mass dimensions must be declared integers")
     kinematics = ["kinematics:", "  incoming_momenta: []",
                   "  outgoing_momenta: " + json.dumps(family["external_momenta"]),
                   "  momentum_conservation: []", "  kinematic_invariants: " + json.dumps(invariants),
                   "  scalarproduct_rules:"]
-    kinematics += ["    - " + json.dumps([item["momenta"], item["value"]]) for item in family["scalar_products"]]
+    kinematics += ["    - " + json.dumps([item["momenta"], native_expression(item["value"], aliases)]) for item in family["scalar_products"]]
     (config / "kinematics.yaml").write_text("\n".join(kinematics) + "\n")
     for item in backend.get("files", []):
         destination = project_path(project, item["destination"])
@@ -285,23 +339,29 @@ def main(canon, wolfram, request, output):
         owner = OwnedProcesses(output,grace)
         project = output / "kira"
         project.mkdir()
-        jobs = prepare_project(family,backend,config_path,project,task["step"]) if source is None else []
+        if source is None:
+            aliases = invariant_aliases(family)
+            jobs = prepare_project(family,backend,config_path,project,task["step"],aliases)
+        else:
+            source_receipt, source_result, paths, aliases = recovery_source(source,family,family_path)
+            jobs = []
         topology = family["topology"]
         masters = backend.get("native_masters",f"results/{topology}/" + ("masters" if task["step"] == "DISCOVER" else "masters.final"))
         rules = backend.get("native_rules",f"results/{topology}/kira_targets.m")
         context = {"schema":"canon-neu/kira-interop/v1", "native_masters":os.path.relpath(project_path(project,masters),output),
-                   "native_rules":os.path.relpath(project_path(project,rules),output)}
+                   "native_rules":os.path.relpath(project_path(project,rules),output), "invariant_aliases":aliases}
         write(output / "interop.json",context)
         receipt.update(family_ref=family["family_ref"],basis_ref=family["basis_ref"],native_topology=topology,
                        reducer_family=descriptor(receipt_path,family_path),backend=descriptor(receipt_path,config_path),
                        jobs=jobs,project="kira",point=family["point"],options=backend.get("options",[]),
                        timeout_seconds=budget,prepare_timeout_seconds=prepare_budget,
                        import_timeout_seconds=import_budget,native_execution_inherited=source is not None)
+        receipt["invariant_aliases"] = aliases
         if source is None:
             receipt.update(executable=executable,executable_sha256=digest(Path(executable)))
         else:
-            source_receipt, source_result, paths = recovery_source(source,family,family_path)
             context = {"schema":"canon-neu/kira-interop/v1",
+                       "invariant_aliases":aliases,
                        **{key:os.path.relpath(path,output) for key,path in paths.items()}}
             write(output / "interop.json",context)
             receipt.update(import_from=descriptor(receipt_path,source_receipt),

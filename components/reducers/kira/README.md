@@ -169,6 +169,26 @@ remaining invariants. The point binding is retained in the run receipt and a
 `reduction_kinematics` WL artifact. All saved artifact references are relative;
 resolved command/executable metadata describes the execution environment.
 
+Scientific invariants retain their declared names, contexts and order. The
+adapter preserves compatible lower-case alphanumeric native names and assigns
+deterministic `canonkiraN` aliases to other names, including the reserved native
+dimension name `d`. Aliases avoid declared names and native momentum/topology
+names. Whole-symbol substitution applies to scalar-product coefficients and
+propagator momentum/mass expressions; prefix substrings are preserved. The
+ordered `invariant_aliases` list in `backend-run.json` and `interop.json` records
+each `scientific`/`native` pair. Import restores those exact scientific symbols
+and the declared dimension before the existing coverage, linearity and
+coefficient-symbol checks. The neutral family, variables, point and source basis
+are unchanged.
+
+`import_from` uses the original successful native project's saved aliases,
+without recomputing the mapping or executing native jobs. Older compatible
+receipts without aliases use their original native names. A legacy project with
+names that require aliases needs an explicit saved mapping; recovery does not
+silently reinterpret its coefficients. Caller-supplied jobs and auxiliary files
+remain verbatim and must use the generated native names when referring to
+kinematic coefficients.
+
 ## Master discovery
 
 An automatic `DISCOVER` job uses the supplied seed and

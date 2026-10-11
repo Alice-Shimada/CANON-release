@@ -16,7 +16,7 @@ validIdentity[a_] := AssociationQ[a] && And @@ (KeyExistsQ[a, #] & /@ $identityK
 sha[path_] := FileHash[path, "SHA256", "HexString"];
 digest[expr_] := Hash[expr, "SHA256", "HexString"];
 sourceRef[declaring_, path_] := <|"path" -> CanonMethodCard`RelativeArtifactPath[declaring, path], "sha256" -> sha[path]|>;
-read[path_] := Module[{a = Quiet @ Check[Get[path], $Failed]}, require[AssociationQ[a], "INVALID_ARTIFACT", <|"path" -> path|>]; a];
+read[path_] := Module[{a = Quiet @ Check[CanonMethodCard`ReadWLData[path], $Failed]}, require[AssociationQ[a], "INVALID_ARTIFACT", <|"path" -> path|>]; a];
 load[task_, input_, key_] := Module[{d, path},
   d = Lookup[task["payload"], key, <||>];
   require[AssociationQ[d] && StringQ[Lookup[d, "path", None]], "MISSING_ARTIFACT", <|"artifact" -> key|>];
@@ -27,6 +27,7 @@ load[task_, input_, key_] := Module[{d, path},
 ];
 sameIdentity[a_, b_] := require[identity[a] === identity[b], "IDENTITY_OR_FRAME_MISMATCH"];
 exactZero[q_] := TrueQ[FullSimplify[Together[q]] === 0];
+exactDataQ[data_] := FreeQ[data, _Real | (z_Complex /; Precision[z] =!= Infinity) | Indeterminate | _DirectedInfinity | Undefined];
 rationalQ[q_] := IntegerQ[q] || Head[q] === Rational;
 finiteNumberQ[q_] := NumberQ[N[q]] && FreeQ[q, Indeterminate | _DirectedInfinity];
 value[q_] := If[StringQ[q], ToExpression[q, InputForm], q];
@@ -46,8 +47,8 @@ arithmetic[task_] := Module[{a, mode},
 ];
 numbers[data_, a_] := If[a["mode"] === "exact", data, N[data, a["precision"]]];
 inputPrecision[data_, a_] := If[a["mode"] === "exact",
-  require[FreeQ[data, _Real], "INEXACT_DATA_IN_EXACT_MODE"],
-  require[AllTrue[Cases[data, _Real, Infinity], Precision[#] >= a["precision"] &], "INSUFFICIENT_INPUT_PRECISION"]
+  require[exactDataQ[data], "INEXACT_DATA_IN_EXACT_MODE"],
+  require[AllTrue[Cases[data, _Real | _Complex, Infinity], Precision[#] >= a["precision"] &], "INSUFFICIENT_INPUT_PRECISION"]
 ];
 residualOK[delta_, target_, a_] := If[Flatten[delta] === {}, True, If[a["mode"] === "exact",
   AllTrue[Flatten[delta], exactZero],
@@ -93,7 +94,7 @@ readSamples[set_, setPath_, roles_, a_] := Module[{records, n = None, sample, pa
     sameIdentity[sample, set];
     point = Lookup[sample, "point", None];
     require[MatchQ[point, {__Rule}] && First /@ point === set["variables"] &&
-      FreeQ[Last /@ point, _Real] && AllTrue[Last /@ point, finiteNumberQ], "INVALID_EXACT_POINT", <|"id" -> r["id"]|>];
+      exactDataQ[Last /@ point] && AllTrue[Last /@ point, finiteNumberQ], "INVALID_EXACT_POINT", <|"id" -> r["id"]|>];
     AppendTo[points, RootReduce[Last /@ point]];
     matrices = Lookup[sample, "matrices", {}];
     require[ListQ[matrices] && Length[matrices] === Length[set["variables"]] && AllTrue[matrices, MatrixQ], "INCOMPLETE_MATRICES", <|"id" -> r["id"]|>];
@@ -116,7 +117,7 @@ rawLetters[task_, input_, set_] := Module[{letters, path},
   require[ListQ[Lookup[letters, "letters", None]] && letters["letters"] =!= {} &&
     ListQ[Lookup[letters, "labels", None]] && Length[letters["labels"]] === Length[letters["letters"]] &&
     AllTrue[letters["labels"], StringQ] && DuplicateFreeQ[letters["labels"]] &&
-    FreeQ[letters["letters"], _Log | _Real | Indeterminate | _DirectedInfinity] && FreeQ[letters["letters"], set["regulator"]], "INVALID_RAW_LETTERS"];
+    FreeQ[letters["letters"], _Log] && exactDataQ[letters["letters"]] && FreeQ[letters["letters"], set["regulator"]], "INVALID_RAW_LETTERS"];
   {letters, path}
 ];
 design[gradient_, samples_, a_] := Module[{m},
@@ -201,6 +202,9 @@ check[task_, input_, out_] := Module[
   require[Length[residues] === Length[letters["letters"]] && AllTrue[residues, Head[#] === SparseArray && Dimensions[#] === {n, n} &&
     TrueQ[Last[Last[ArrayRules[#]]] == 0] && AllTrue[Last /@ ArrayRules[#], rationalQ] &] &&
     Lookup[cand, "matrix_shape", None] === {n, n}, "INCOMPLETE_RESIDUE_MATRICES"];
+  require[a["mode"] === "exact" ||
+    AllTrue[storedValues[residues], Denominator[#] <= a["max_denominator"] &&
+      Abs[Numerator[#]] <= a["max_numerator"] &], "RATIONAL_RECOGNITION_BOUND_EXCEEDED"];
   If[digest[residues] =!= Lookup[cand, "residue_digest", None], stop["FAIL", "COEFFICIENT_BINDING_MISMATCH"]];
   (* Independent differentiation from original analytic definitions; no fitted design cache is loaded. *)
   gradient = Table[Together[D[Log[w], x]], {x, set["variables"]}, {w, letters["letters"]}];
@@ -236,11 +240,11 @@ propose[task_, input_, out_] := Module[{forms, formsPath, data, rational, candid
   {forms, formsPath} = load[task, input, "one_forms"];
   require[Lookup[forms, "schema", None] === "canon-neu/analytic-one-forms/v1" && validIdentity[forms], "INVALID_ONE_FORMS"];
   vars = forms["variables"]; eps = forms["regulator"]; data = Lookup[forms, "one_forms", {}];
-  require[ListQ[data] && data =!= {} && AllTrue[data, ListQ[#] && Length[#] === Length[vars] &] && FreeQ[data, _Real | _Log] && FreeQ[data, eps], "INVALID_ONE_FORMS"];
+  require[ListQ[data] && data =!= {} && AllTrue[data, ListQ[#] && Length[#] === Length[vars] &] && FreeQ[data, _Log] && exactDataQ[data] && FreeQ[data, eps], "INVALID_ONE_FORMS"];
   budget = Lookup[task["payload"], "max_letters", 32]; require[IntegerQ[budget] && budget > 0, "INVALID_LETTER_BUDGET"];
   rational = Select[Flatten[data], CanonMethodCard`ExactRationalExpressionQ];
   candidates = Join[Lookup[forms, "seed_letters", {}], CanonMethodCard`DLogAlphabet[{eps rational}, vars, eps], CanonMethodCard`QuadraticRootLetters[data, vars]];
-  candidates = DeleteDuplicates @ Select[candidates, FreeQ[#, _Real | _Log | Indeterminate | _DirectedInfinity] && FreeQ[#, eps] && !FreeQ[#, Alternatives @@ vars] &];
+  candidates = DeleteDuplicates @ Select[candidates, FreeQ[#, _Log] && exactDataQ[#] && FreeQ[#, eps] && !FreeQ[#, Alternatives @@ vars] &];
   If[candidates === {}, stop["INCONCLUSIVE", "NO_LETTERS_PROPOSED"]];
   candidates = Take[candidates, UpTo[budget]]; path = FileNameJoin[{out, "raw-letters.wl"}];
   artifact = Join[identity[forms], <|"schema" -> "canon-neu/raw-letters/v1", "labels" -> Table["L" <> ToString[i], {i, Length[candidates]}], "letters" -> candidates,

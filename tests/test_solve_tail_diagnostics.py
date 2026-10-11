@@ -16,7 +16,7 @@ FULL_DE = r'''With[{raw = {{{0,0,0},{0,0,0},{TAIL,0,0}}}},
 "sector"-><|"id"->7,"propagator_count"->3|>, "current_basis_id"->"fixture/7",
 "accepted_prefix_id"->"fixture/lower", "source_basis"->{j1,j2,j3},
 "source_matrices"->raw, "variables"->{x}, "regulator"->eps, "alphabet"->{},
-"convention"->"old=T.new", "block_boundaries"-><|"lower_dimension"->2,"current_dimension"->1|>,
+"convention"->"old_prefix_basis = full_transformation . candidate_prefix_basis", "block_boundaries"-><|"lower_dimension"->2,"current_dimension"->1|>,
 "candidates"->{<|"candidate_id"->"fixture", "member_candidate_ids"->{"fixture"},
 "new_basis_rows"->IdentityMatrix[3], "full_transformation"->IdentityMatrix[3],
 "transformed_matrices"->raw|>}|>]
@@ -118,6 +118,9 @@ def main():
     write_json(manifest, {"schema": "canon-neu/components/v1", "steps": {"SOLVE_TAIL": {
         "command": command_prefix + [str(script)],
         "instructions": str(script.parents[1] / "skills/canon-solve-tail/SKILL.md")}}})
+    components = [canon / "components/profiles/custom-kira.json",
+                  canon / "components/local-jobs/components.json", manifest]
+    component_flags = [arg for path in components for arg in ("--components", str(path))]
     results = {}
     cases = {
         "off-diagonal-failure": "1/(1+eps x)^2",
@@ -130,7 +133,7 @@ def main():
         case = work / name
         case.mkdir()
         (case / "full.wl").write_text(FULL_DE.replace("TAIL", tail))
-        (case / "core.wl").write_text('<|"candidate_id"->"fixture"|>\n')
+        (case / "core.wl").write_text('<|"schema"->"canon-neu/core-transform/v1","candidate_id"->"fixture","basis_id"->"fixture/7","basis"->{j3},"family_id"->"tail-diagnostic-fixture","sector"-><|"id"->7,"propagator_count"->3|>,"variables"->{x},"regulator"->eps,"checks"-><|"pass"->True|>|>\n')
         if name in ("off-diagonal-failure", "epsilon-failure", "backend-success"):
             (case / "CANONICA.m").write_text(BACKEND.replace("MODE", name))
         request = case / "request.json"
@@ -140,12 +143,16 @@ def main():
                 "core_transform": {"type": "mathematica-expression", "path": "core.wl"},
                 "method_options": {"package_entry": "CANONICA.m"}}})
         command = [sys.executable, str(canon / "run_step.py"), str(request),
-                   str(case / "output"), "--components", str(manifest)]
+                   str(case / "output"), *component_flags]
         if not results:
             described = subprocess.run(command + ["--describe"], env=environment,
                 capture_output=True, text=True, check=True)
             description = json.loads(described.stdout)
-            assert description["components"] == [str(manifest)] and description["workflows"] == []
+            assert description["components"] == list(map(str, components))
+            assert description["workflows"] == [
+                {"manifest": str(canon / "components" / package / "components.json"),
+                 "instructions": str(canon / "components" / package / "WORKFLOW.md")}
+                for package in ("parameterization", "reducers/kira", "local-jobs")]
             write_json(work / "selected-component.json", description)
         with (case / "process.log").open("w") as log:
             process = subprocess.run(command, env=environment, cwd=case, stdout=log, stderr=subprocess.STDOUT)
@@ -190,6 +197,7 @@ def main():
     assert checked.returncode == 0 and all(facts["checks"].values()), facts
     receipt = {"status": "PASS", "scope": "injected-backend component fixtures; no family run",
         "kernel": command_prefix[0], "cpu_budget": 1, "computation_timeout": None,
+        "components": list(map(str, components)),
         "script_sha256": hashlib.sha256(script.read_bytes()).hexdigest(),
         "test_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
         "cases": results, "readback": facts}

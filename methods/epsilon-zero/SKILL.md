@@ -27,10 +27,26 @@ every reconstructed row is substituted exactly into every original differential
 direction. Prefactors come from trace poles and declared algebraic generators.
 This is a finite ansatz, not a completeness claim.
 
+For each allowed prefactor, sampling keeps the required point count and selected
+prime, trying at most eight times that count along the deterministic prime grid.
+Only finite rational evaluations with denominators invertible modulo that prime
+enter the linear system. The prime must be an integer prime; it is never silently
+replaced. If incomplete sampling prevents a candidate, the result is
+`INCONCLUSIVE/OUT_OF_SCOPE` with reason `regular finite-field sampling incomplete`
+and per-prefactor counts and rejection causes. This is incomplete computational
+evidence, not exhaustion of the mathematical ansatz. Clean finite-ansatz
+exhaustion retains `INCONCLUSIVE/METHOD_EXHAUSTED`.
+
 For a two-dimensional core with only one horizontal row, the method fixes a
 complementary frame's determinant from the trace, integrates its leading
 off-diagonal coefficient, and tries the epsilon profile read from the opposite
 entry. No topology or regulator polynomial is hard-coded.
+An unsupported leading primitive, or the absence of a finite nonzero
+epsilon-zero opposite-entry value with a finite kinematics-independent profile,
+returns `INCONCLUSIVE/OUT_OF_SCOPE` with its construction reason. No candidate
+is published from a malformed, non-finite or identically singular row frame.
+Generic meromorphic invertibility is sufficient: zeros or poles at epsilon zero
+are allowed. A well-formed proposal must still pass independent `CHECK_CORE`.
 That completion is implemented only for a two-dimensional core. A higher-rank
 horizontal deficit is a method limitation: it does not rule out a rational
 transformation with poles or a vanishing determinant at epsilon=0. In particular,

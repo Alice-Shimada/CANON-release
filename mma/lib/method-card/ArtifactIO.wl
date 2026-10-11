@@ -80,17 +80,42 @@ ResolveMethodPackage[task_Association, inputPath_String, context_String] := Modu
   <|"entry" -> ExpandFileName[path], "source" -> source|>
 ];
 
+symbolFromName[name_String] := Module[{held},
+  held = Quiet @ Check[Block[{$Context = "CANON`DEData`", $ContextPath = {"System`"}},
+    ToExpression[name, InputForm, HoldComplete]], $Failed];
+  If[MatchQ[held, HoldComplete[_Symbol]], First[held], $Failed]
+];
+
+ParseSymbolRules[mapping_Association] := Module[{rules},
+  rules = KeyValueMap[Function[{source, target},
+    If[!StringQ[source] || !StringQ[target], $Failed,
+      With[{from = symbolFromName[source], to = symbolFromName[target]},
+        If[from === $Failed || to === $Failed, $Failed, from -> to]]]], mapping];
+  If[MemberQ[rules, $Failed], $Failed, rules]
+];
+ParseSymbolRules[_] := $Failed;
+
 ReadWLData[path_String] := Block[
   {$Context = "CANON`DEData`", $ContextPath = {"System`"}}, Get[path]];
+
+ResolveArtifactPath[inputPath_String, descriptor_] := Module[{path},
+  If[!AssociationQ[descriptor], Return[failure["MISSING_ARTIFACT", "missing file descriptor"]]];
+  path = artifactPath[inputPath, descriptor];
+  If[path === $Failed || FileType[path] =!= File,
+    Return[failure["MISSING_ARTIFACT", "declared path is not a file"]]
+  ];
+  If[KeyExistsQ[descriptor, "sha256"] &&
+      (!StringQ[descriptor["sha256"]] ||
+        ToLowerCase[descriptor["sha256"]] =!= FileHash[path, "SHA256", "HexString"]),
+    Return[failure["SOURCE_HASH_MISMATCH", path <> " does not match its declared SHA-256"]]];
+  path
+];
 
 LoadArtifact[task_Association, inputPath_String, name_String] := Module[
   {descriptor, path, value},
   descriptor = Lookup[Lookup[task, "payload", <||>], name, Missing[name]];
-  If[!AssociationQ[descriptor], Return[failure["MISSING_ARTIFACT", name]]];
-  path = artifactPath[inputPath, descriptor];
-  If[path === $Failed || FileType[path] =!= File,
-    Return[failure["MISSING_ARTIFACT", name <> " path is not a file"]]
-  ];
+  path = ResolveArtifactPath[inputPath, descriptor];
+  If[FailureQ[path], Return[path]];
   value = Quiet @ Check[ReadWLData[path], $Failed];
   If[!AssociationQ[value], Return[failure["INVALID_ARTIFACT", name <> " is not an Association"]]];
   value

@@ -57,6 +57,13 @@ algebraicRootQ[expr_] := Module[{variable = Unique["root$"], polynomial, degree}
     And @@ (ExactAlgebraicExpressionQ /@ CoefficientList[polynomial, variable])
 ];
 
+ValidMatrixSystemQ[matrices_, variables_, regulator_, dimension_] :=
+  IntegerQ[dimension] && dimension > 0 && ListQ[variables] && variables =!= {} &&
+  AllTrue[variables, MatchQ[#, _Symbol] &] && DuplicateFreeQ[variables] &&
+  MatchQ[regulator, _Symbol] && FreeQ[variables, regulator] &&
+  matrixListShapeQ[matrices, Length[variables], dimension] &&
+  AllTrue[Flatten[matrices], ExactAlgebraicExpressionQ];
+
 DeclaredCoefficientDomainQ[expr_, allowedSymbols_List] :=
   ExactRationalExpressionQ[expr] && SubsetQ[
     DeleteDuplicates[allowedSymbols],
@@ -66,13 +73,14 @@ DeclaredCoefficientDomainQ[expr_, allowedSymbols_List] :=
 exactRationalMatrixQ[m_, n_Integer] := squareMatrixQ[m, n] &&
   And @@ (ExactRationalExpressionQ /@ Flatten[m]);
 
-ValidCutDEQ[value_] := Module[{basis, variables, regulator, matrices, n},
+ValidCutDEQ[value_, allowAlgebraic_ : False] := Module[{basis, variables, regulator, matrices, n, domain},
   If[!AssociationQ[value] || Lookup[value, "schema", None] =!= "canon-neu/sector-cut-de/v1", Return[False]];
   If[
     !AssociationQ[Lookup[value, "sector", None]] ||
     !StringQ[Lookup[value, "family_id", None]] ||
     !StringQ[Lookup[value, "basis_id", None]] ||
-    Lookup[value, "coefficient_domain", None] =!= "exact-rational-functions",
+    !MemberQ[If[TrueQ[allowAlgebraic], {"exact-rational-functions", "exact-algebraic-functions"},
+      {"exact-rational-functions"}], Lookup[value, "coefficient_domain", None]],
     Return[False]
   ];
   basis = Lookup[value, "basis", None];
@@ -80,17 +88,27 @@ ValidCutDEQ[value_] := Module[{basis, variables, regulator, matrices, n},
   regulator = Lookup[value, "regulator", None];
   matrices = Lookup[value, "matrices", None];
   If[!ListQ[basis] || !ListQ[variables] || variables === {} || !ListQ[matrices], Return[False]];
-  If[Length[variables] =!= Length[matrices] || !MatchQ[regulator, _Symbol], Return[False]];
+  If[Length[variables] =!= Length[matrices] || !MatchQ[regulator, _Symbol] ||
+    !AllTrue[variables, MatchQ[#, _Symbol] &] || !DuplicateFreeQ[variables] ||
+    !FreeQ[variables, regulator] || !DuplicateFreeQ[basis], Return[False]];
   n = Length[basis];
-  n > 0 && And @@ (exactRationalMatrixQ[#, n] & /@ matrices)
+  domain = If[value["coefficient_domain"] === "exact-rational-functions",
+    ExactRationalExpressionQ, ExactAlgebraicExpressionQ];
+  n > 0 && matrixListShapeQ[matrices, Length[variables], n] && AllTrue[Flatten[matrices], domain]
 ];
+
+SameSectorQ[first_Association, rest__Association] := SameQ @@ (KeySort /@ {first, rest});
+SameSectorQ[___] := False;
+SameSectorTraceQ[left_List, right_List] := Length[left] === Length[right] &&
+  And @@ MapThread[SameSectorQ, {left, right}];
+SameSectorTraceQ[___] := False;
 
 ValidSectorBasisQ[value_] := AssociationQ[value] &&
   Lookup[value, "schema", None] === "canon-neu/sector-basis/v1" &&
   AssociationQ[Lookup[value, "sector", None]] &&
   StringQ[Lookup[value, "family_id", None]] &&
   StringQ[Lookup[value, "basis_id", None]] &&
-  ListQ[Lookup[value, "basis", None]];
+  ListQ[Lookup[value, "basis", None]] && value["basis"] =!= {} && DuplicateFreeQ[value["basis"]];
 
 ValidCandidatesQ[value_] := AssociationQ[value] &&
   Lookup[value, "schema", None] === "canon-neu/core-candidates/v1" &&
@@ -98,7 +116,8 @@ ValidCandidatesQ[value_] := AssociationQ[value] &&
   AssociationQ[Lookup[value, "sector", None]] &&
   StringQ[Lookup[value, "family_id", None]] &&
   StringQ[Lookup[value, "basis_id", None]] &&
-  Lookup[value, "coefficient_domain", None] === "exact-rational-functions" &&
+  MemberQ[{"exact-rational-functions", "exact-algebraic-functions"},
+    Lookup[value, "coefficient_domain", None]] &&
   ListQ[Lookup[value, "basis", None]] &&
   ListQ[Lookup[value, "variables", None]] &&
   MatchQ[Lookup[value, "regulator", None], _Symbol] &&

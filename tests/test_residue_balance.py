@@ -42,6 +42,7 @@ class ResidueBalanceTest(unittest.TestCase):
         source = cut or FIXTURES / "g3382-cut.wl"
         basis = basis or FIXTURES / "g3382-basis.wl"
         sector = {"id": 3, "propagator_count": 2} if source.name.startswith("nilpotent") else {"id": 3382, "propagator_count": 7}
+        sector = dict(reversed(list(sector.items())))  # Record key order is not sector order.
         payload = {"sector_cut_de": {"type": "mathematica-expression", "path": str(source)},
                    "sector_basis": {"type": "mathematica-expression", "path": str(basis)}}
         if options is not None:

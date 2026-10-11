@@ -8,9 +8,12 @@ Get[FileNameJoin[{repoRoot, "mma", "lib", "CandidateIBPBridge.wl"}]];
 {inputPath, outputDir} = ExpandFileName /@ CanonMethodCard`ScriptArguments[];
 task = CanonMethodCard`ReadTask[inputPath, "REDUCE_CANDIDATE_IBP"];
 If[FailureQ[task], Print[InputForm[task]]; Exit[1]];
-If[AnyTrue[{"result.json", "candidate-ibp-bridge.wl", "candidate-ibp-bridge.wl.audit.wl", "ibp-audit.wl"},
-    FileExistsQ[FileNameJoin[{outputDir, #}]] &],
+If[FileExistsQ[FileNameJoin[{outputDir, "result.json"}]],
   Print["output paths must be fresh; publish changed reductions in a new directory"]; Exit[1]];
+If[AnyTrue[{"candidate-ibp-bridge.wl", "candidate-ibp-bridge.wl.audit.wl", "ibp-audit.wl"},
+    FileExistsQ[FileNameJoin[{outputDir, #}]] &],
+  CanonMethodCard`WriteResult[task, outputDir, "ERROR", "ARTIFACT_WRITE_FAILED", <||>,
+    <|"reason" -> "Output paths must be fresh; publish changed reductions in a new directory."|>]; Exit[1]];
 {candidates, preparedFamily, masterBasis, preparedDerivatives} = Block[
   {$Context = "CANON`DEData`", $ContextPath = {"System`"}},
   CanonMethodCard`LoadArtifact[task, inputPath, #] & /@
@@ -31,12 +34,17 @@ If[FailureQ[compiled],
 targetsPath = CanonMethodCard`WriteWLArtifact[<|
   "schema" -> "canon-neu/reduction-targets/v1",
   "family_ref" -> compiled["family_ref"], "basis_ref" -> compiled["basis_ref"],
-  "targets" -> Lookup[compiled["reducer_targets"], "integral"],
+  "targets" -> (#1["integral"] & /@ compiled["reducer_targets"]),
   "masters" -> compiled["masters"]|>, outputDir, "reduction-targets.wl"];
+If[!StringQ[targetsPath],
+  CanonMethodCard`WriteResult[task, outputDir, "ERROR", "ARTIFACT_WRITE_FAILED", <||>,
+    <|"reason" -> "Could not write the current reduction targets."|>]; Exit[1]];
 bridgeArtifacts = <|"reduction_targets" -> <|"type" -> "mathematica-expression",
   "path" -> FileNameTake[targetsPath]|>|>;
 If[KeyExistsQ[task["payload"], "ibp_reduction"],
   reduction = CanonMethodCard`LoadArtifact[task, inputPath, "ibp_reduction"],
+  If[compiled["reducer_targets"] === {},
+    reduction = <|"masters" -> compiled["masters"], "rules" -> {}|>,
   ibpRequestPath = FileNameJoin[{outputDir, "ibp-input.json"}];
   ibpOutput = FileNameJoin[{outputDir, "ibp"}];
   rebase[descriptor_] := Join[descriptor, <|"path" -> CanonMethodCard`RelativeArtifactPath[
@@ -72,6 +80,7 @@ If[KeyExistsQ[task["payload"], "ibp_reduction"],
   reduction = CanonMethodCard`LoadArtifact[
     <|"payload" -> Lookup[ibpResult, "artifacts", <||>]|>,
     FileNameJoin[{ibpOutput, "result.json"}], "ibp_reduction"];
+  ]
 ];
 If[FailureQ[reduction],
   CanonMethodCard`WriteResult[task, outputDir, "ERROR", reduction[[1]], bridgeArtifacts, reduction[[2]]]; Exit[1]];
@@ -88,7 +97,9 @@ If[FailureQ[result],
     Join[audit["summary"], <|"ibp_audit" -> KeyTake[audit,
       {"status", "code", "checks", "counts", "reuse", "summary"}]|>]]; Exit[1]];
 artifactPath = CanonMethodCard`WriteWLArtifact[result, outputDir, "candidate-ibp-bridge.wl"];
-If[!StringQ[artifactPath], Print["could not publish fresh final bridge"]; Exit[1]];
+If[!StringQ[artifactPath],
+  CanonMethodCard`WriteResult[task, outputDir, "ERROR", "ARTIFACT_WRITE_FAILED", bridgeArtifacts,
+    <|"reason" -> "Could not write the candidate reduction bridge."|>]; Exit[1]];
 resultSHA256 = Quiet @ Check[FileHash[artifactPath, "SHA256", "HexString"], $Failed];
 If[!StringQ[resultSHA256], Print["could not identify final bridge"]; Exit[1]];
 fileBoundAudit = result["ibp_audit"];

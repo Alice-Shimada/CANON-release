@@ -212,7 +212,7 @@ implementationFiles = {"run_step.py", "components/default.json", "mma/ReduceIBP.
   "mma/PrepareFamily.wls", "methods/dlogbasis/run.wls",
   "mma/ReduceCandidateIBP.wls", "mma/BuildSectorCutDE.wls",
   "mma/RouteCoreCandidates.wls", "mma/CheckSectorCore.wls",
-  "mma/BuildFullSectorDE.wls", "mma/SolveTail.wls",
+  "mma/BuildFullSectorDE.wls", "mma/SolveTail.wls", "mma/lib/TailCompletion.wl",
   "mma/CheckCanonical.wls", "mma/CommitSector.wls", "mma/NextSector.wls",
   "mma/CheckFullSystem.wls", "mma/lib/BaikovDerivative.wl",
   "mma/lib/CandidateIBPBridge.wl", "mma/lib/IBPReductionAudit.wl", "mma/lib/DEBuilder.wl",

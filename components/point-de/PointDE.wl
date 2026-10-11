@@ -6,7 +6,7 @@ CollectSamples::usage = "CollectSamples[roles, requestFile, outputFile] checks i
 Begin["`Private`"];
 rat[e_] := Cancel[Together[e]];
 need[q_, code_, details_: <||>] := If[!TrueQ[q], Throw[Failure[code, details]]];
-finiteExactQ[e_] := FreeQ[e, _Real | Indeterminate | _DirectedInfinity];
+finiteExactQ[e_] := FreeQ[e, _Real | (z_Complex /; Precision[z] =!= Infinity) | Indeterminate | _DirectedInfinity | Undefined];
 namedHeadQ[e_, name_] := !AtomQ[e] && Head[Head[e]] === Symbol && SymbolName[Head[e]] === name;
 identityKeys = {"family_id", "basis_id", "chart_id", "frame_id", "scope", "variables", "regulator"};
 convention = "D[basis, variables[[i]]] = matrices[[i]] . basis";
@@ -19,7 +19,7 @@ validPointQ[point_, vars_, eps_] := ListQ[point] && Length[point] === Length[var
 PreparePoint[family_Association, masterData_Association, candidates_Association, spec_Association] := Catch[Module[
   {vars, eps, point, loops, ext, full, positions, signature, masters, head, n, nv, nl, ns,
    vectors, dvectors, frame, dframe, invFrame, coeff, dcoeff, gram, dgram, pairs, ss, zz,
-   ll, le, metric, dmetric, symbols, embedding, dembedding, vc, dvc, bilinear, dbilinear,
+   ll, le, metric, dmetric, symbols, embedding, dembedding, momentumRow, vc, dvc, bilinear, dbilinear,
    propagators, momenta, den, affine, invAffine, ssRules, dss, metricZ, dmetricZ,
    spValue, spDerivative, externalVector, externalDerivative, atomValue, atomDerivative,
    rows, rSymbolic, atoms, atomSymbols, values, derivatives, atomRules, valueRules,
@@ -48,7 +48,7 @@ PreparePoint[family_Association, masterData_Association, candidates_Association,
   loops = family["loop_momenta"]; ext = family["external_momenta"];
   full = family["vectors"]; positions = family["external_basis"]; signature = family["metric"];
   masters = masterData["masters"]; n = Length[masters]; nl = Length[loops];
-  need[n > 0 && nl > 0 && Dimensions[full] === {Length[ext], 4} && Length[positions] === 4 &&
+  need[n > 0 && DuplicateFreeQ[masters] && nl > 0 && Dimensions[full] === {Length[ext], 4} && Length[positions] === 4 &&
     signature === {1, -1, -1, -1}, "UNSUPPORTED_EXTERNAL_GEOMETRY"];
   head = Head[First[masters]];
   need[SymbolName[head] === family["integral_head"] && And @@ (Head[#] === head & /@ masters), "INTEGRAL_HEAD_MISMATCH"];
@@ -85,9 +85,12 @@ PreparePoint[family_Association, masterData_Association, candidates_Association,
   embedding = Join[IdentityMatrix[nl + 4][[1 ;; nl]], (Join[ConstantArray[0, nl], #] & /@ coeff)];
   dembedding = Table[Join[ConstantArray[0, {nl, nl + 4}],
     (Join[ConstantArray[0, nl], #] & /@ dcoeff[[k]])], {k, nv}];
-  vc[q_] := rat[(Coefficient[Expand[q], #] & /@ symbols) /. point] . embedding;
-  dvc[q_, k_] := rat[(D[Coefficient[Expand[q], #], vars[[k]]] & /@ symbols) /. point] . embedding +
-    rat[(Coefficient[Expand[q], #] & /@ symbols) /. point] . dembedding[[k]];
+  momentumRow[q_] := momentumRow[q] = Module[{row = Coefficient[Expand[q], #] & /@ symbols},
+    need[zeroQ[q - row.symbols] && FreeQ[row, Alternatives @@ symbols],
+      "NONLINEAR_OR_UNDECLARED_MOMENTUM"]; row];
+  vc[q_] := rat[momentumRow[q] /. point] . embedding;
+  dvc[q_, k_] := rat[D[momentumRow[q], vars[[k]]] /. point] . embedding +
+    rat[momentumRow[q] /. point] . dembedding[[k]];
   bilinear[q_, u_] := vc[q] . metric . vc[u];
   dbilinear[q_, u_, k_] := dvc[q, k] . metric . vc[u] + vc[q] . metric . dvc[u, k] + vc[q] . dmetric[[k]] . vc[u];
   den = Expand[bilinear[#, #] & /@ momenta];
@@ -101,7 +104,8 @@ PreparePoint[family_Association, masterData_Association, candidates_Association,
   spValue[q_, u_] := rat[vc[q] . metricZ . vc[u]];
   spDerivative[q_, u_, k_] := rat[dvc[q, k] . metricZ . vc[u] +
     vc[q] . metricZ . dvc[u, k] + vc[q] . dmetricZ[[k]] . vc[u]];
-  externalVector[q_] := (Coefficient[Expand[q], #] & /@ ext) . full;
+  externalVector[q_] := Module[{row = momentumRow[q]},
+    need[zeroQ[Take[row, nl]], "LOOP_EPSILON_UNSUPPORTED"]; Drop[row, nl].full];
   externalDerivative[q_, k_] := rat[D[externalVector[q], vars[[k]]] /. point];
   atomValue[a_] := Switch[SymbolName[Head[a]],
     "sp", spValue[First[a], Last[a]],
@@ -173,17 +177,36 @@ PreparePoint[family_Association, masterData_Association, candidates_Association,
 
 BuildPointDE[p_Association, rules_List] := Catch[Module[
   {masters = p["masters"], head, n, nv, eps, reduced, missing, row, t, q, ak, r, dr, inv,
-   projection, projectionDerivatives, matrices, sample, report, pointRules},
+   projection, projectionDerivatives, matrices, sample, report, pointRules, dispatch, pointCoefficientQ, integrals},
   need[p["schema"] === "canon-neu/prepared-point/v1", "INVALID_PREPARED_POINT"];
-  need[And @@ (MatchQ[#, _Rule] & /@ rules), "INVALID_REDUCTION_RULES"];
-  head = Head[First[masters]]; n = Length[masters]; nv = Length[p["variables"]]; eps = p["regulator"];
+  n = Length[masters]; nv = Length[p["variables"]]; eps = p["regulator"];
+  need[ListQ[masters] && n > 0 && DuplicateFreeQ[masters] &&
+    ListQ[p["variables"]] && nv > 0 && DuplicateFreeQ[p["variables"]] &&
+    validPointQ[p["point"], p["variables"], eps] &&
+    Dimensions[p["expressions"]] === {n} &&
+    Dimensions[p["candidate_derivatives"]] === {nv,n} &&
+    Dimensions[p["master_derivatives"]] === {nv,n} &&
+    Dimensions[p["frame"]] === {n,n} && Dimensions[p["frame_derivatives"]] === {nv,n,n} &&
+    ListQ[p["targets"]], "INVALID_PREPARED_POINT"];
+  head = Head[First[masters]];
+  need[AllTrue[masters, Head[#] === head && VectorQ[List @@ #, IntegerQ] &], "INVALID_PREPARED_POINT"];
+  integrals = DeleteDuplicates @ Cases[{masters,p["expressions"],p["candidate_derivatives"],p["master_derivatives"]},
+    g_ /; Head[g] === head, Infinity];
+  need[SubsetQ[p["targets"],integrals], "INCOMPLETE_TARGET_UNION"];
+  need[AllTrue[rules, MatchQ[#, _Rule] && Head[First[#]] === head &&
+      VectorQ[List @@ First[#], IntegerQ] &] && DuplicateFreeQ[First /@ rules], "INVALID_REDUCTION_RULES"];
+  pointCoefficientQ[e_] := CanonMethodCard`ExactAlgebraicExpressionQ[e] &&
+    FreeQ[e, s_Symbol /; Context[s] =!= "System`" && s =!= eps];
   pointRules = rules /. p["point"];
-  reduced = p["targets"] /. Dispatch[pointRules];
+  dispatch = Dispatch[pointRules];
+  reduced = p["targets"] /. dispatch;
   missing = Complement[DeleteDuplicates[Cases[reduced, g_ /; Head[g] === head, Infinity]], masters];
   need[missing === {}, "MISSING_TARGETS", <|"missing" -> missing|>];
-  row[e_] := Module[{value = Expand[e /. Dispatch[pointRules] /. p["dimension_rule"]], v},
-    v = Coefficient[value, #] & /@ masters;
-    need[FreeQ[v, g_ /; Head[g] === head] && zeroQ[value - v . masters] && finiteExactQ[v], "NONLINEAR_OR_INEXACT_REDUCTION"];
+  row[e_] := row[e] = Module[{v},
+    v = First[CanonMethodCard`IntegralCoefficientRows[
+      {e /. dispatch /. p["dimension_rule"]}, masters, head]];
+    need[v =!= $Failed && finiteExactQ[v], "NONLINEAR_OR_INEXACT_REDUCTION"];
+    need[AllTrue[v, pointCoefficientQ], "UNRESOLVED_POINT_COEFFICIENT"];
     rat[v]];
   (* Check every target, including master derivatives not used by a candidate row. *)
   row /@ p["targets"];
@@ -199,6 +222,7 @@ BuildPointDE[p_Association, rules_List] := Catch[Module[
   projectionDerivatives = Table[rat[dr[[k]] . t + r . (q[[k]] - t . ak[[k]])], {k, nv}];
   matrices = Table[rat[(dr[[k]] . t + r . q[[k]]) . inv], {k, nv}];
   need[finiteExactQ[{projection, projectionDerivatives, matrices}], "NONFINITE_POINT_DE"];
+  need[AllTrue[Flatten[{projection, projectionDerivatives, matrices}], pointCoefficientQ], "UNRESOLVED_POINT_COEFFICIENT"];
   sample = Join[KeyTake[p, Join[identityKeys, {"point", "source_basis_id", "candidate_basis_id", "frame_expression"}]],
     <|"schema" -> "canon-neu/de-sample/v1", "matrices" -> matrices, "convention" -> convention|>];
   report = <|"schema" -> "canon-neu/point-de-check/v1", "target_coverage_complete" -> True,
@@ -212,14 +236,18 @@ BuildPointDE[p_Association, rules_List] := Catch[Module[
 ]];
 
 CollectSamples[roles_Association, requestFile_String, outputFile_String] := Catch[Module[
-  {names = {"training", "validation", "blind"}, entries, sample, paths, reference, shape, points = {}, result},
+  {names = {"training", "validation", "blind"}, entries, sample, paths, reference, shape, points = {}, hashes = <||>, result},
   need[Length[Lookup[roles, "training", {}]] > 0 && Length[Lookup[roles, "validation", {}]] > 0, "MISSING_SAMPLE_ROLES"];
   entries = Flatten[Lookup[roles, names, {}], 1];
   need[And @@ (AssociationQ[#] && StringQ[Lookup[#, "id", None]] && StringQ[Lookup[#, "path", None]] & /@ entries), "INVALID_SAMPLE_ENTRY"];
   paths = CanonMethodCard`ResolveInputPath[requestFile, #["path"]] & /@ entries;
   need[DuplicateFreeQ[Lookup[entries, "id"]] && DuplicateFreeQ[paths], "OVERLAPPING_SAMPLE_ROLES"];
   Do[
-    sample = Get[paths[[i]]];
+    hashes[paths[[i]]] = FileHash[paths[[i]], "SHA256", "HexString"];
+    If[KeyExistsQ[entries[[i]], "sha256"],
+      need[StringQ[entries[[i,"sha256"]]] && ToLowerCase[entries[[i,"sha256"]]] ===
+        hashes[paths[[i]]], "SOURCE_HASH_MISMATCH"]];
+    sample = CanonMethodCard`ReadWLData[paths[[i]]];
     need[AssociationQ[sample] && Lookup[sample, "schema", None] === "canon-neu/de-sample/v1", "INVALID_SAMPLE"];
     If[i === 1,
       reference = Lookup[sample, identityKeys]; shape = Dimensions[sample["matrices"]];
@@ -234,8 +262,10 @@ CollectSamples[roles_Association, requestFile_String, outputFile_String] := Catc
     {i, Length[paths]}
   ];
   need[DuplicateFreeQ[points], "OVERLAPPING_SAMPLE_POINTS"];
-  Do[If[KeyExistsQ[roles, role], result[role] = (<|"id" -> #["id"], "path" -> CanonMethodCard`RelativeArtifactPath[
-    outputFile, CanonMethodCard`ResolveInputPath[requestFile, #["path"]]]|> & /@ roles[role])], {role, names}];
+  Do[If[KeyExistsQ[roles, role], result[role] = (With[
+    {path = CanonMethodCard`ResolveInputPath[requestFile, #["path"]]},
+    <|"id" -> #["id"], "path" -> CanonMethodCard`RelativeArtifactPath[outputFile, path],
+      "sha256" -> hashes[path]|>] & /@ roles[role])], {role, names}];
   result
 ]];
 End[];

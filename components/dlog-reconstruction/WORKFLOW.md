@@ -20,6 +20,7 @@ independent producer of the documented schema; this package does not launch it.
 | --- | --- |
 | `INSUFFICIENT_TRAINING_RANK` | Add independent, nonsingular training points or reduce a justified candidate span. Keep independent validation after changing the training set. Rank growth on held-out points requires a new training design. |
 | `MISSING_LETTERS_OR_INCONSISTENT_TRAINING` | Check the common frame, basis, data and arithmetic. If these agree, add analytically justified letters/one-forms and make a new bounded fit. |
+| `RATIONAL_RECOGNITION_BOUND_EXCEEDED` | The supplied residue coefficients exceed the declared numerator/denominator bounds. Rebuild the bounded proposal or explicitly revise its arithmetic contract. |
 | `RATIONAL_RECOGNITION_FAILED` | Review coefficient precision and justified rational bounds; change the declared precision/bounds or the ansatz based on evidence. |
 | `EPSILON_NOT_FACTORIZED` | Repair the basis/frame or point-DE input; no letter fit can remove residual symbolic epsilon dependence. |
 | `IDENTITY_OR_FRAME_MISMATCH`, `SOURCE_BINDING_MISMATCH`, `SOURCE_HASH_MISMATCH` | Resolve the actual changed identity/source before any downstream claim. Do not relabel a different frame to force agreement. |
@@ -35,3 +36,9 @@ independent producer of the documented schema; this package does not launch it.
 Never repeat the same fit unchanged after a failed gate. A source-basis repair
 belongs to the basis/DE producer, a missing-letter hypothesis to the analytic
 letter provider, and a point-rank failure to sample selection.
+
+Precision checks include both real and complex numeric atoms. Exact mode rejects
+inexact complex values; high-precision mode checks the precision of complex
+coefficients too. Raw analytic letters and point coordinates remain exact in
+both modes. CHECK_RECONSTRUCTION independently enforces the declared rational
+recognition bounds as well as the sample residual checks.

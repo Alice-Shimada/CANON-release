@@ -35,9 +35,8 @@ sectorBasis = CanonMethodCard`LoadArtifact[task, inputPath, "sector_basis"];
 If[FailureQ[cut] || !CanonMethodCard`ValidSectorBasisQ[sectorBasis],
   publishFailure[Failure["INVALID_INPUT", <|"reason" -> "Invalid sector_basis or sector_cut_de",
     "nonexistence_proved" -> False|>]]];
-If[cut["sector"] =!= Lookup[task, "sector", None] ||
-    KeyTake[cut, {"sector", "family_id", "basis_id", "basis"}] =!=
-      KeyTake[sectorBasis, {"sector", "family_id", "basis_id", "basis"}],
+If[!CanonMethodCard`SameSectorQ[cut["sector"], sectorBasis["sector"], Lookup[task, "sector", None]] ||
+    !AllTrue[{"family_id", "basis_id", "basis"}, cut[#] === sectorBasis[#] &],
   publishFailure[Failure["INVALID_INPUT", <|"reason" -> "Sector, family, basis or order mismatch",
     "nonexistence_proved" -> False|>]]];
 options = Lookup[task["payload"], "method_options", <||>];

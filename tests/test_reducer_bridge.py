@@ -42,7 +42,10 @@ assert 'G[2]' in (project/'targets').read_text()
 result=project/'results/G'; result.mkdir(parents=True)
 mode=sys.argv[1]
 (result/'masters.final').write_text('G[3]\\n' if mode=='basis' else 'G[1]\\n')
-(result/'kira_targets.m').write_text('{}' if mode=='missing' else '{G[2]->(1-d/2)/x G[1]}')
+rhs = {'legacy-square':'G[1]^2', 'legacy-function':'Sin[G[1]]',
+       'legacy-offset':'G[1]+x', 'legacy-chain':'G[3]',
+       'legacy-cancellation':'((x+1)^2-x^2-2 x-1) G[1]^2+(1-d/2)/x G[1]'}.get(mode,'(1-d/2)/x G[1]')
+(result/'kira_targets.m').write_text('{}' if mode=='missing' else '{G[2]->'+rhs+'}')
 '''
 FAKE_ADAPTER = '''import json,pathlib,sys
 source,output=map(pathlib.Path,sys.argv[1:])
@@ -148,7 +151,8 @@ def main():
                        "instructions": "instructions.md"}}})
     # Keep the evaluated profile, then override only REDUCE_IBP for this fixture.
     write_json(tree / "legacy-selection.json", {"schema": "canon-neu/components/v1", "steps": {
-        "REDUCE_IBP": {"from": str(canon / "components/default.json")}}})
+        "REDUCE_IBP": {"command": ["{wolframscript}", "-file", str(canon / "mma/ReduceIBP.wls")],
+                       "instructions": str(canon / "skills/canon-reduce-ibp/SKILL.md")}}})
     project = tree / "native project"
     project.mkdir()
     (project / "job.yaml").write_text("jobs: []\n")
@@ -159,8 +163,10 @@ def main():
     invalid_audit_options = {"custom-invalid-audit-type": 7,
                             "custom-invalid-audit-budget": {"time_limit_seconds": -1},
                             "custom-invalid-audit-key": {"typo": 1}}
-    for mode in ("custom", "custom-absolute", "custom-missing-export", "custom-nonassociation", "custom-identity",
-                 "legacy", "basis", "missing", "custom-incomplete", "custom-invalid-exit",
+    legacy_modes = ("legacy", "basis", "missing", "legacy-square", "legacy-function", "legacy-offset",
+                    "legacy-chain", "legacy-cancellation")
+    for mode in (*legacy_modes, "custom", "custom-absolute", "custom-missing-export", "custom-nonassociation", "custom-identity",
+                 "custom-incomplete", "custom-invalid-exit",
                  "custom-affine", "custom-invalid-selection", "custom-invalid-selection-type",
                  *invalid_audit_options):
         selected = dict(payload)
@@ -188,6 +194,11 @@ def main():
         "reuse-missing": '<|"masters"->{G[1]},"rules"->{}|>',
         "reuse-unreduced": '<|"masters"->{G[1]},"rules"->{G[2]->G[3],G[3]->G[1]}|>',
         "reuse-nonlinear": '<|"masters"->{G[1]},"rules"->{G[2]->G[1]^2}|>',
+        "reuse-function": '<|"masters"->{G[1]},"rules"->{G[2]->Sin[G[1]]}|>',
+        "reuse-reciprocal": '<|"masters"->{G[1]},"rules"->{G[2]->1/G[1]}|>',
+        "reuse-offset": '<|"masters"->{G[1]},"rules"->{G[2]->G[1]+x}|>',
+        "reuse-fractional": '<|"masters"->{G[1]},"rules"->{G[2]->Sqrt[G[1]]}|>',
+        "reuse-cancellation": REDUCTION.replace('(1-d/2)/x G[1]', '((x+1)^2-x^2-2 x-1) G[1]^2+(1-d/2)/x G[1]'),
         "reuse-master-change": REDUCTION.replace('G[2]->', 'G[1]->2 G[1],G[2]->'),
         "reuse-identity": REDUCTION.replace('<|', '<|"family_ref"->"wrong","basis_ref"->"wrong",', 1),
         "reuse-invalid-rules": REDUCTION.replace('G[2]->', 'G[2]->0,G[2]->'),
@@ -212,7 +223,7 @@ def main():
     # Move the custom selection and backend config before their first use.
     moved = work / "relocated tree with spaces"
     tree.rename(moved)
-    for mode in ("legacy", "basis", "missing"):
+    for mode in legacy_modes:
         task = json.loads((moved / f"{mode}.json").read_text())
         task["payload"]["reduction"]["options"][0] = str(moved / "fake_kira.py")
         write_json(moved / f"{mode}.json", task)
@@ -222,6 +233,9 @@ def main():
                 "custom-missing-export": "MISSING_ARTIFACT", "custom-nonassociation": "INVALID_ARTIFACT",
                 "custom-identity": "IBP_CHECK_FAILED", "legacy": "CANDIDATES_REDUCED",
                 "basis": "IBP_CHECK_FAILED", "missing": "IBP_CHECK_FAILED",
+                "legacy-square": "IBP_CHECK_FAILED", "legacy-function": "IBP_CHECK_FAILED",
+                "legacy-offset": "IBP_CHECK_FAILED", "legacy-chain": "IBP_CHECK_FAILED",
+                "legacy-cancellation": "IBP_CHECK_FAILED",
                 "custom-incomplete": "EXPLICIT_CONVERSION_NEEDED", "custom-invalid-exit": "REDUCTION_FAILED",
                 "custom-affine": "CANDIDATES_REDUCED",
                 "custom-invalid-selection": "DERIVATIVE_OPERATOR_INVALID",
@@ -231,13 +245,22 @@ def main():
                 "reuse-missing": "IBP_CHECK_FAILED", "reuse-unreduced": "IBP_CHECK_FAILED",
                 "reuse-nonlinear": "IBP_CHECK_FAILED", "reuse-master-change": "IBP_CHECK_FAILED",
                 "reuse-identity": "IBP_CHECK_FAILED", "reuse-order": "CANDIDATES_REDUCED",
+                "reuse-function": "IBP_CHECK_FAILED", "reuse-reciprocal": "IBP_CHECK_FAILED",
+                "reuse-offset": "IBP_CHECK_FAILED", "reuse-fractional": "IBP_CHECK_FAILED",
+                "reuse-cancellation": "IBP_CHECK_FAILED",
                 "reuse-invalid-rules": "IBP_CHECK_FAILED"}
     audit_reasons = {"reuse-missing": "IBP_MISSING_TARGETS", "reuse-unreduced": "IBP_UNREDUCED_INTEGRALS",
                      "reuse-nonlinear": "IBP_UNSUPPORTED_STRUCTURE", "reuse-master-change": "IBP_MASTER_REDEFINED",
-                     "reuse-invalid-rules": "IBP_DUPLICATE_LHS"}
+                "reuse-invalid-rules": "IBP_DUPLICATE_LHS",
+                "reuse-cancellation": "IBP_UNSUPPORTED_STRUCTURE"}
+    audit_reasons.update({name: "IBP_UNSUPPORTED_STRUCTURE" for name in
+        ("reuse-function", "reuse-reciprocal", "reuse-offset", "reuse-fractional")})
     check_reasons = {**audit_reasons, "custom-identity": "SOURCE_BASIS_MISMATCH",
                      "reuse-identity": "SOURCE_BASIS_MISMATCH", "basis": "MASTER_BASIS_MISMATCH",
-                     "missing": "INCOMPLETE_REDUCTION"}
+                     "missing": "INCOMPLETE_REDUCTION",
+                     "legacy-cancellation": "IBP_UNSUPPORTED_STRUCTURE",
+                     **{name: "INCOMPLETE_REDUCTION" for name in
+                        ("legacy-square", "legacy-function", "legacy-offset", "legacy-chain")}}
     components = [path.resolve() for path in args.components] or [canon / "components/profiles/custom-kira.json"]
     results = {}
     for mode, code in expected.items():
@@ -252,7 +275,7 @@ def main():
             process = subprocess.run(command, env=environment, stdout=log, stderr=subprocess.STDOUT)
         result = json.loads((output / "result.json").read_text())
         invalid_selection = mode.startswith("custom-invalid-selection")
-        error = mode in {"custom-invalid-exit", "custom-missing-export", "custom-nonassociation", "custom-identity", "basis", "missing"} or invalid_selection or mode in invalid_audit_options or (
+        error = code == "IBP_CHECK_FAILED" or mode in {"custom-invalid-exit", "custom-missing-export", "custom-nonassociation", "custom-identity", "basis", "missing"} or invalid_selection or mode in invalid_audit_options or (
             is_reuse and code != "CANDIDATES_REDUCED")
         assert process.returncode == (1 if error else 0) and result["code"] == code, (mode, process.returncode, result)
         if code == "IBP_CHECK_FAILED":

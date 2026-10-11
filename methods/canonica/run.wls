@@ -27,6 +27,9 @@ writeDiagnostics[] := Module[{path},
 closeMessages[] := If[Head[messageStream] === OutputStream, Close[messageStream]; messageStream = None];
 recordAttempt[captured_Association] := (
   AppendTo[attempts, captured["diagnostics"]]; diagnosticSummary = captured["diagnostics"];
+  If[TrueQ[Lookup[diagnosticSummary, "aborted", False]],
+    cleanupKernels[];
+    writeFailure["ERROR", "EXECUTION_INTERRUPTED", "CANONICA execution was interrupted."]];
   captured["result"]
 );
 markMalformedAttempt[block_] := If[Lookup[diagnosticSummary, "failed_stage", Null] === Null,
@@ -110,8 +113,7 @@ If[
   ]
 ];
 If[
-  sectorBasis["sector"] =!= task["sector"] ||
-    cut["sector"] =!= task["sector"] ||
+  !CanonMethodCard`SameSectorQ[sectorBasis["sector"], cut["sector"], task["sector"]] ||
     sectorBasis["family_id"] =!= cut["family_id"] ||
     sectorBasis["basis_id"] =!= cut["basis_id"] ||
     sectorBasis["basis"] =!= cut["basis"],

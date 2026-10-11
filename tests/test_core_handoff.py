@@ -82,10 +82,10 @@ class CoreHandoffTest(unittest.TestCase):
 
     def test_unused_malformed_rows_do_not_poison_selected_full_completion(self):
         result, output = self.build_full(self.candidates(malformed=True))
-        self.assertEqual(result["summary"]["candidate_ids"], ["tutorial:1", "unused:bad"])
-        self.assertEqual(result["summary"].get("rejected_completion_ids"), ["unused:bad"])
+        self.assertEqual(result["summary"]["candidate_ids"], ["tutorial:1"])
+        self.assertEqual(result["summary"].get("rejected_completion_ids"), [])
         artifact = " ".join((output / "full-sector-de.wl").read_text().split())
-        self.assertIn('"completion_rejection" -> "INVALID_CORE_COMPLETION"', artifact)
+        self.assertNotIn('"unused:bad"', artifact)
         self.assertIn('"first_core_candidate_id" -> "tutorial:1"', artifact)
 
     def test_unverified_inverse_proposal_cannot_change_checked_core_on_handoff(self):
@@ -95,7 +95,7 @@ class CoreHandoffTest(unittest.TestCase):
         self.assertFalse((output / "full-sector-de.wl").exists())
 
     def test_core_receipt_must_bind_selected_candidate_identity(self):
-        self.build_full(self.candidates(), expected=("ERROR", "INVALID_INPUT"),
+        self.build_full(self.candidates(), expected=("ERROR", "INVALID_FULL_DE_INPUT"),
                         core_updates=(( '"candidate_id" -> "tutorial:1"',
                                         '"candidate_id" -> "unrelated:1"'),))
 
@@ -113,6 +113,7 @@ class CoreHandoffTest(unittest.TestCase):
           "basis_id"->"full", "basis"->{lower,j}, "variables"->{x},"regulator"->eps,
           "matrices"->{{{(1+eps)/x,0},{0,(1/2+eps)/x}}}|>'''
         accepted = '''<|"schema"->"canon-neu/accepted-prefix/v1", "source_basis"->{lower},
+          "family_id"->"fixture-libra-tutorial-1","variables"->{x},"regulator"->eps,
           "basis"->{normalizedLower},"transformation"->{{x}},"prefix_id"->"lower-prefix",
           "matrices"->{{{eps/x}}}|>'''
         result, output = self.build_full(candidates, inputs={"sector_basis": basis,"sector_cut_de": cut},

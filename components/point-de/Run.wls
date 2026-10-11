@@ -9,8 +9,9 @@ descriptor[name_] := task["payload", name];
 load[name_] := With[{data = CanonMethodCard`LoadArtifact[task, inputPath, name]}, If[FailureQ[data], Throw[data], data]];
 relativeSource[name_, declaring_] := With[{path = CanonMethodCard`ResolveInputPath[inputPath, descriptor[name]["path"]]},
   <|"path" -> CanonMethodCard`RelativeArtifactPath[declaring, path], "sha256" -> FileHash[path, "SHA256", "HexString"]|>];
-save[data_, name_] := (CanonMethodCard`WriteWLArtifact[data, outputDir, name];
-  <|"type" -> "mathematica-expression", "path" -> name|>);
+save[data_, name_] := Module[{path = CanonMethodCard`WriteWLArtifact[data, outputDir, name]},
+  If[!StringQ[path], Throw[Failure["ARTIFACT_WRITE_FAILED", <|"path" -> name|>]]];
+  <|"type" -> "mathematica-expression", "path" -> name|>];
 outcome = Catch[Switch[task["step"],
   "PREPARE_POINT",
     prepared = CanonPointDE`PreparePoint[load["family_data"], load["master_basis"], load["candidates"], load["point_spec"]];
@@ -32,7 +33,11 @@ outcome = Catch[Switch[task["step"],
   "BUILD_POINT_DE",
     prepared = load["prepared_point"];
     reductionDescriptor = descriptor["ibp_reduction"];
-    reduction = CanonMethodCard`ReadWLData[CanonMethodCard`ResolveInputPath[inputPath, reductionDescriptor["path"]]];
+    reductionPath = CanonMethodCard`ResolveInputPath[inputPath, reductionDescriptor["path"]];
+    If[KeyExistsQ[reductionDescriptor,"sha256"] &&
+      (!StringQ[reductionDescriptor["sha256"]] || ToLowerCase[reductionDescriptor["sha256"]] =!=
+        FileHash[reductionPath,"SHA256","HexString"]), Throw[Failure["SOURCE_HASH_MISMATCH", <||>]]];
+    reduction = CanonMethodCard`ReadWLData[reductionPath];
     rules = If[AssociationQ[reduction], reduction["rules"], reduction];
     If[!ListQ[rules], Throw[Failure["INVALID_REDUCTION_RULES", <||>]]];
     symbolicRules = TrueQ[Lookup[reductionDescriptor, "symbolic", False]];
@@ -57,7 +62,16 @@ outcome = Catch[Switch[task["step"],
     ];
     integralHead = Head[First[prepared["masters"]]];
     reducerHeadName = Lookup[reductionDescriptor, "integral_head", SymbolName[integralHead]];
-    rules = rules /. (s_Symbol /; SymbolName[Unevaluated[s]] === reducerHeadName) :> integralHead;
+    mapIntegralHead[value_] := value /. (g_ /; !AtomQ[g] && Head[Head[g]] === Symbol &&
+      SymbolName[Head[g]] === reducerHeadName && VectorQ[List @@ g, IntegerQ]) :> Apply[integralHead, List @@ g];
+    rules = mapIntegralHead[rules];
+    If[AssociationQ[reduction],
+      If[KeyExistsQ[reduction,"masters"] && mapIntegralHead[reduction["masters"]] =!= prepared["masters"],
+        Throw[Failure["SOURCE_BASIS_MISMATCH", <||>]]];
+      If[AnyTrue[{{"family_ref","family_id"},{"basis_ref","source_basis_id"}},
+          KeyExistsQ[reduction,First[#]] && reduction[First[#]] =!= prepared[Last[#]] &],
+        Throw[Failure["SOURCE_BASIS_MISMATCH", <||>]]]
+    ];
     built = CanonPointDE`BuildPointDE[prepared, rules];
     If[FailureQ[built], built,
       built["sample", "sources"] = AssociationMap[relativeSource[#, FileNameJoin[{outputDir, "de-sample.wl"}]] &,

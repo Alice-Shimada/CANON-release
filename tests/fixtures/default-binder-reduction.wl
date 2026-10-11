@@ -1,4 +1,4 @@
-(* The legacy binder's explicit integral_head "Q" declares Global`Q.
-   Keep those heads explicit when the common data reader loads the rules. *)
-<|"masters" -> {Global`Q[1,1]}, "rules" -> {
-  Global`Q[0,2] -> 0, Global`Q[1,2] -> -(d-3)/u Global`Q[1,1]}|>
+(* Unqualified integral heads and coordinates share CANON`DEData` when read.
+   This is the same source basis produced by default discovery. *)
+<|"masters" -> {Q[1,1]}, "rules" -> {
+  Q[0,2] -> 0, Q[1,2] -> -(d-3)/u Q[1,1]}|>
