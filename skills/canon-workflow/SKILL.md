@@ -61,10 +61,6 @@ mathematical inputs and options as data. Use
 into a consumer request when needed. A missing computational capability is a
 separate component development task with a reusable interface and tests; do not
 silently introduce a task-local scientific glue program during research.
-Before an expensive experimental tail capability, include an existing matching
-built-in completion receipt or a concrete skip reason in that assignment; follow
-the [tail preflight](../canon-solve-tail/SKILL.md#what-the-script-tries-automatically).
-Reuse unchanged evidence and honor the selected component's workflow.
 
 Parameterization and native backend choice are independent. A profile may bind
 PREPARE, DISCOVER, REDUCE_IBP and BUILD_CUT_DE to different packages using `from`
