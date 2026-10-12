@@ -191,6 +191,14 @@ full2 = artifact[build2, "full_sector_de"];
 
 tests = {
   VerificationTest[
+    Lookup[commit0["result", "summary"],
+      {"accepted_sector_count", "accepted_master_count", "previous_master_count", "new_master_count"}] ===
+      {1, 1, 0, 1} &&
+    Lookup[commit1["result", "summary"],
+      {"accepted_sector_count", "accepted_master_count", "previous_master_count", "new_master_count"}] ===
+      {2, 2, 1, 1},
+    True, TestID -> "reports-initial-and-cumulative-master-counts"],
+  VerificationTest[
     Lookup[{check0["result"], commit0["result"]}, {"status", "code"}] ===
       {{"PASS", "CANONICAL_PASS"}, {"PASS", "OK"}} &&
     accepted0["parent_prefix_id"] === Null && accepted0["sector_trace"] === {sector0},

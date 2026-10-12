@@ -95,4 +95,7 @@ CanonMethodCard`WriteResult[task, outputDir, "PASS", "OK",
     "type" -> "mathematica-expression", "path" -> FileNameTake[path]|>|>,
   <|"prefix_id" -> prefix["prefix_id"],
     "accepted_sector_count" -> Length[sectorTrace],
+    "accepted_master_count" -> Length[acceptedBasis],
+    "previous_master_count" -> lowerDimension,
+    "new_master_count" -> currentDimension,
     "candidate_id" -> sectorTransform["candidate_id"]|>];

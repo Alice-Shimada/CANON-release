@@ -19,6 +19,13 @@ normalization of earlier sectors. Keep earlier artifacts intact, append the
 sector and candidate traces in resident order, and derive a stable
 SHA-256 prefix ID from the complete accepted expression.
 
+The result summary reports `accepted_sector_count`, `accepted_master_count`,
+`previous_master_count` and `new_master_count` from this cumulative prefix.
+Use these fields for progress counts instead of counting sectors as masters or
+copying prose from older runs. COMMIT is a checked artifact handoff; formal
+persistent progress requires the main agent to accept its run. Monitors report
+these counts as accepted only after the corresponding task is `completed`.
+
 Register this new cumulative prefix and this step's other new outputs separately.
 Reference the existing ordered DE, reduction rules, and prior artifact records;
 do not embed their files or archives in the new handoff.

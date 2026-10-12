@@ -49,7 +49,7 @@ loadCheckpoint[task_, inputPath_] := Module[{descriptor, path, hash, value},
 ];
 
 RunBackend[task_, inputPath_, full_, core_, baseT_, matrices_, options_] := Module[
-  {package, entry, entryHash, variables, regulator, lower, dim, dependencies, active,
+  {package, entry, entryHash, variables, regulator, lower, dim, active,
    activeLower, n, bounds, lowerBounds, backend, binding, identity, ansatz, terms = {},
    ansatzInfo = <||>, checkpoint, previousD, columns, completed, stage, result, lifted,
    embedding, fullBounds, normalized, started, seconds, diagnostics = {}, steps = 0,
@@ -95,9 +95,7 @@ RunBackend[task_, inputPath_, full_, core_, baseT_, matrices_, options_] := Modu
     TrueQ[check["result"]]
   ];
   lower = full["block_boundaries", "lower_dimension"]; dim = Length[baseT];
-  dependencies = Table[Union @@ (Flatten[Position[#[[i]], z_ /; z =!= 0,
-    {1}, Heads -> False]] & /@ matrices), {i, dim}];
-  active = FixedPoint[Union[#, Flatten[dependencies[[#]]]] &, Range[lower + 1, dim]];
+  active = CanonTailCompletion`ActivePositions[matrices, lower];
   activeLower = Count[active, i_ /; i <= lower]; n = Length[active];
   backend = matrices[[All, active, active]] /. regulator -> CANONICA`eps;
   bounds = If[activeLower === 0, {{1, n}}, {{1, activeLower}, {activeLower + 1, n}}];

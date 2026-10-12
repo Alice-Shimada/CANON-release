@@ -91,6 +91,17 @@ The script applies the following proposals to matching input structures.
 
 Each completion still needs the existing exact epsilon and shared-dlog gates.
 None of these ansatzes is a complete solver for arbitrary algebraic tails.
+The default runner reports `summary.builtin_completion` with `attempted`,
+`method` and `solved`, even when a later backend stage fails. `solved` describes
+the built-in proposal; only the final result and independent checks establish
+the outgoing claim.
+
+Before developing or selecting an expensive experimental tail solver, read an
+existing built-in receipt for the same input. If none exists, try an applicable
+bounded built-in proposal or record why it is skipped (for example, an unsupported
+domain, the available budget, or an explicitly selected replacement's workflow).
+Do not replay an unchanged attempt for provenance or silently override a selected
+component. Carry this receipt or skip reason into the development assignment.
 See [normalization and tails](../canon-search-core/references/normalization-and-tails.md)
 for the gauge convention, equations and algebraic-letter construction.
 
@@ -109,6 +120,18 @@ Diagnostics describe the matrices retained after the built-in attempts, not a
 proof about every possible basis. `current_master_count`, `epsilon_factorized`,
 `affine_in_epsilon`, `rational_coefficients` and `alphabet_candidate_count` let
 the coordinator distinguish the following cases without repeating the same run.
+
+`coefficient_scopes` gives row/column counts and exact nonrational-entry counts
+for `whole`, `current`, `current_to_lower`, `active_closure`, `inactive` and
+`inactive_to_active`. `active_positions` is the dependency closure seeded by
+all current rows in the retained post-proposal matrices; positions are one-based
+in the complete prefix. The `current` and `inactive` scopes are their square
+diagonal blocks. A nonrational lower block does not establish that the current
+block or its direct tail is nonrational. Conversely, a rational active square
+does not certify that lifting its transformation is safe: inspect inactive-to-active
+couplings and complete-prefix epsilon normalization. These fields diagnose scope;
+they neither relax the rational backend's whole-input guard nor replace the full
+gauge and dlog checks. Root counts alone do not establish an obstruction.
 
 | Evidence | Next bounded hypothesis |
 |---|---|

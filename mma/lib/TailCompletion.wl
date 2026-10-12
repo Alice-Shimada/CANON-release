@@ -1,6 +1,6 @@
 (* Private completion routines for SOLVE_TAIL. No task or artifact IO. *)
 BeginPackage["CanonTailCompletion`"];
-CompleteAlgebraicTail; CompleteRationalTail; TailDiagnostics;
+CompleteAlgebraicTail; CompleteRationalTail; TailDiagnostics; ActivePositions;
 Begin["`Private`"];
 
 regulatorFactor[expression_, variables_List, regulator_] := Times @@ (#[[1]]^#[[2]] & /@
@@ -188,15 +188,34 @@ CompleteAlgebraicTail[fullDE_Association, selected_Association] := Module[
     "method" -> method, "solved" -> tailSolved|>
 ];
 
-TailDiagnostics[fullDE_Association, solution_Association] := With[
-  {matrices = solution["matrices"], regulator = fullDE["regulator"]},
-  <|"current_master_count" -> Length[solution["transformation"]] -
-      fullDE["block_boundaries", "lower_dimension"],
+ActivePositions[matrices_List, lower_Integer] := Module[{dimension = Length[First[matrices]], dependencies},
+  dependencies = Table[Union @@ (Flatten[Position[#[[i]], z_ /; z =!= 0,
+    {1}, Heads -> False]] & /@ matrices), {i, dimension}];
+  FixedPoint[Union[#, Flatten[dependencies[[#]]]] &, Range[lower + 1, dimension]]
+];
+
+TailDiagnostics[fullDE_Association, solution_Association] := Module[
+  {matrices = solution["matrices"], regulator = fullDE["regulator"], lower,
+    dimension, current, active, inactive, nonrational, scope},
+  lower = fullDE["block_boundaries", "lower_dimension"];
+  dimension = Length[solution["transformation"]];
+  current = Range[lower + 1, dimension];
+  active = ActivePositions[matrices, lower];
+  inactive = Complement[Range[dimension], active];
+  nonrational = Map[Boole[!CanonMethodCard`ExactRationalExpressionQ[#]] &, matrices, {3}];
+  scope[rows_, columns_] := With[{count = Total[Flatten[nonrational[[All, rows, columns]]]]},
+    <|"row_count" -> Length[rows], "column_count" -> Length[columns],
+      "nonrational_entry_count" -> count, "rational_coefficients" -> (count === 0)|>];
+  <|"current_master_count" -> Length[current],
     "epsilon_factorized" -> CanonMethodCard`EpsilonFactorizedQ[matrices, regulator],
     "affine_in_epsilon" -> affineEpsilonQ[matrices, regulator],
-    "rational_coefficients" -> And @@
-      (CanonMethodCard`ExactRationalExpressionQ /@ Flatten[matrices]),
-    "alphabet_candidate_count" -> Length[solution["alphabet"]]|>
+    "rational_coefficients" -> (Total[Flatten[nonrational]] === 0),
+    "alphabet_candidate_count" -> Length[solution["alphabet"]],
+    "active_positions" -> active, "inactive_positions" -> inactive,
+    "coefficient_scopes" -> <|"whole" -> scope[Range[dimension], Range[dimension]],
+      "current" -> scope[current, current], "current_to_lower" -> scope[current, Range[lower]],
+      "active_closure" -> scope[active, active], "inactive" -> scope[inactive, inactive],
+      "inactive_to_active" -> scope[inactive, active]|>|>
 ];
 
 (* The return is held at the call site, before passing it to this constructor. *)
@@ -219,17 +238,14 @@ CompleteRationalTail[fullDE_Association, candidateID_, solution_Association, pac
   {variables = fullDE["variables"], regulator = fullDE["regulator"],
    lowerDimension = fullDE["block_boundaries", "lower_dimension"],
    transformation = solution["transformation"], matrices = solution["matrices"],
-   dimension, dependencies, active, activeLower, boundaries, backendMatrices,
+   dimension, active, activeLower, boundaries, backendMatrices,
    result, embedding, lifted, backendTransformation, alphabet},
   dimension = Length[transformation];
   If[!TrueQ[Quiet @ Check[Get[packageEntry]; True, False]] ||
       DownValues[CANONICA`TransformOffDiagonalBlock] === {} ||
       DownValues[CANONICA`TransformDlogToEpsForm] === {},
     Return[Failure["TOOL_ERROR", <|"Message" -> "CANONICA failed to load its required tail interfaces."|>]]];
-  dependencies = Table[Union @@ (Flatten[Position[#[[i]],
-      x_ /; x =!= 0, {1}, Heads -> False]] & /@ matrices), {i, dimension}];
-  active = FixedPoint[Union[#, Flatten[dependencies[[#]]]] &,
-    Range[lowerDimension + 1, dimension]];
+  active = ActivePositions[matrices, lowerDimension];
   activeLower = Count[active, i_ /; i <= lowerDimension];
   boundaries = If[activeLower === 0, {{1, Length[active]}},
     {{1, activeLower}, {activeLower + 1, Length[active]}}];

@@ -18,7 +18,8 @@ publishUnsolved[task_, outputDir_, fullDE_, candidateID_, solution_, reason_] :=
   ];
   CanonMethodCard`WriteResult[task, outputDir, "INCONCLUSIVE", "TAIL_UNSOLVED", artifacts,
     Join[<|"candidate_id" -> candidateID, "method" -> solution["method"],
-      "reason" -> reason, "diagnostics" -> CanonTailCompletion`TailDiagnostics[fullDE, solution]|>,
+      "reason" -> reason, "diagnostics" -> CanonTailCompletion`TailDiagnostics[fullDE, solution],
+      "builtin_completion" -> solution["builtin_completion"]|>,
       details]]
 ];
 
@@ -69,6 +70,8 @@ If[!TrueQ[MatrixQ[selected["full_transformation"]] &&
   fail["INVALID_TAIL_INPUT", "The selected full transformation must be exact, invertible and correctly shaped."]];
 solution = CheckAbort[CanonTailCompletion`CompleteAlgebraicTail[fullDE, selected],
   fail["EXECUTION_INTERRUPTED", "Tail completion was interrupted."]];
+solution = Join[solution, <|"builtin_completion" ->
+  Join[<|"attempted" -> True|>, KeyTake[solution, {"method", "solved"}]]|>];
 
 If[!TrueQ[solution["solved"]],
   If[!And @@ (CanonMethodCard`ExactRationalExpressionQ /@ Flatten[solution["matrices"]]),
@@ -91,7 +94,8 @@ If[!TrueQ[solution["solved"]],
   If[!TrueQ[backend["success"]],
     If[TrueQ[backend["input_error"]],
       CanonMethodCard`WriteResult[task, outputDir, "ERROR", Lookup[backend, "error_code", "INVALID_INPUT"], backendArtifacts,
-        <|"reason" -> backend["reason"], "backend" -> backendEvidence|>]; Quit[1]];
+        <|"reason" -> backend["reason"], "backend" -> backendEvidence,
+          "builtin_completion" -> solution["builtin_completion"]|>]; Quit[1]];
     checkpointArtifacts = <||>;
     If[KeyExistsQ[backend, "checkpoint"],
       checkpointPath = CanonMethodCard`WriteWLArtifact[backend["checkpoint"], outputDir,
@@ -111,7 +115,8 @@ If[!TrueQ[solution["solved"]],
       If[interrupted, "EXECUTION_INTERRUPTED", "TAIL_UNSOLVED"],
       Join[backendArtifacts, checkpointArtifacts], Join[<|"candidate_id" -> core["candidate_id"],
       "method" -> "canonica-off-diagonal", "reason" -> backend["reason"],
-      "backend" -> backendEvidence, "diagnostics" -> CanonTailCompletion`TailDiagnostics[fullDE, solution]|>,
+      "backend" -> backendEvidence, "diagnostics" -> CanonTailCompletion`TailDiagnostics[fullDE, solution],
+      "builtin_completion" -> solution["builtin_completion"]|>,
       failureDetails]]; Quit[If[interrupted, 1, 0]]
   ];
   backendTransformation = backend["backend_transformation"];
@@ -142,4 +147,5 @@ path = CanonMethodCard`WriteWLArtifact[value, outputDir, "sector-transform.wl"];
 CanonMethodCard`WriteResult[task, outputDir, "PASS", "TAIL_READY",
   Join[backendArtifacts, <|"sector_transform" -> <|"type" -> "mathematica-expression",
     "path" -> FileNameTake[path]|>|>],
-  <|"candidate_id" -> core["candidate_id"], "method" -> solution["method"], "backend" -> backendEvidence|>];
+  <|"candidate_id" -> core["candidate_id"], "method" -> solution["method"], "backend" -> backendEvidence,
+    "builtin_completion" -> solution["builtin_completion"]|>];

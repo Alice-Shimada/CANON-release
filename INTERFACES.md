@@ -971,6 +971,14 @@ An unresolved result includes `summary.reason` and `summary.diagnostics`:
 `rational_coefficients`, and `alphabet_candidate_count`. These describe the
 retained attempted matrices, not all possible representatives. Use the
 [tail skill](skills/canon-solve-tail/SKILL.md) to choose the next bounded action.
+Diagnostics also report one-based `active_positions`, `inactive_positions` and
+`coefficient_scopes` for the whole matrix, current block, current-to-lower block,
+active closure, inactive block and inactive-to-active couplings. Each scope gives
+row/column counts, a nonrational-entry count and a rationality flag. These fields
+do not relax the whole-input rational backend guard. `summary.builtin_completion`
+records the built-in attempt's `attempted`, `method` and `solved` before any backend
+call; it is retained on success and backend failure. Reuse this evidence or record
+a concrete skip reason before an expensive experimental tail component.
 
 Tail-specific `method_options` additionally accept `tail_strategy` (default
 `"monolithic"`, optional `"subsector"`), nonnegative integer
@@ -1018,6 +1026,11 @@ Unresolved abbreviations require their actual source-master definitions before
 acceptance. `CHECK_CANONICAL` binds the transform to the full source prefix;
 `COMMIT_SECTOR` requires matching passing check flags and the exact checked
 transformation, and `NEXT_SECTOR` rejects traces that are not a resident prefix.
+The COMMIT summary derives `accepted_sector_count`, `accepted_master_count`,
+`previous_master_count` and `new_master_count` from the complete cumulative basis.
+These are artifact-level counts; persistent monitors label progress formally
+accepted only after the main agent accepts the corresponding run and its task
+is `completed`.
 Exact algebraic expressions use Wolfram differentiation, simplification, and
 `SolveAlways` directly; no additional algebraic-field or branch-management layer
 is constructed.

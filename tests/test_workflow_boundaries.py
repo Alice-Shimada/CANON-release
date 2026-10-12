@@ -169,6 +169,9 @@ def main():
         run('canonical-'+name,'CHECK_CANONICAL',{**canonical_payload,'sector_transform':r},('ERROR','INVALID_CANONICAL_INPUT'),sector)
     commit_payload=dict(previous_accepted_prefix=lower_ref,sector_basis=base_ref,sector_transform=trans_ref,canonical_sector_de=can_ref)
     commit_result,commit_dir=run('commit-good','COMMIT_SECTOR',commit_payload,sector=sector)
+    assert {key: commit_result['summary'][key] for key in (
+        'accepted_sector_count', 'accepted_master_count', 'previous_master_count', 'new_master_count')} == {
+        'accepted_sector_count': 2, 'accepted_master_count': 3, 'previous_master_count': 1, 'new_master_count': 2}
     accepted_ref=result_ref(commit_result,commit_dir,'accepted_prefix')
     run('commit-record-key-order','COMMIT_SECTOR',commit_payload,sector=reversed_sector)
     for name,updates in [('unchecked',{'full_checks':{}}),('other-transform',{'transformation':WL('IdentityMatrix[3]')}),('other-prefix',{'accepted_prefix_id':'other'})]:
