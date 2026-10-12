@@ -68,10 +68,10 @@ If[!TrueQ[MatrixQ[selected["full_transformation"]] &&
     Together[Det[selected["full_transformation"]]] =!= 0 &&
     CanonMethodCard`ValidMatrixSystemQ[selected["transformed_matrices"], fullDE["variables"], fullDE["regulator"], dimension]],
   fail["INVALID_TAIL_INPUT", "The selected full transformation must be exact, invertible and correctly shaped."]];
-solution = CheckAbort[CanonTailCompletion`CompleteAlgebraicTail[fullDE, selected],
+solution = CheckAbort[CanonTailCompletion`CompleteAlgebraicTail[fullDE, selected, tailOptions["max_wall_seconds"]],
   fail["EXECUTION_INTERRUPTED", "Tail completion was interrupted."]];
 solution = Join[solution, <|"builtin_completion" ->
-  Join[<|"attempted" -> True|>, KeyTake[solution, {"method", "solved"}]]|>];
+  Join[<|"attempted" -> True|>, KeyTake[solution, {"method", "solved", "dlog_epsilon_normalization"}]]|>];
 
 If[!TrueQ[solution["solved"]],
   If[!And @@ (CanonMethodCard`ExactRationalExpressionQ /@ Flatten[solution["matrices"]]),

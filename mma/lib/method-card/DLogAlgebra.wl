@@ -28,14 +28,21 @@ QuadraticRootLetters[matrices_List, variables_List] := Module[
   DeleteDuplicates[candidates]
 ];
 
-DLogResidues[matrices_List, variables_List, regulator_Symbol, alphabet_List] := Catch[Module[
+DLogResidues[matrices_List, variables_List, regulator_Symbol, alphabet_List] :=
+  If[FreeQ[alphabet, regulator] && EpsilonFactorizedQ[matrices, regulator],
+    constantDLogResidues[Map[Together[#/regulator] &, matrices, {3}], variables, alphabet, {}],
+    $Failed];
+
+DLogFormResidues[matrices_List, variables_List, regulator_Symbol, alphabet_List] :=
+  If[FreeQ[alphabet, regulator],
+    constantDLogResidues[matrices, variables, alphabet, {regulator}], $Failed];
+
+constantDLogResidues[matrices_List, variables_List, alphabet_List, coefficientSymbols_List] := Catch[Module[
   {powers, bases, orders, roots, relations, formal, numerator, fieldPowers,
    fieldBasis, fieldVector, points, point, pointCount, letterValues,
    logarithmicDerivatives, connectionEntries, connectionValues, logVectors,
    entryVectors, sampled, sampledEntries, coefficientMatrix,
    pivotPositions, rows, columns, inverse, entry, entryResidues},
-  If[!FreeQ[alphabet, regulator] || !EpsilonFactorizedQ[matrices, regulator],
-    Return[$Failed]];
   If[alphabet === {}, Return[If[And @@ (ZeroMatrixQ /@ matrices), {}, $Failed]]];
   powers = DeleteDuplicates @ Cases[{matrices, alphabet},
     Power[b_, p_Rational] /; !FreeQ[b, Alternatives @@ variables] :>
@@ -69,7 +76,7 @@ DLogResidues[matrices_List, variables_List, regulator_Symbol, alphabet_List] := 
   If[logarithmicDerivatives === $Failed, Return[$Failed]];
   connectionEntries = DeleteDuplicates[Flatten[Table[matrices[[All, row, column]],
     {row, Length[First[matrices]]}, {column, Length[First[matrices]]}], 1]];
-  connectionValues = formal[Together[#/regulator]] & /@ connectionEntries;
+  connectionValues = formal[Together[#]] & /@ connectionEntries;
   pointCount = Ceiling[Length[alphabet]/Max[1, Length[variables] - 1]] + 2;
   points = {}; sampled = {}; sampledEntries = {};
   (* Reject divisors and singular field inversions before any matrix algebra.
@@ -101,15 +108,15 @@ DLogResidues[matrices_List, variables_List, regulator_Symbol, alphabet_List] := 
     sampledValues = Flatten[sampledEntries[[All, position]]];
     solution = ConstantArray[0, Length[alphabet]];
     If[columns =!= {}, solution[[columns]] = inverse.sampledValues[[rows]]];
-    If[Cases[solution, _Symbol, Infinity] =!= {} ||
+    If[Complement[Cases[solution, _Symbol, Infinity], coefficientSymbols] =!= {} ||
         !And @@ MapThread[TrueQ[numerator[Together[#1 - solution.#2]] === 0] &,
-        {values, logarithmicDerivatives}], Throw[$Failed, DLogResidues]];
+        {values, logarithmicDerivatives}], Throw[$Failed, constantDLogResidues]];
     solution
   ];
   entryResidues = Table[entry[matrices[[All, row, column]]],
     {row, Length[First[matrices]]}, {column, Length[First[matrices]]}];
   Table[entryResidues[[All, All, i]], {i, Length[alphabet]}]
-], DLogResidues];
+], constantDLogResidues];
 
 AlgebraicPrimitive[components_List, variables_List] := Catch[Module[
   {parts, classes, radicalPart, terms, prefactor, rational, den, factors, fd,

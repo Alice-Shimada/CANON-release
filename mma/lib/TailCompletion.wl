@@ -3,6 +3,8 @@ BeginPackage["CanonTailCompletion`"];
 CompleteAlgebraicTail; CompleteRationalTail; TailDiagnostics; ActivePositions;
 Begin["`Private`"];
 
+Get[FileNameJoin[{DirectoryName[$InputFileName], "tail", "DLogNormalization.wl"}]];
+
 regulatorFactor[expression_, variables_List, regulator_] := Times @@ (#[[1]]^#[[2]] & /@
   Select[Rest[FactorList[expression]],
     !FreeQ[First[#], regulator] && FreeQ[First[#], Alternatives @@ variables] &]);
@@ -135,12 +137,12 @@ firstDerivativeCompletion[sourceMatrices_, selected_Association, variables_List,
     {trialT, trial, trialAlphabet}, $Failed]
 ];
 
-CompleteAlgebraicTail[fullDE_Association, selected_Association] := Module[
+CompleteAlgebraicTail[fullDE_Association, selected_Association, maxWall_:60] := Module[
   {variables = fullDE["variables"], regulator = fullDE["regulator"],
    lowerDimension = fullDE["block_boundaries", "lower_dimension"],
    transformation = selected["full_transformation"], matrices = selected["transformed_matrices"],
    alphabet, method = "candidate-completion", dimension, scale, normalization,
-   completion, scaled, tailSolved = False},
+   completion, scaled, tailSolved = False, normalizationEvidence = <||>},
   dimension = Length[transformation];
   alphabet = DeleteDuplicates @ Join[fullDE["alphabet"],
     CanonMethodCard`DLogAlphabet[matrices, variables, regulator]];
@@ -184,8 +186,20 @@ CompleteAlgebraicTail[fullDE_Association, selected_Association] := Module[
       {transformation, matrices, alphabet} = completion;
       method = "scalar-first-derivative-completion"; tailSolved = True]
   ];
-  <|"transformation" -> transformation, "matrices" -> matrices, "alphabet" -> alphabet,
-    "method" -> method, "solved" -> tailSolved|>
+  If[!tailSolved && !AllTrue[Flatten[{selected["transformed_matrices"], matrices}],
+      CanonMethodCard`ExactRationalExpressionQ],
+    (* Try the original dlog frame as well as the retained primitive frame.
+       A failed affine proposal must not hide a constant-residue input. *)
+    completion = completeDLogEpsilon[fullDE,
+      DeleteDuplicates[{{selected["full_transformation"], selected["transformed_matrices"]},
+        {transformation, matrices}}], alphabet, maxWall];
+    normalizationEvidence = <|"dlog_epsilon_normalization" -> completion["diagnostics"]|>;
+    If[TrueQ[completion["solved"]],
+      {transformation, matrices, alphabet} = Lookup[completion, {"transformation", "matrices", "alphabet"}];
+      method = "algebraic-dlog-epsilon-normalization"; tailSolved = True]
+  ];
+  Join[<|"transformation" -> transformation, "matrices" -> matrices, "alphabet" -> alphabet,
+    "method" -> method, "solved" -> tailSolved|>, normalizationEvidence]
 ];
 
 ActivePositions[matrices_List, lower_Integer] := Module[{dimension = Length[First[matrices]], dependencies},

@@ -31,6 +31,7 @@ ZeroMatrixQ::usage = "ZeroMatrixQ[matrix] tests exact entrywise vanishing.";
 FlatConnectionQ::usage = "FlatConnectionQ[matrices, variables] tests the exact symbolic curvature in every pair of variables.";
 EpsilonFactorizedQ::usage = "EpsilonFactorizedQ[matrices, eps] tests exact epsilon factorization.";
 DLogResidues::usage = "DLogResidues[matrices, variables, eps, alphabet] solves shared constant residues using exact Wolfram algebraic expressions.";
+DLogFormResidues::usage = "DLogFormResidues[matrices, variables, eps, alphabet] fits shared kinematically constant residues, allowing regulator dependence, and proves every original direction exactly. This does not test epsilon form.";
 DLogAlphabet::usage = "DLogAlphabet[matrices, variables, eps] extracts regulator-free pole factors as candidate letters.";
 QuadraticRootLetters::usage = "QuadraticRootLetters[matrices, variables] proposes norm-ratio letters for quadratic roots with rational square leading coefficients.";
 AlgebraicPrimitive::usage = "AlgebraicPrimitive[components, variables] solves a polynomial-over-poles primitive in the algebraic components of an exact one-form.";

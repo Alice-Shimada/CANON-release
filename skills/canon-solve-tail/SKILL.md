@@ -45,6 +45,7 @@ structure. The agent does not dispatch the internal branches separately.
 | Affine normalized tail `R0 + eps R1` | An algebraic primitive of `R0` in every variable, followed by a lower-sector shear. |
 | One current master and one supported quadratic root | A neutral lower lift when needed, then a primitive with coefficient `1/(1+2 c eps)` from the scalar radicand residue. This can remove higher poles of a `1/q` primitive. |
 | Several current masters | A bounded completion from the simplest row and its first derivatives; an exact full-rank cut aligns the rows. |
+| Remaining algebraic connection with kinematically constant dlog residues | Solve the full-prefix residue intertwiner for an exact rational function of epsilon, including gauges singular at epsilon zero. |
 | Remaining rational coefficients | CANONICA off-diagonal completion and full-prefix epsilon normalization. |
 
 Each completion still needs the existing exact epsilon and shared-dlog gates.
@@ -53,6 +54,17 @@ The default runner reports `summary.builtin_completion` with `attempted`,
 `method` and `solved`, even when a later backend stage fails. `solved` describes
 the built-in proposal; only the final result and independent checks establish
 the outgoing claim.
+
+The algebraic dlog normalization is an internal fallback, after the existing
+primitive and derivative proposals. It uses the same `max_wall_seconds` control
+(60 seconds by default), with fixed finite bounds: dimension 64, alphabet 128,
+400,000 equations, algebraic field basis 256, and two million stored sparse
+coefficients or coefficient updates. It tries exact nonzero reference values and
+finite free-parameter choices; it does not solve arbitrary kinematic gauges or
+remove higher-order poles. Its optional
+`summary.builtin_completion.dlog_epsilon_normalization` receipt records the
+actual stage, including a time or size limit. Such a limit or failed search
+remains inconclusive. The rational backend retains its whole-input domain guard.
 
 Before assigning an expensive experimental tail capability, reuse the matching
 `summary.builtin_completion` receipt produced by the ordinary SOLVE_TAIL call.

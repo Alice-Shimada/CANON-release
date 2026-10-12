@@ -46,6 +46,14 @@ Live Kira/provider tests are separate scripts with explicit installation and
 output arguments. Run them only when the change needs that evidence; the
 [installation guide](docs/installation.md) lists their dependency configuration.
 
+For algebraic tail epsilon normalization, run
+`wolframscript -file tests/RunDLogNormalizationUnitTests.wls` and
+`python3 -m unittest discover -s tests -p test_algebraic_dlog_tail.py -v` with a
+declared `CANON_WOLFRAM_KERNEL`. These cover exact sparse residue equations and
+the unchanged public sector workflow through `FINAL_CHECK`, using synthetic
+connections with independent known gauges. Also run the shared dlog regressions
+in `tests/RunDLogRegularSampleUnitTests.wls` and the existing full-sector tail tests.
+
 For component selection and command interfaces, run
 `python3 -m unittest discover -s tests -p 'test_components.py' -v` and
 `PYTHONPATH=. python3 -m unittest discover -s tests -p 'test_prepare_request.py' -v`.
