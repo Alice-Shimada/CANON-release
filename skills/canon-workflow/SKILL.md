@@ -149,34 +149,19 @@ as new artifacts. Do not rerun a separate full audit solely because the workflow
 
 ## 4. Core selection
 
-Follow [canon-search-core](../canon-search-core/SKILL.md), which chooses a
-bounded hypothesis from the family geometry, available inputs and current
-evidence. A simple sector may be handled by selected dots and natural
-normalization; a concrete numerator, dimensional or contact-term hypothesis may
-favor Gram constructions. Use DlogBasis-refine when a general bounded search or
-leading-singularity information is useful. It is not compulsory before every
-other method. Integral proposals use candidate IBP reduction and CHECK_CORE.
-For a selected DlogBasis attempt, invoke `DlogBasisSearch` with finite bounds;
-package loading and family construction are preparation steps.
+Use [canon-search-core](../canon-search-core/SKILL.md) to choose one bounded
+hypothesis from the goal, family geometry, available inputs and retained
+rank/checker evidence. That skill owns integral proposals, their derivative/IBP
+preparation and direct-DE applicability. Its method table is not an execution
+ladder; exhaustive provider or candidate enumeration is unnecessary.
 
-Each operation requires its own inputs. Candidate derivative `exact_strategy`
-belongs to the IBP bridge and may be prepared after the proposal. The
-core-selection skill also describes applicable direct-DE choices. The method catalog provides
-capabilities and contracts; exhaustive provider or numerator/dot enumeration is
-not required. Method choices follow the overall goal and current evidence
-throughout worker handoffs. Record tested decision rules with their inputs,
-bounds and checker evidence so later choices can improve without broadening the
-scientific claim or repeating accepted work.
-
-When core selection selects a direct-DE construction, a small explicitly normalized UT seed set
-can select INITIAL's seeded core card alongside the other SEARCH_CORE providers.
-Use `run_step.py` with explicit `SEARCH_CORE` and `--method initial` for the default
-provider. The legacy official
-ladder evidence steps are reference validation only; they cannot satisfy
-CORE_PASS, select a method, or run automatically after a failed core attempt.
-Libra's bounded normalization and CANONICA's finite block ansatz extend this same
-node. CANONICA's subsector D solving and checkpoints extend SOLVE_TAIL. Every
-proposal retains the existing independent checks and forward-routing order.
+Use the selected method card's normal entry first. Consult optional-control
+contracts when that attempt uses them. Bounded normalization, finite ansatzes
+and tail checkpoints are options of existing SEARCH_CORE or SOLVE_TAIL nodes.
+They keep the forward route
+and independent gates. INITIAL's official reference validation remains outside
+core selection and cannot establish CORE_PASS. Reuse accepted evidence and record
+a changed hypothesis with its bounds before a new attempt.
 
 ## 5. Result routing
 
@@ -192,10 +177,9 @@ prefix. A new attempt must change the stated failing hypothesis or input.
 | `FAIL/IBP_CHECK_FAILED` | Read `summary.reason_code` and details through the IBP skill. Extend named target coverage, fix the declared data/order, or complete a timed-out or unsupported check before consumption. A nonpassing gate does not exhaust an IBP method or establish missing masters. |
 | An input/schema/tool error with a result file | Fix the named field, path, convention or installation in the step's skill, then resume that operation using unaffected artifacts. |
 | `CORE_FAIL`, `CANDIDATE_BUDGET_EXHAUSTED`, or `SELECT_CORE_METHOD` | Read the candidate rejection/rank and return to core selection. Do not call SOLVE_TAIL for a failed core. |
-| `TAIL_UNSOLVED` | Follow the tail skill's diagnostic table. It distinguishes epsilon dependence, missing letters/higher poles and the rational backend domain. |
+| `TAIL_UNSOLVED` | Follow the [tail diagnostic table](../canon-solve-tail/SKILL.md#replan-from-the-actual-obstruction) for epsilon dependence, letter span/pole order, backend ansatz or coefficient domain. |
 | `TAIL_FAIL` from CHECK_CANONICAL | Read its failed full-prefix flags. A core that still passes calls for a full representative/tail correction, then SOLVE_TAIL and CHECK_CANONICAL on that changed proposal. |
 | Core `nonrationalinv`, an exhausted epsilon-zero ansatz, or an epsilon-zero no-go claim | Follow direct-DE selection: DIAGNOSE_CORE, then residue-balance when applicable and untried. Preserve the actual limitation; it is not a proof of nonexistence. |
-| `remaining_algebraic_tail_outside_rational_CANONICA_domain` | Use the algebraic branch in the tail skill. Do not remove the rationality check or repeat the same backend call with more time. |
 | `METHOD_EXHAUSTED` or `OUT_OF_SCOPE` without an operational interruption | Record the specific ansatz or capability limit. Select a changed bounded hypothesis or another applicable construction within budget, or report the unresolved scope. |
 | A source-gauge, identity, ordering or committed-prefix check fails | Resolve the named input/convention/composition mismatch before downstream steps. Preserve all lower-sector normalization in the cumulative map. |
 
