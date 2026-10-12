@@ -15,7 +15,7 @@ is not required for every task.
 | Read saved basis and DE files | Mathematica or another licensed Wolfram Language kernel; see [Reading results](results.md) |
 | Run the default scientific components | Python 3.10 or newer for `run_step.py`, and a Wolfram installation providing `wolframscript` |
 | Transform a supplied rational DE, or solve its off-diagonal tail | Wolfram Language and [CANONICA](../external/CANONICA/README), entry `external/CANONICA/src/CANONICA.m` |
-| Use the single-variable Libra methods | Wolfram Language and [Libra](../external/Libra/Readme.md), entry `external/Libra/Source/Libra.m`; the current CANON providers use its Wolfram backend |
+| Use Libra core methods | Wolfram Language and [Libra](../external/Libra/Readme.md), entry `external/Libra/Source/Libra.m`; single-variable default and explicit multivariable directional proposals use its Wolfram backend |
 | Produce IBP reductions | The selected adapter's installed software and dependencies; the default uses [Kira](../external/Kira/README.rst), with Fermat when required by that installation |
 | Generate integral candidates | [DlogBasis-refine](../external/DlogBasis-refine/README.md), entry `external/DlogBasis-refine/DlogBasis.wl`, a working [FiniteFlow](../external/FiniteFlow/README.md) Wolfram interface and native library, and [Singular](../external/Singular/README.md) for the module-lift step; all must be available where the Wolfram kernel executes |
 | Use Fermat-assisted exact algebra | [Fermatica](../external/Fermatica/README.md) and an installed [Fermat](../external/Fermat/README.md); provide `FERMATPATH` |

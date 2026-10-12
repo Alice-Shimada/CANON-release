@@ -241,6 +241,7 @@ Normalize[source_, x_, eps_, budgets_Association] := Module[
     <|"strategy" -> "bounded", "budgets" -> budgets, "dimension" -> n,
       "steps_used" -> Length[accepted], "projectors_tested" -> projectorCount,
       "elapsed_seconds" -> N[AbsoluteTime[] - started], "stopped_stage" -> stage,
+      "timed_out" -> (Lookup[result, "limit_code", None] === "SECONDS_BUDGET"),
       "subspace_policy" -> "individual-tower-prefixes-and-ordered-tower-list-prefixes",
       "initial_singularities" -> initial, "final_singularities" -> final,
       "attempts" -> attempts, "provider_messages" -> diagnostics,

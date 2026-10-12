@@ -270,6 +270,9 @@ EndPackage[];
 $LibraVersion = "1.2";
 $LibraUseFermat = False;
 DependentRowIndices;
+NewDSystem; Fuchsify; Transform; FactorOut; OverallTransformation;
+PolesInfo; LeadingSeriesCoefficient; TClosure; EFormQ;
+Begin["`Private`"];
 SetAttributes[NewDSystem, HoldFirst];
 NewDSystem[ds_Symbol, rule_Rule] := (
   ds["variable"] = First[rule];
@@ -278,15 +281,15 @@ NewDSystem[ds_Symbol, rule_Rule] := (
   Null
 );
 Fuchsify[ds_Symbol, fakeVariable_] := IdentityMatrix[Length[ds[fakeVariable]]];
-Transform[ds_Symbol, transformation_] := (
-  ds[ds["variable"]] = Together[
+Transform[ds_Symbol, transformation_] := Module[{{fakeDirection = ds["variable"]}},
+  ds[fakeDirection] = Together[
     Inverse[transformation].(
-      ds[ds["variable"]].transformation - D[transformation, ds["variable"]]
+      ds[fakeDirection].transformation - D[transformation, fakeDirection]
     )
   ];
   ds["overall"] = Together[ds["overall"].transformation];
   Null
-);
+];
 Options[FactorOut] = {{DependentRowIndices -> Automatic}};
 FactorOut[ds_Symbol, fakeVariable_, fakeRegulator_, 1/2, OptionsPattern[]] := (
   Put[OptionValue[DependentRowIndices], "{capture}"];
@@ -300,6 +303,7 @@ TClosure[m_?MatrixQ] := FixedPoint[
 ];
 OverallTransformation[ds_Symbol][_] := ds["overall"];
 EFormQ[m_, fakeRegulator_] := FreeQ[Together[m/fakeRegulator], fakeRegulator];
+End[];
 EndPackage[];
 ''',
             encoding="utf-8",
@@ -1316,9 +1320,9 @@ EndPackage[];
         script = self.run_root / "check-libra-hierarchy-parity.wls"
         result_path = self.run_root / "libra-hierarchy-parity.wl"
         script.write_text(
-            '''$HistoryLength = 0;
-position = FirstPosition[$CommandLine, "-script"];
-args = Drop[$CommandLine, First[position] + 1];
+            '$HistoryLength = 0;\n'
+            f'Get[{json.dumps(str(ROOT / "mma" / "lib" / "MethodCardCore.wl"))}];\n'
+            '''args = CanonMethodCard`ScriptArguments[];
 {entry, cutPath, outputPath} = args;
 cut = Get[cutPath];
 Get[entry];

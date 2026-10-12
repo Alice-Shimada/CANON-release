@@ -100,6 +100,7 @@ class LibraNormalizationTest(unittest.TestCase):
     def assert_success(self, result: dict, output: Path, basis: Path, cut: Path, transform: str) -> None:
         self.assertEqual((result["status"], result["code"]), ("PROVISIONAL", "CANDIDATE_TRANSFORMATION"))
         evidence = result["summary"]["normalization"]
+        self.assertFalse(evidence["timed_out"])
         self.assertEqual(evidence["transformation"], transform)
         self.assertEqual(evidence["steps_used"], 1)
         self.assertEqual(evidence["attempts"][-1]["metric_after"], 0)
@@ -135,6 +136,7 @@ class LibraNormalizationTest(unittest.TestCase):
         entry = self.wrapped_entry(f'Clear[Libra`GetSubspaces]; Libra`GetSubspaces[___] := (Put[True, {json.dumps(str(marker))}]; {{}});')
         result, _, _, _ = self.provider(kind="jordan", options={"normalization_max_dimension": 1}, entry=entry)
         self.assertEqual(result["summary"]["normalization"]["limit_code"], "DIMENSION_BUDGET")
+        self.assertFalse(result["summary"]["normalization"]["timed_out"])
         self.assertFalse(marker.exists())
 
     def test_step_and_projector_budgets_preserve_partial_transform(self) -> None:
@@ -211,11 +213,14 @@ class LibraNormalizationTest(unittest.TestCase):
 
     def test_seconds_budget_interrupts_public_primitive(self) -> None:
         entry = self.wrapped_entry("Clear[Libra`GetSubspaces]; Libra`GetSubspaces[___] := (Pause[3]; {});")
-        result, _, _, _ = self.provider(options={"normalization_max_seconds": 1}, entry=entry)
+        result, output, _, _ = self.provider(options={"normalization_max_seconds": 1}, entry=entry)
+        self.assertEqual((result["status"], result["code"]), ("INCONCLUSIVE", "METHOD_EXHAUSTED"))
         evidence = result["summary"]["normalization"]
         self.assertEqual(evidence["limit_code"], "SECONDS_BUDGET")
+        self.assertTrue(evidence["timed_out"])
         self.assertEqual(evidence["stopped_stage"], "GetSubspaces")
         self.assertEqual(evidence["steps_used"], 0)
+        self.assertFalse((output / "core-candidates.wl").exists())
 
     def test_noninteger_undecidable_and_irregular_scopes_have_specific_limits(self) -> None:
         for source, code in (("(1/2 + eps)/x", "NONINTEGER_INTERCEPT"),

@@ -42,6 +42,19 @@ For a scientific implementation change, select the corresponding existing
 wolframscript -file tests/RunFullSystemUnitTests.wls
 ```
 
+For Libra core changes, run
+`python3 -m unittest tests.test_libra_normalization tests.test_libra_multivariable -v`.
+These use `CANON_WOLFRAM_KERNEL` or a kernel found on `PATH`. Set
+`CANON_TEST_LIBRA_ENTRY` to an installed `Libra.m` to include the real-package
+cases; otherwise they are explicitly skipped. The multivariable suite covers
+coupled directions, joint coefficient factorization, provider limits, independent
+checks and the existing pipeline through `FINAL_CHECK`, using fixed exact DEs.
+It does not regenerate a physical family's IBP reduction. The optional
+`CANON_TEST_LIBRA_MULTIVARIABLE_OUTPUT_ROOT` retains artifacts in a fresh directory.
+For the shared finite factor-selection policy, also run
+`wolframscript -file tests/RunLibraFactorizationUnitTests.wls`. CLI handoff cases
+use `CANON_WOLFRAMSCRIPT` when declared, or `wolframscript` on `PATH`.
+
 Live Kira/provider tests are separate scripts with explicit installation and
 output arguments. Run them only when the change needs that evidence; the
 [installation guide](docs/installation.md) lists their dependency configuration.

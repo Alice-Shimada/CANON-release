@@ -187,6 +187,7 @@ prefix. A new attempt must change the stated failing hypothesis or input.
 | Result or evidence | Next action |
 |---|---|
 | A matching exact CORE_PASS exists, including when an older diagnostic claimed an obstruction | Reuse that positive witness and follow forward routing to BUILD_FULL_DE. A diagnostic cannot veto a passing gauge identity. |
+| A result or host receipt reports timeout/cancellation, including `METHOD_EXHAUSTED` with `TIME_BUDGET` or `timed_out=true` | Follow section 6: preserve the interrupted stage and owned job, collect or confirm termination, then assess a changed allocation within budget. This is an incomplete attempt; the outer code alone does not select another scientific method. |
 | `ERROR/IBP_EXECUTION_FAILED` | Fix the audit invocation, inputs or options using the diagnostic details. |
 | `FAIL/IBP_CHECK_FAILED` | Read `summary.reason_code` and details through the IBP skill. Extend named target coverage, fix the declared data/order, or complete a timed-out or unsupported check before consumption. A nonpassing gate does not exhaust an IBP method or establish missing masters. |
 | An input/schema/tool error with a result file | Fix the named field, path, convention or installation in the step's skill, then resume that operation using unaffected artifacts. |
@@ -195,7 +196,7 @@ prefix. A new attempt must change the stated failing hypothesis or input.
 | `TAIL_FAIL` from CHECK_CANONICAL | Read its failed full-prefix flags. A core that still passes calls for a full representative/tail correction, then SOLVE_TAIL and CHECK_CANONICAL on that changed proposal. |
 | Core `nonrationalinv`, an exhausted epsilon-zero ansatz, or an epsilon-zero no-go claim | Follow direct-DE selection: DIAGNOSE_CORE, then residue-balance when applicable and untried. Preserve the actual limitation; it is not a proof of nonexistence. |
 | `remaining_algebraic_tail_outside_rational_CANONICA_domain` | Use the algebraic branch in the tail skill. Do not remove the rationality check or repeat the same backend call with more time. |
-| `METHOD_EXHAUSTED` or `OUT_OF_SCOPE` | Record the exhausted method and ansatz. The coordinator selects the next applicable untried branch within budget, or reports the precise unresolved scope. |
+| `METHOD_EXHAUSTED` or `OUT_OF_SCOPE` without an operational interruption | Record the specific ansatz or capability limit. Select a changed bounded hypothesis or another applicable construction within budget, or report the unresolved scope. |
 | A source-gauge, identity, ordering or committed-prefix check fails | Resolve the named input/convention/composition mismatch before downstream steps. Preserve all lower-sector normalization in the cumulative map. |
 
 Method exhaustion describes the attempted ansatz and bounds. If no implemented
@@ -233,7 +234,8 @@ merely to match a generic response-wait default. Use the host's supported
 execution timeout or an explicitly selected [detached execution component](../../components/local-jobs/README.md)
 when needed; retain its job handle and collection route instead of adding a
 second runner. Detachment preserves the user's execution budget. A timed-out
-bounded search is incomplete, not `METHOD_EXHAUSTED`.
+bounded search is incomplete even when an adapter reports `METHOD_EXHAUSTED`
+with timeout evidence; it does not establish scientific exhaustion.
 
 Handle operational failures at the affected stage:
 

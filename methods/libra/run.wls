@@ -8,6 +8,15 @@ If[Length[args] =!= 2, Print["Usage: run.wls <input.json> <output_dir>"]; Quit[2
 {inputPath, outputDir} = ExpandFileName /@ args;
 task = CanonMethodCard`ReadTask[inputPath, "SEARCH_CORE"];
 If[FailureQ[task], Print[InputForm[task]]; Quit[2]];
+methodID = "libra-single-variable";
+Get[FileNameJoin[{repoRoot, "methods", "libra", "Factorization.wl"}]];
+multivariableSummary[evidence_Association] := KeyTake[evidence, {
+  "strategy", "direction_sequence", "completed_directions", "stopped_stage",
+  "factorization_max_equations", "max_wall_seconds", "factorization_equation_count",
+  "factorization_solver_equation_count",
+  "directional_fuchsian", "limit_code", "timed_out", "adapter_source", "adapter_sha256",
+  "reference_regulator_exact", "free_parameter_strategy", "free_parameter_trial_count",
+  "free_parameter_selected_index", "free_parameter_max_trials"}];
 
 writeFailure[
   status_String,
@@ -17,7 +26,7 @@ writeFailure[
 ] := (
   CanonMethodCard`WriteProviderResult[
     task, outputDir, status, code, <||>,
-    Join[<|"method_id" -> "libra-single-variable", "reason" -> reason|>,
+    Join[<|"method_id" -> methodID, "reason" -> reason|>,
       If[AssociationQ[normalizationEvidence],
         <|"normalization" -> normalizationEvidence|>, <||>], evidence]
   ];
@@ -146,16 +155,39 @@ If[
     "Sector, family, basis, or order differs between the task, sector_basis, and sector_cut_de"
   ]
 ];
+If[!And @@ (MatchQ[#, _Symbol] & /@ cut["variables"]) ||
+    !DuplicateFreeQ[cut["variables"]] || MemberQ[cut["variables"], cut["regulator"]],
+  writeFailure["ERROR", "INVALID_DIFFERENTIAL_SYSTEM",
+    "Cut variables must be distinct symbols with a separate regulator"]
+];
 If[!CanonMethodCard`FlatConnectionQ[cut["matrices"], cut["variables"]],
   writeFailure["ERROR", "INVALID_DIFFERENTIAL_SYSTEM", "The input differential connection is not flat"]
 ];
-If[Length[cut["variables"]] =!= 1,
-  writeFailure["INCONCLUSIVE", "OUT_OF_SCOPE", "The current Libra card requires exactly one variable"]
-];
-
 methodOptions = Lookup[Lookup[task, "payload", <||>], "method_options", <||>];
 If[!AssociationQ[methodOptions],
   writeFailure["ERROR", "INVALID_OPTIONS", "method_options must be an Association"]
+];
+factorOptions = CanonLibraFactorization`ReadOptions[methodOptions];
+If[FailureQ[factorOptions],
+  writeFailure["ERROR", "INVALID_OPTIONS", factorOptions[[2, "reason"]]]];
+referenceRegulator = factorOptions["reference_regulator"];
+multivariableRoute = KeyExistsQ[methodOptions, "direction_sequence"];
+If[Length[cut["variables"]] =!= 1 && !multivariableRoute,
+  writeFailure["INCONCLUSIVE", "OUT_OF_SCOPE",
+    "Multivariable Libra requires an explicit direction_sequence"]
+];
+If[multivariableRoute,
+  methodID = "libra-multivariable";
+  directionSequence = methodOptions["direction_sequence"];
+  If[Length[cut["variables"]] < 2 || !ListQ[directionSequence] ||
+      !And @@ (IntegerQ[#] && 1 <= # <= Length[cut["variables"]] & /@ directionSequence),
+    writeFailure["ERROR", "INVALID_OPTIONS",
+      "direction_sequence must be a finite list of variable indexes for a multivariable cut"]];
+  factorizationMaxEquations = Lookup[methodOptions, "factorization_max_equations", 4096];
+  maxWallSeconds = Lookup[methodOptions, "max_wall_seconds", 60];
+  If[!IntegerQ[factorizationMaxEquations] || factorizationMaxEquations <= 0 ||
+      !MatchQ[maxWallSeconds, _Integer | _Rational | _Real] || !TrueQ[maxWallSeconds > 0],
+    writeFailure["ERROR", "INVALID_OPTIONS", "Factorization budgets must be finite and positive"]]
 ];
 normalizationBudgetDefaults = <|
   "normalization_max_steps" -> 8,
@@ -164,7 +196,9 @@ normalizationBudgetDefaults = <|
   "normalization_max_seconds" -> 30
 |>;
 If[Complement[Keys[methodOptions], Join[
-    {"package_entry", "dependent_row_strategy", "normalization_strategy"},
+    {"package_entry", "dependent_row_strategy", "normalization_strategy",
+      "reference_regulator", "free_parameter_strategy", "free_parameter_max_trials"},
+    If[multivariableRoute, {"direction_sequence", "factorization_max_equations", "max_wall_seconds"}, {}],
     Keys[normalizationBudgetDefaults]
   ]] =!= {},
   writeFailure["ERROR", "INVALID_OPTIONS", "method_options contains unknown options"]
@@ -193,6 +227,10 @@ If[normalizationStrategy === "none" &&
     "Normalization budgets require normalization_strategy=bounded"]
 ];
 normalizationEvidence = <|"strategy" -> normalizationStrategy|>;
+If[multivariableRoute && normalizationStrategy =!= "none",
+  writeFailure["INCONCLUSIVE", "OUT_OF_SCOPE",
+    "The multivariable Libra route currently supports normalization_strategy=none"]
+];
 
 hierarchy = None;
 hierarchyPath = None;
@@ -237,20 +275,21 @@ entryHash = Quiet @ Check[FileHash[entry, "SHA256", "HexString"], $Failed];
 If[!StringQ[entryHash] || !StringMatchQ[entryHash, RegularExpression["[0-9a-fA-F]{64}"]],
   writeFailure["ERROR", "TOOL_ERROR", "Cannot compute the Libra entry SHA-256"]
 ];
-requiredSymbols = {
-  "NewDSystem", "Fuchsify", "Transform", "FactorOut",
-  "OverallTransformation", "EFormQ"
-};
+requiredSymbols = If[multivariableRoute,
+  Join[{"NewDSystem", "Transform", "FactorDependence", "GaussSolve", "EFormQ", "FuchsianQ"},
+    If[directionSequence === {}, {}, {"Fuchsify"}]],
+  {"NewDSystem", "Fuchsify", "Transform", "FactorOut", "OverallTransformation", "EFormQ"}];
 If[normalizationStrategy === "bounded",
   requiredSymbols = Join[requiredSymbols, {"GetSubspaces", "Projector", "Balance"}]];
 If[dependentRowStrategy === "sector-de-closure",
-  requiredSymbols = Join[requiredSymbols, {"TClosure", "LeadingSeriesCoefficient", "PolesInfo"}]];
+  requiredSymbols = Join[requiredSymbols, If[multivariableRoute,
+    {"TClosure"}, {"TClosure", "LeadingSeriesCoefficient", "PolesInfo"}]]];
 loadSucceeded = TrueQ[Quiet[Check[(Get[entry]; True), False]]];
 If[!loadSucceeded,
   writeFailure["ERROR", "TOOL_ERROR", "Libra failed to load"]
 ];
 libraSymbolAvailableQ[symbolName_String] :=
-  NameQ["Libra`" <> symbolName] || NameQ["Global`" <> symbolName];
+  NameQ["Libra`" <> symbolName] || (!multivariableRoute && NameQ["Global`" <> symbolName]);
 symbolsAvailable = And @@ (libraSymbolAvailableQ /@ requiredSymbols);
 If[normalizationStrategy === "bounded",
   symbolsAvailable = symbolsAvailable && And @@
@@ -260,6 +299,38 @@ If[!symbolsAvailable,
   writeFailure["ERROR", "TOOL_ERROR", "Libra lacks public symbols required by this card"]
 ];
 Libra`$LibraUseFermat = False;
+
+If[multivariableRoute,
+  multivariableAdapter = FileNameJoin[{repoRoot, "methods", "libra", "Multivariable.wl"}];
+  Get[multivariableAdapter];
+  proposal = CanonLibraMultivariable`Propose[cut, directionSequence,
+    hierarchy, factorizationMaxEquations, maxWallSeconds, factorOptions];
+  multivariableEvidence = Join[proposal["evidence"], <|
+    "adapter_source" -> "methods/libra/Multivariable.wl",
+    "adapter_sha256" -> FileHash[multivariableAdapter, "SHA256", "HexString"]|>];
+  If[dependentRowStrategy === "sector-de-closure",
+    multivariableEvidence["dependent_rows"] = Join[multivariableEvidence["dependent_rows"], <|
+      "hierarchy_id" -> hierarchy["hierarchy_id"],
+      "hierarchy_artifact" -> hierarchyPath, "hierarchy_artifact_sha256" -> hierarchyHash,
+      "mapped_sectors" -> False, "hierarchy_source_artifact" -> hierarchy["provenance"]["source_artifact"],
+      "hierarchy_source_sha256" -> ToLowerCase[hierarchy["provenance"]["source_sha256"]]|>]];
+  If[!TrueQ[proposal["success"]],
+    diagnosticPath = CanonMethodCard`WriteWLArtifact[multivariableEvidence, outputDir, "libra-diagnostic.wl"];
+    If[diagnosticPath === $Failed,
+      writeFailure["ERROR", "OUTPUT_ERROR", "Cannot write the Libra diagnostic artifact"]];
+    resultPath = CanonMethodCard`WriteProviderResult[task, outputDir, "INCONCLUSIVE", "METHOD_EXHAUSTED",
+      <|"libra_diagnostic" -> <|"type" -> "mathematica-expression", "path" -> FileNameTake[diagnosticPath]|>|>,
+      <|"method_id" -> methodID, "reason" -> proposal["reason"],
+        "multivariable" -> multivariableSummary[multivariableEvidence]|>];
+    If[resultPath === $Failed, Print["Failed to write result.json"]; Quit[1]];
+    Quit[0]];
+  transformation = proposal["transformation"];
+  transformedMatrices = proposal["transformed_matrices"];
+  newBasisRows = proposal["full_new_basis_rows"];
+  providerEFormQ = True;
+  strategyEvidence = multivariableEvidence["dependent_rows"];
+  providerEvidence = KeyDrop[multivariableEvidence,
+    {"transformation", "transformed_matrices", "source_basis", "variables", "regulator"}],
 
 variable = First[cut["variables"]];
 regulator = cut["regulator"];
@@ -304,11 +375,19 @@ If[!TrueQ[Quiet @ Check[Transform[cardSystem, fuchsTransformation]; True, False]
 strategyEvidence = <|
   "dependent_row_strategy" -> dependentRowStrategy,
   "hierarchy_stage" -> "post-fuchsify-residue-matrices",
-  "specialization_policy" -> "C[*] -> 1"
+  "specialization_policy" -> factorOptions["free_parameter_strategy"],
+  "reference_regulator_exact" -> factorOptions["reference_regulator_exact"]
 |>;
+referenceMatrix = Quiet[Check[Map[Together, cardSystem[variable]/regulator, {2}] /.
+  regulator -> referenceRegulator, $Failed]];
+If[!MatrixQ[referenceMatrix] ||
+    !And @@ (CanonMethodCard`ExactRationalExpressionQ /@ Flatten[referenceMatrix]),
+  writeFailure["INCONCLUSIVE", "METHOD_EXHAUSTED", "The selected regulator reference is singular",
+    <|"limit_code" -> "REFERENCE_EPSILON_SINGULAR",
+      "reference_regulator_exact" -> factorOptions["reference_regulator_exact"]|>]];
 If[dependentRowStrategy === "automatic",
-  factorTransformation = Quiet @ Check[
-    FactorOut[cardSystem, variable, regulator, 1/2] /. _C -> 1,
+  factorTemplate = Quiet @ Check[
+    FactorOut[cardSystem, variable, regulator, referenceRegulator],
     $Failed
   ],
   n = Length[cut["basis"]];
@@ -356,20 +435,30 @@ If[dependentRowStrategy === "automatic",
       strategyEvidence
     ]
   ];
-  factorTransformation = Quiet @ Check[
+  factorTemplate = Quiet @ Check[
     FactorOut[
-      cardSystem, variable, regulator, 1/2,
+      cardSystem, variable, regulator, referenceRegulator,
       DependentRowIndices -> combinedMask
-    ] /. _C -> 1,
+    ],
     $Failed
   ]
 ];
-If[factorTransformation === $Failed || !MatrixQ[factorTransformation],
+If[factorTemplate === $Failed || !MatrixQ[factorTemplate],
   writeFailure[
     "INCONCLUSIVE", "METHOD_EXHAUSTED",
     "Libra FactorOut produced no matrix transformation", strategyEvidence
   ]
 ];
+freeParameters = DeleteDuplicates[Cases[factorTemplate, _C, Infinity]];
+factorSelection = CanonLibraFactorization`SelectFactor[factorTemplate, freeParameters, factorOptions,
+  Function[{candidate, specification}, If[factorOptions["free_parameter_strategy"] === "ones", <||>,
+    <|"epsilon_factorized" -> CanonMethodCard`EpsilonFactorizedQ[
+      CanonMethodCard`GaugeTransform[{cardSystem[variable]}, {variable}, candidate], regulator]|>]]];
+strategyEvidence = Join[strategyEvidence, factorSelection["evidence"]];
+If[!TrueQ[factorSelection["success"]],
+  writeFailure["INCONCLUSIVE", "METHOD_EXHAUSTED", "No tried free-parameter point supplied a valid factor",
+    Join[strategyEvidence, <|"limit_code" -> factorSelection["limit_code"]|>]]];
+factorTransformation = factorSelection["factor"];
 If[!TrueQ[Quiet @ Check[Transform[cardSystem, factorTransformation]; True, False]],
   writeFailure["INCONCLUSIVE", "METHOD_EXHAUSTED", "Libra could not apply the FactorOut transformation"]
 ];
@@ -382,6 +471,16 @@ providerEFormQ = TrueQ @ Quiet @ Check[EFormQ[transformed, regulator], False];
 If[!providerEFormQ,
   writeFailure["INCONCLUSIVE", "METHOD_EXHAUSTED", "The Libra stages produced no epsilon-form candidate"]
 ];
+transformedMatrices = {transformed};
+newBasisRows = Map[Together, Inverse[transformation], {2}];
+providerEvidence = <|
+  "check_eps_form" -> providerEFormQ,
+  "stages" -> If[normalizationStrategy === "bounded",
+    {"BoundedNormalization", "Fuchsify", "FactorOut"}, {"Fuchsify", "FactorOut"}],
+  "factor_out_mu" -> referenceRegulator,
+  "reference_regulator_exact" -> factorOptions["reference_regulator_exact"], "use_fermatica" -> False,
+  "dependent_rows" -> strategyEvidence, "normalization" -> normalizationEvidence|>
+];
 
 candidateArtifact = <|
   "schema" -> "canon-neu/core-candidates/v1",
@@ -391,11 +490,11 @@ candidateArtifact = <|
   "coefficient_domain" -> "exact-rational-functions",
   "basis" -> cut["basis"],
   "source_basis" -> cut["basis"],
-  "variables" -> {variable},
-  "regulator" -> regulator,
+  "variables" -> cut["variables"],
+  "regulator" -> cut["regulator"],
   "convention" -> "old_basis = transformation . new_basis",
   "method" -> <|
-    "id" -> "libra-single-variable",
+    "id" -> methodID,
     "tool" -> "Libra",
     "tool_identity" -> Libra`$LibraVersion,
     "package_source" -> package["source"],
@@ -409,22 +508,14 @@ candidateArtifact = <|
     "unconsumed_candidates" -> 0, "pool_exhausted" -> True|>,
   "candidates" -> {
     <|
-      "candidate_id" -> "libra-single-variable:1",
-      "member_candidate_ids" -> Table["libra-single-variable:row:" <> ToString[i],
+      "candidate_id" -> methodID <> ":1",
+      "member_candidate_ids" -> Table[methodID <> ":row:" <> ToString[i],
         {i, Length[cut["basis"]]}],
-      "full_new_basis_rows" -> Map[Together, Inverse[transformation], {2}],
+      "full_new_basis_rows" -> newBasisRows,
       "construction_rejection" -> None,
       "transformation" -> transformation,
-      "transformed_matrices" -> {transformed},
-      "provider_evidence" -> <|
-        "check_eps_form" -> providerEFormQ,
-        "stages" -> If[normalizationStrategy === "bounded",
-          {"BoundedNormalization", "Fuchsify", "FactorOut"}, {"Fuchsify", "FactorOut"}],
-        "factor_out_mu" -> 1/2,
-        "use_fermatica" -> False,
-        "dependent_rows" -> strategyEvidence,
-        "normalization" -> normalizationEvidence
-      |>
+      "transformed_matrices" -> transformedMatrices,
+      "provider_evidence" -> providerEvidence
     |>
   }
 |>;
@@ -439,14 +530,15 @@ resultPath = CanonMethodCard`WriteProviderResult[
   "PROVISIONAL",
   "CANDIDATE_TRANSFORMATION",
   <|"core_candidates" -> <|"type" -> "mathematica-expression", "path" -> FileNameTake[artifactPath]|>|>,
-  <|
-    "method_id" -> "libra-single-variable",
+  Join[<|
+    "method_id" -> methodID,
     "tool" -> "Libra",
     "provider_check_eps_form" -> providerEFormQ,
     "candidate_count" -> 1,
     "dependent_rows" -> strategyEvidence,
     "normalization" -> normalizationEvidence
-  |>
+  |>, If[multivariableRoute,
+    <|"multivariable" -> multivariableSummary[multivariableEvidence]|>, <||>]]
 ];
 If[resultPath === $Failed, Print["Failed to write result.json"]; Quit[1]];
 Quit[0];
