@@ -194,6 +194,12 @@ class TailControlsTest(unittest.TestCase):
                 self.assertEqual(result["summary"]["reason"], "tail_checkpoint_shape_or_domain")
 
     def test_malformed_backend_matrices_stop_before_lift_or_publication(self):
+        # A moving pole is outside the new built-in fixed-pole repair, so the
+        # malformed normalization fixtures still reach the provider API.
+        unsupported = self.directory / "moving-pole.wl"
+        unsupported.write_text(FULL.replace(
+            'raw = Map[Together,(D[known,x]+known.target).Inverse[known],{2}];',
+            'raw = ReplacePart[target,{3,1}->1/(x-eps)^2];'))
         two_current = self.directory / "two-current.wl"
         two_current_core = self.directory / "two-current-core.wl"
         two_current_core.write_text(CORE.replace('"basis"->{j}', '"basis"->{j1,j2}'))
@@ -216,8 +222,8 @@ class TailControlsTest(unittest.TestCase):
             ("symbol", "subsector", self.full, "subsector_no_transformation"),
             ("approximate", "subsector", self.full, "subsector_no_transformation"),
             ("off-shape", "monolithic", self.full, "backend_no_transformation"),
-            ("normalization-shape", "monolithic", self.full, "epsilon_normalization_no_transformation"),
-            ("normalization-singular", "monolithic", self.full, "epsilon_normalization_no_transformation"),
+            ("normalization-shape", "monolithic", unsupported, "epsilon_normalization_no_transformation"),
+            ("normalization-singular", "monolithic", unsupported, "epsilon_normalization_no_transformation"),
         ):
             with self.subTest(mode=mode):
                 fake = self.directory / f"fake-{mode}.m"

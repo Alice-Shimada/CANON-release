@@ -35,6 +35,68 @@ class RequestBindingTest(unittest.TestCase):
                 "step": "BUILD_CUT_DE", "sector": {"id": 3, "propagator_count": 2},
                 "payload": payload}
 
+    def tail_result(self, tree, **changes):
+        value = {"schema": "canon-neu/script-result/v1", "step": "SOLVE_TAIL",
+                 "status": "INCONCLUSIVE", "code": "TAIL_UNSOLVED",
+                 "artifacts": {"tail_checkpoint": {
+                     "type": "mathematica-expression", "path": "checkpoint.wl",
+                     "sha256": "a" * 64},
+                     "sector_transform": {"type": "mathematica-expression", "path": "unsafe.wl"}}}
+        value.update(changes)
+        save(tree / "producer/result.json", value)
+        return {"from_result": "../producer/result.json", "artifact": "tail_checkpoint"}
+
+    def test_tail_continuation_preserves_descriptor_and_budget(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            tree = Path(temporary).resolve()
+            reference = self.tail_result(tree)
+            template = {**self.template({"tail_checkpoint": reference,
+                         "method_options": {"max_wall_seconds": 17, "tail_strategy": "subsector"}}),
+                        "step": "SOLVE_TAIL"}
+            output = tree / "bound"
+            process, result = self.call(tree, template, output)
+            self.assertEqual(process.returncode, 0, result)
+            payload = json.loads((output / "request.json").read_text())["payload"]
+            self.assertEqual(payload["tail_checkpoint"]["type"], "mathematica-expression")
+            self.assertEqual(payload["tail_checkpoint"]["sha256"], "a" * 64)
+            self.assertEqual((output / payload["tail_checkpoint"]["path"]).resolve(),
+                             tree / "producer/checkpoint.wl")
+            self.assertEqual(payload["method_options"], template["payload"]["method_options"])
+
+    def test_tail_continuation_exception_is_scoped_to_one_producer_and_slot(self):
+        changes = ({"schema": "other"}, {"step": "CHECK_CANONICAL"},
+                   {"status": "FAIL"}, {"status": "ERROR"}, {"code": "OTHER"})
+        for change in changes:
+            with self.subTest(change=change), tempfile.TemporaryDirectory() as temporary:
+                tree = Path(temporary).resolve()
+                reference = self.tail_result(tree, **change)
+                template = {**self.template({"tail_checkpoint": reference}), "step": "SOLVE_TAIL"}
+                output = tree / "bound"
+                _, result = self.call(tree, template, output)
+                self.assertEqual(result["code"], "REQUEST_BINDING_FAILED")
+                self.assertFalse((output / "request.json").exists())
+        for slot in ("nested", "list", "other_step", "other_artifact", "cache_hit"):
+            with self.subTest(slot=slot), tempfile.TemporaryDirectory() as temporary:
+                tree = Path(temporary).resolve()
+                reference = self.tail_result(tree)
+                payload = {"tail_checkpoint": reference}
+                step = "SOLVE_TAIL"
+                if slot == "nested":
+                    payload = {"nested": payload}
+                elif slot == "list":
+                    payload = {"tail_checkpoint": [reference]}
+                elif slot == "other_step":
+                    step = "BUILD_FULL_DE"
+                elif slot == "other_artifact":
+                    payload = {"tail_checkpoint": {**reference, "artifact": "sector_transform"}}
+                else:
+                    payload["sector_transform"] = {**reference, "artifact": "sector_transform"}
+                template = {**self.template(payload), "step": step}
+                output = tree / "bound"
+                _, result = self.call(tree, template, output)
+                self.assertEqual(result["code"], "REQUEST_BINDING_FAILED")
+                self.assertFalse((output / "request.json").exists())
+
     def test_moved_nested_bindings_keep_producer_metadata_and_literal_paths(self):
         with tempfile.TemporaryDirectory(prefix="canon bindings ") as temporary:
             original = Path(temporary) / "original"

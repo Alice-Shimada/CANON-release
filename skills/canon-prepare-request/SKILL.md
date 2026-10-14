@@ -33,5 +33,11 @@ Success returns `PASS/REQUEST_READY` and the `request` artifact. Run that genera
 JSON through `run_step.py`, carrying the selected components again. Preparation
 does not run the target step, select a method, or accept a scientific result.
 Producer hashes and descriptor metadata are preserved; the consuming scientific
-component owns its input checks. Missing artifacts or unsuitable producer results
+component owns its input checks. A bounded tail continuation may bind the
+`tail_checkpoint` from `SOLVE_TAIL` with `INCONCLUSIVE/TAIL_UNSOLVED` into the
+direct `payload.tail_checkpoint` of another `SOLVE_TAIL` request. The descriptor
+and budget remain unchanged; other artifacts from that unsuccessful result
+remain unusable. The tail consumer checks its file hash, complete source binding,
+partition and exact D shape/domain as usual.
+Missing artifacts or unsuitable producer results
 return `ERROR/REQUEST_BINDING_FAILED` without a partially bound request.

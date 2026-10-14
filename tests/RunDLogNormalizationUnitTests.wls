@@ -44,7 +44,7 @@ full = <|"source_basis"->{j1,j2,j3,j4}, "source_matrices"->raw,
 completed = Quiet[CanonTailCompletion`CompleteAlgebraicTail[full,selected], Solve::svars];
 bounded = CanonTailCompletion`Private`completeDLogEpsilon[full,
   {{IdentityMatrix[4],raw}}, {}, 0.001];
-tooLarge = Join[full,<|"source_basis"->Range[65]|>];
+tooLarge = Join[full,<|"source_basis"->Range[129]|>];
 dimensionBound = CanonTailCompletion`Private`completeDLogEpsilon[tooLarge,{}, {}, 1];
 systemBound = CanonTailCompletion`Private`completeDLogEpsilon[full,
   {{IdentityMatrix[4],raw}}, Table[x+i,{i,129}], 10];

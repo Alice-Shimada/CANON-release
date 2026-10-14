@@ -14,6 +14,10 @@ Taccepted = DiagonalBlock[Tlower, IdentityMatrix[currentDimension]].Tfull
 ```
 
 and the accepted basis is `Inverse[Tfull].Join[acceptedLower, rawCurrent]`.
+The implementation publishes this equivalent basis as collected coefficients
+of the original masters. It recovers the previous inverse from those definitions
+when their exact reconstruction and matrix identity pass, keeping cumulative
+bases compact without repeatedly inverting the growing lower transformation.
 Use the entire new basis, cumulative map, and checked matrices, including any
 normalization of earlier sectors. Keep earlier artifacts intact, append the
 sector and candidate traces in resident order, and derive a stable

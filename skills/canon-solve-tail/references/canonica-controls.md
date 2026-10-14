@@ -28,6 +28,11 @@ and calls `CalculateNextSubsectorD` once per remaining lower block. Trace entry
 counts are not matrix widths. The completed D is lifted into the full prefix,
 then full-prefix epsilon normalization runs. Stage messages, block bounds,
 timing, attempted ansatz and stopped reason are retained in `summary.backend`.
+Its `dlog_epsilon_normalization` receipt reports the built-in post-D stage,
+exact sparse-row statistics and any supported pole repair. These automatic
+operations use the same wall budget and outgoing transformation contract.
+The receipt records the built-in normalizer and pole-helper hashes captured when
+loaded, separately from the native D package hash used by the checkpoint.
 
 For a directed attempt, provide `payload.d_ansatz`, a SHA-256 descriptor for
 `canon-neu/canonica-rational-ansatz/v1`, with `kind -> "D"`. Its `identity`
@@ -47,6 +52,9 @@ with `tail_strategy="subsector"` to continue the remaining blocks. Validation
 binds the complete source, selected candidate, base transformation, active rows,
 partition and package entry hash; it also checks the partial D's shape and
 rational domain. Changed sources or malformed checkpoints return input errors.
+The package hash identifies the D backend entry. The built-in post-D normalizer
+is a separate CANON module, so changing it does not masquerade as a changed D
+package. Cross-package checkpoint compatibility is still not assumed.
 Checkpoint progress establishes no canonical claim. A resumed complete result
 still goes through CHECK_CANONICAL and FINAL_CHECK. The step budget is local to
 the new attempt; no automatic resume or budget increase occurs.
@@ -55,7 +63,8 @@ the new attempt; no automatic resume or budget increase occurs.
 
 For a backend failure, `summary.backend_stage` is `TransformOffDiagonalBlock`
 (off-diagonal completion on the active closure) or `TransformDlogToEpsForm`
-(full-prefix epsilon normalization). The `backend_failure` descriptor points to
+(native full-prefix epsilon normalization), or `CompleteDLogTail` when the
+built-in post-D completion stopped. The `backend_failure` descriptor points to
 `backend-failure.wl`, a `canon-neu/tail-backend-failure/v1` Association. It records
 the stage, candidate, resolved package entry, and immediate call context:
 variables, backend regulator, active positions, sector boundaries, initial

@@ -14,7 +14,7 @@ runStep[name_, script_, step_, sector_, payload_] := Module[{input, output, proc
   Export[input, <|"schema" -> "canon-neu/script-input/v1",
     "task_id" -> name, "step" -> step, "sector" -> sector,
     "payload" -> payload|>, "RawJSON"];
-  process = RunProcess[{"wolframscript", "-file",
+  process = RunProcess[{Replace[Environment["CANON_WOLFRAMSCRIPT"], Except[_String] -> "wolframscript"], "-file",
     FileNameJoin[{repoRoot, "mma", script}], input, output}];
   <|"process" -> process, "output" -> output,
     "result" -> Import[FileNameJoin[{output, "result.json"}], "RawJSON"]|>
@@ -189,6 +189,17 @@ build2 = runStep["build-2", "BuildFullSectorDE.wls", "BUILD_FULL_DE", sector2,
     "accepted_prefix" -> descriptor[accepted1Path]|>];
 full2 = artifact[build2, "full_sector_de"];
 
+(* Preserve the legacy nonzero upper-right route as well as the zero shortcut. *)
+orderedUpper = ReplacePart[ordered2, {"matrices", 1, 1, 3} -> 1/x];
+orderedUpperPath = put["ordered-upper", orderedUpper];
+buildUpper = runStep["build-upper", "BuildFullSectorDE.wls", "BUILD_FULL_DE", sector2,
+  <|"ordered_master_de" -> descriptor[orderedUpperPath],
+    "sector_cut_de" -> descriptor[cut2Path], "core_candidates" -> descriptor[coreCandidates2Path],
+    "core_transform" -> descriptor[coreTransform2Path],
+    "declared_alphabet" -> descriptor[alphabet2Path],
+    "accepted_prefix" -> descriptor[accepted1Path]|>];
+expectedUpper = Map[Together, Inverse[T0].(First[orderedUpper["matrices"]].T0-D[T0,x]), {2}];
+
 tests = {
   VerificationTest[
     Lookup[commit0["result", "summary"],
@@ -253,7 +264,11 @@ tests = {
     full2["accepted_prefix_transformation"] === T0 &&
     sameMatrices[full2["source_matrices"], {source2}] &&
     full2["source_positions"] === {1, 2, 3},
-    True, TestID -> "committed-prefix-feeds-the-next-full-sector-build"]
+    True, TestID -> "committed-prefix-feeds-the-next-full-sector-build"],
+  VerificationTest[
+    buildUpper["result", "status"] === "PASS" &&
+    sameMatrices[artifact[buildUpper, "full_sector_de"]["source_matrices"], {expectedUpper}],
+    True, TestID -> "nonzero-upper-right-retains-original-exact-gauge"]
 };
 
 report = TestReport[tests];

@@ -61,12 +61,18 @@ T0 = If[lowerDimension === 0, IdentityMatrix[currentDimension], ArrayFlatten[{
   {ConstantArray[0, {currentDimension, lowerDimension}], IdentityMatrix[currentDimension]}
 }]];
 sourceMatrices = If[accepted === Null, rawMatrices,
-  With[{lower = Range[lowerDimension], current = lowerDimension + Range[currentDimension],
-      inverseLower = Inverse[lowerTransformation]},
+  With[{lower = Range[lowerDimension], current = lowerDimension + Range[currentDimension]},
+    (* The resident sector order usually makes this block exactly zero.
+       Do not invert an ever-growing lower map to multiply that zero. *)
+    upperRight = If[AllTrue[rawMatrices,
+        CanonMethodCard`ZeroMatrixQ[#[[lower, current]]] &],
+      ConstantArray[ConstantArray[0, {lowerDimension, currentDimension}], Length[rawMatrices]],
+      With[{inverseLower = Inverse[lowerTransformation]},
+        (inverseLower.#[[lower, current]] &) /@ rawMatrices]];
     MapThread[ArrayFlatten[{
-      {#2, inverseLower.#1[[lower, current]]},
+      {#2, #3},
       {Map[Together, #1[[current, lower]].lowerTransformation, {2}], #1[[current, current]]}
-    }] &, {rawMatrices, accepted["matrices"]}]
+    }] &, {rawMatrices, accepted["matrices"], upperRight}]
   ]
 ];
 sourceProjection = Table[Boole[source === target],

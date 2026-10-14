@@ -33,14 +33,14 @@ basis = <|"schema"->"canon-neu/sector-basis/v1","family_id"->family,
   "basis_id"->"current","sector"->sector,"basis"->{j4}|>;
 cut = Join[KeyDrop[basis,"schema"],<|"schema"->"canon-neu/sector-cut-de/v1",
   "coefficient_domain"->"exact-rational-functions","variables"->vars,"regulator"->eps,
-  "matrices"->ConstantArray[{{0}},3],"sector_boundaries"->{{1,1}}|>];
+  "matrices"->ConstantArray[{{0}},Length[vars]],"sector_boundaries"->{{1,1}}|>];
 pool = Join[KeyDrop[cut,{"schema","matrices","sector_boundaries"}],
   <|"schema"->"canon-neu/core-candidates/v1","source_basis"->{j4},
   "candidate_group_pool"-><|"declared"->1,"eligible"->1,"remaining"->0,"pool_exhausted"->True|>,
   "convention"->"old_basis = transformation . new_basis",
   "method"-><|"id"->"identity-fixture","tool"->"none"|>,
   "candidates"->{<|"candidate_id"->"identity","member_candidate_ids"->{"identity"},
-    "construction_rejection"->None,"transformation"->{{1}},"transformed_matrices"->ConstantArray[{{0}},3],
+    "construction_rejection"->None,"transformation"->{{1}},"transformed_matrices"->ConstantArray[{{0}},Length[vars]],
     "full_new_basis_rows"->{{1}},"provider_evidence"-><||>|>}|>];
 previous = <|"schema"->"canon-neu/accepted-prefix/v1","family_id"->family,
   "source_basis"->{j1,j2,j3},"basis"->Inverse[previousT].{j1,j2,j3},
@@ -162,6 +162,52 @@ class AlgebraicDLogTailTest(unittest.TestCase):
         self.assertEqual((tail[0]["status"], tail[0]["code"]), ("INCONCLUSIVE", "TAIL_UNSOLVED"))
         self.assertEqual(tail[0]["summary"]["builtin_completion"]["dlog_epsilon_normalization"]["stage"], "wall_budget")
         self.assertEqual(tail[0]["artifacts"], {})
+
+    def test_rational_post_d_repair_uses_the_same_workflow_through_final_check(self):
+        rational = r'''
+vars={x}; letters={x,x-1};
+rs=Normal /@ {SparseArray[{{1,2}->1,{4,2}->1},{4,4}],
+  SparseArray[{{4,3}->1},{4,4}]};
+normalization=DiagonalMatrix[{1/(1+eps),1/(1+eps),1/(1+2 eps),1}];
+shear=IdentityMatrix[4];
+shear[[4,1;;3]]={1/(eps x^2),1/((1+eps)(x+1)),x^2/eps};
+known=normalization.shear;
+target={eps (rs[[1]]/x+rs[[2]]/(x-1))};
+mixed={Map[Together,(known.First[target]+D[known,x]).Inverse[known],{2}]};
+'''
+        start, end = FIXTURES.index("vars ="), FIXTURES.index("previousT =")
+        script = self.directory / "rational-fixtures.wls"
+        script.write_text((FIXTURES[:start] + rational + FIXTURES[end:])
+                          .replace("CORE_PATH", str(ROOT / "mma/lib/MethodCardCore.wl"))
+                          .replace("OUTPUT_PATH", str(self.directory)))
+        self.kernel(script)
+        # A controlled completed D frame isolates the module's new post-D
+        # capability. Exact independent checks below use the original source.
+        entry = self.directory / "completed-d.m"
+        entry.write_text('''BeginPackage["CANONICA`"];
+eps; VerbosityLevel; DDeltaNumeratorDegree;
+TransformOffDiagonalBlock[v_,b_,t_,a_,___]:={t,a};
+TransformDlogToEpsForm[___]:=Abort[];
+EndPackage[];
+''')
+        full, core = self.full_de()
+        tail = self.invoke("SOLVE_TAIL", {"full_sector_de": full, "core_transform": core,
+            "method_options": {"package_entry": str(entry)}})
+        self.assertEqual(tail[0]["code"], "TAIL_READY")
+        evidence = tail[0]["summary"]["backend"]["dlog_epsilon_normalization"]
+        self.assertGreater(evidence["pole_repair"]["corrections"], 0)
+        check = self.invoke("CHECK_CANONICAL", {"full_sector_de": full,
+            "sector_transform": self.artifact(tail, "sector_transform")})
+        self.assertEqual(check[0]["code"], "CANONICAL_PASS")
+        self.assertTrue(all(check[0]["summary"]["full_checks"].values()))
+        commit = self.invoke("COMMIT_SECTOR", {"previous_accepted_prefix": self.ref("previous"),
+            "sector_basis": self.ref("basis"), "sector_transform": self.artifact(tail, "sector_transform"),
+            "canonical_sector_de": self.artifact(check, "canonical_sector_de")})
+        final = self.invoke("FINAL_CHECK", {"prepared_family": self.ref("prepared"),
+            "master_basis": self.ref("masters"), "sector_manifest": self.ref("manifest"),
+            "ordered_master_de": self.ref("ordered"),
+            "accepted_prefix": self.artifact(commit, "accepted_prefix")})
+        self.assertEqual((final[0]["status"], final[0]["code"]), ("PASS", "ALL_PASS"))
 
 
 if __name__ == "__main__":

@@ -54,9 +54,11 @@ RunBackend[task_, inputPath_, full_, core_, baseT_, matrices_, options_] := Modu
    ansatzInfo = <||>, checkpoint, previousD, columns, completed, stage, result, lifted,
    embedding, fullBounds, normalized, started, seconds, diagnostics = {}, steps = 0,
    checkpointValue, inputContextPath = $ContextPath, failure, record,
-   rationalMatrixQ, checkedResultQ, backendFailure, normalizationMatrices},
+   rationalMatrixQ, checkedResultQ, backendFailure, normalizationMatrices, completion = None,
+   normalizationStage = "CompleteDLogTail"},
   failure[reason_, error_:False, extra_:<||>] := Join[<|"success" -> False,
-    "reason" -> reason, "input_error" -> error, "diagnostics" -> diagnostics|>, extra];
+    "reason" -> reason, "input_error" -> error, "diagnostics" -> diagnostics,
+    "dlog_epsilon_normalization" -> If[AssociationQ[completion], Lookup[completion, "diagnostics", <||>], <||>]|>, extra];
   package = CanonMethodCard`ResolveMethodPackage[task, inputPath, "CANONICA`"];
   If[FailureQ[package], Return[failure["canonica_package_unavailable", True,
     <|"error_code" -> If[package[[1]] === "METHOD_PACKAGE_UNAVAILABLE",
@@ -195,25 +197,38 @@ RunBackend[task_, inputPath_, full_, core_, baseT_, matrices_, options_] := Modu
   If[seconds[] <= 0, Return[failure["epsilon_normalization_budget_exhausted", False,
     If[options["tail_strategy"] === "subsector", <|"checkpoint" -> checkpointValue[]|>, <||>]]]];
   fullBounds = If[lower === 0, {{1, dim}}, {{1, lower}, {lower + 1, dim}}];
-  normalizationMatrices = CanonMethodCard`GaugeTransform[
-    matrices /. regulator -> CANONICA`eps, variables, lifted];
   record = CanonCANONICAControl`CaptureStage[
-    CANONICA`TransformDlogToEpsForm[variables, fullBounds, lifted,
-      normalizationMatrices,
-      CANONICA`VerbosityLevel -> 1], "epsilon_normalization", Last[fullBounds], seconds[], ansatzInfo];
+    CanonMethodCard`GaugeTransform[matrices /. regulator -> CANONICA`eps, variables, lifted],
+    "post_D_frame", Last[fullBounds], seconds[], ansatzInfo];
+  AppendTo[diagnostics, record["diagnostics"]]; normalizationMatrices = record["result"];
+  If[!ListQ[normalizationMatrices], Return[failure[
+    If[TrueQ[record["diagnostics", "timed_out"]], "epsilon_normalization_budget_exhausted",
+      "epsilon_normalization_frame_failed"], False,
+    If[options["tail_strategy"] === "subsector", <|"checkpoint" -> checkpointValue[]|>, <||>]]]];
+  record = CanonCANONICAControl`CaptureStage[
+    normalizationStage = "CompleteDLogTail";
+    completion = CanonTailCompletion`CompleteDLogTail[normalizationMatrices,
+      variables, CANONICA`eps, lower, full["alphabet"] /. regulator -> CANONICA`eps, seconds[]];
+    If[TrueQ[completion["solved"]],
+      {Map[Together, lifted.completion["transformation"], {2}], completion["matrices"]},
+      normalizationStage = "TransformDlogToEpsForm";
+      CANONICA`TransformDlogToEpsForm[variables, fullBounds, lifted,
+        normalizationMatrices, CANONICA`VerbosityLevel -> 1]],
+    "epsilon_normalization", Last[fullBounds], seconds[], ansatzInfo];
   AppendTo[diagnostics, record["diagnostics"]]; normalized = record["result"];
   If[!ListQ[normalized] || Length[normalized] < 2 || First[normalized] === False ||
       !checkedResultQ[normalized[[1]], {dim, dim}, True,
         "epsilon_normalization_result_check", Last[fullBounds]],
     Return[Join[backendFailure["epsilon_normalization_no_transformation",
-      "TransformDlogToEpsForm", lifted, Range[dim], fullBounds, normalizationMatrices,
-      {CANONICA`VerbosityLevel -> 1},
+      normalizationStage, lifted, Range[dim], fullBounds, normalizationMatrices,
+      If[normalizationStage === "TransformDlogToEpsForm", {CANONICA`VerbosityLevel -> 1}, {}],
       Extract[OwnValues[normalized], {1, 2}, HoldComplete]],
       If[options["tail_strategy"] === "subsector", <|"checkpoint" -> checkpointValue[]|>, <||>]]]];
   <|"success" -> True, "backend_transformation" -> (normalized[[1]] /. CANONICA`eps -> regulator),
     "diagnostics" -> diagnostics, "tail_strategy" -> options["tail_strategy"],
     "boundaries" -> bounds, "active_rows" -> active,
     "completed_lower_blocks" -> completed, "steps_this_attempt" -> steps,
+    "dlog_epsilon_normalization" -> If[AssociationQ[completion], Lookup[completion, "diagnostics", <||>], <||>],
     "resumed" -> (checkpoint =!= None), "entry_sha256" -> entryHash, "ansatz" -> ansatzInfo|>
 ];
 End[];

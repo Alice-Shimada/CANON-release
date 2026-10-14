@@ -46,7 +46,7 @@ structure. The agent does not dispatch the internal branches separately.
 | One current master and one supported quadratic root | A neutral lower lift when needed, then a primitive with coefficient `1/(1+2 c eps)` from the scalar radicand residue. This can remove higher poles of a `1/q` primitive. |
 | Several current masters | A bounded completion from the simplest row and its first derivatives; an exact full-rank cut aligns the rows. |
 | Remaining algebraic connection with kinematically constant dlog residues | Solve the full-prefix residue intertwiner for an exact rational function of epsilon, including gauges singular at epsilon zero. |
-| Remaining rational coefficients | CANONICA off-diagonal completion and full-prefix epsilon normalization. |
+| Remaining rational coefficients | CANONICA off-diagonal completion, then supported fixed-pole lower-shear repair and full-prefix epsilon normalization. |
 
 Each completion still needs the existing exact epsilon and shared-dlog gates.
 None of these ansatzes is a complete solver for arbitrary algebraic tails.
@@ -57,14 +57,30 @@ the outgoing claim.
 
 The algebraic dlog normalization is an internal fallback, after the existing
 primitive and derivative proposals. It uses the same `max_wall_seconds` control
-(60 seconds by default), with fixed finite bounds: dimension 64, alphabet 128,
+(60 seconds by default), with fixed finite bounds: dimension 128, alphabet 128,
 400,000 equations, algebraic field basis 256, and two million stored sparse
-coefficients or coefficient updates. It tries exact nonzero reference values and
+coefficients (with a separate bound on the resulting nullspace). It tries exact nonzero reference values and
 finite free-parameter choices; it does not solve arbitrary kinematic gauges or
 remove higher-order poles. Its optional
 `summary.builtin_completion.dlog_epsilon_normalization` receipt records the
 actual stage, including a time or size limit. Such a limit or failed search
 remains inconclusive. The rational backend retains its whole-input domain guard.
+
+After rational D completion, the same full-prefix residue solver runs inside
+SOLVE_TAIL. It assembles individual linear coefficients, reduces rational rows
+first and orders them by sparsity; regulator-dependent rows are reduced exactly
+over the rational-function field. Every full-prefix equation and free direction
+is retained, including inactive-to-active couplings. Already epsilon-factorized
+residues need no linear solve. This stage shares the remaining backend wall
+budget and retains the native normalization fallback.
+
+For one rational variable, epsilon-Fuchsian lower/current diagonal blocks and
+fixed rational poles, a bounded lower shear first removes higher finite poles
+and polynomial infinity terms. Its 64 corrections, dimension 128 and two-million
+Sylvester-entry limits are internal bounds. Unsupported roots, moving poles or
+diagonal blocks retain the existing fallback. The shear preserves both diagonal
+blocks and checks the complete exact differential gauge identity. This capability
+uses the existing SOLVE_TAIL request and independent CHECK_CANONICAL gate.
 
 Before assigning an expensive experimental tail capability, reuse the matching
 `summary.builtin_completion` receipt produced by the ordinary SOLVE_TAIL call.
