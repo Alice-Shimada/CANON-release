@@ -155,6 +155,34 @@ class AlgebraicDLogTailTest(unittest.TestCase):
         self.assertEqual(rejected[0]["status"], "FAIL")
         self.assertFalse(rejected[0]["summary"]["full_checks"]["exact_gauge"])
 
+    def test_large_residue_conditioning_uses_the_same_complete_workflow(self):
+        fixtures = FIXTURES.replace(
+            "known = DiagonalMatrix",
+            "distortion = DiagonalMatrix[{1,10^30,1,1}];\n"
+            "rs = Map[Together,distortion.#.Inverse[distortion],{2}] & /@ rs;\n"
+            "known = DiagonalMatrix",
+        )
+        script = self.directory / "large-residue-fixtures.wls"
+        script.write_text(fixtures.replace("CORE_PATH", str(ROOT / "mma/lib/MethodCardCore.wl"))
+                          .replace("OUTPUT_PATH", str(self.directory)))
+        self.kernel(script)
+        full, core = self.full_de()
+        tail = self.invoke("SOLVE_TAIL", {"full_sector_de": full, "core_transform": core})
+        self.assertEqual((tail[0]["status"], tail[0]["code"]), ("PASS", "TAIL_READY"))
+        compact = tail[0]["summary"]["representation_simplification"]
+        self.assertTrue(compact["applied"])
+        self.assertLess(compact["after"][0], compact["before"][0])
+        check = self.invoke("CHECK_CANONICAL", {"full_sector_de": full,
+            "sector_transform": self.artifact(tail, "sector_transform")})
+        self.assertEqual(check[0]["code"], "CANONICAL_PASS")
+        commit = self.invoke("COMMIT_SECTOR", {"previous_accepted_prefix": self.ref("previous"),
+            "sector_basis": self.ref("basis"), "sector_transform": self.artifact(tail, "sector_transform"),
+            "canonical_sector_de": self.artifact(check, "canonical_sector_de")})
+        final = self.invoke("FINAL_CHECK", {"prepared_family": self.ref("prepared"), "master_basis": self.ref("masters"),
+            "sector_manifest": self.ref("manifest"), "ordered_master_de": self.ref("ordered"),
+            "accepted_prefix": self.artifact(commit, "accepted_prefix")})
+        self.assertEqual((final[0]["status"], final[0]["code"]), ("PASS", "ALL_PASS"))
+
     def test_existing_wall_budget_reports_incomplete_without_backend(self):
         full, core = self.full_de()
         tail = self.invoke("SOLVE_TAIL", {"full_sector_de": full, "core_transform": core,

@@ -38,7 +38,10 @@ record[stage_, variables_, boundaries_, initial_, matrices_, options_, response_
   response
 ];
 TransformOffDiagonalBlock[v_, b_, t_, a_, o___Rule] := Module[{change, response},
-  change = {{1,0},{First[v]/(1+eps First[v]),1}};
+  (* Retain an unsupported moving pole in the epsilon-failure fixture. The
+     successful fixture becomes zero after D and now needs no native normalizer. *)
+  change = If[mode === "epsilon-failure", IdentityMatrix[2],
+    {{1,0},{First[v]/(1+eps First[v]),1}}];
   response = If[mode === "off-diagonal-failure",
     {False, {17, "fixture off-diagonal return", TailDiagnosticFixture`pending[]}},
     {t.change, CanonMethodCard`GaugeTransform[a,v,change]}];
@@ -172,9 +175,9 @@ def main():
         assert process.returncode == 0, (name, process.returncode)
         result = json.loads((case / "output/result.json").read_text())
         calls = (case / "calls.txt").read_text().splitlines() if (case / "calls.txt").exists() else []
-        expected_calls = ["TransformOffDiagonalBlock"] if name == "off-diagonal-failure" else (
+        expected_calls = ["TransformOffDiagonalBlock"] if name in ("off-diagonal-failure", "backend-success") else (
             ["TransformOffDiagonalBlock", "TransformDlogToEpsForm"]
-            if name in ("epsilon-failure", "backend-success") else [])
+            if name == "epsilon-failure" else [])
         assert calls == expected_calls, (name, calls)
         if name.endswith("failure"):
             reason = ("backend_no_transformation" if name == "off-diagonal-failure"

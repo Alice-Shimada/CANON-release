@@ -8,6 +8,7 @@
    checkpoint binding. A later disk edit must not relabel an already loaded hook. *)
 dlogNormalizationImplementation = <|
   "normalizer_sha256" -> FileHash[$InputFileName, "SHA256", "HexString"],
+  "complexity_sha256" -> residueComplexityImplementation,
   "pole_repair_sha256" -> FileHash[FileNameJoin[{DirectoryName[$InputFileName],
     "RationalPoleRepair.wl"}], "SHA256", "HexString"]|>;
 
@@ -130,7 +131,7 @@ completeDLogEpsilon[fullDE_, frames_List, initialAlphabet_List, maxWall_] := Mod
   {variables = fullDE["variables"], regulator = fullDE["regulator"],
    n = Length[fullDE["source_basis"]], started = AbsoluteTime[], diagnostics = <||>,
    outcome, alphabet, residues, normalization, change, transformation, matrices,
-   residual, stage = "not_dlog"},
+   residual, compact, stage = "not_dlog"},
   outcome = TimeConstrained[Catch[
     If[n > 128, dlogNormalizationStop["dimension_bound"]];
     Do[
@@ -170,6 +171,13 @@ completeDLogEpsilon[fullDE_, frames_List, initialAlphabet_List, maxWall_] := Mod
           "alphabet" -> alphabet|>, dlogNormalizationBound]], {frame, frames}];
     stage, dlogNormalizationBound], maxWall, "wall_budget"];
   If[AssociationQ[outcome],
+    (* The original exact solution is already available. Optional refinement
+       cannot consume its success or reorder the main intertwiner search. *)
+    compact = compactDLogAnchor[outcome, residues, normalization, variables, regulator,
+      Max[0, Min[1/2, maxWall/50, maxWall - (AbsoluteTime[] - started)]]];
+    outcome = compact["solution"];
+    If[TrueQ[compact["diagnostics", "applied"]] || KeyExistsQ[compact["diagnostics"], "reason"],
+      diagnostics = Join[diagnostics, <|"anchor_compaction" -> compact["diagnostics"]|>]];
     Join[outcome, <|"diagnostics" -> Join[diagnostics,
       <|"stage" -> "normalized", "wall_seconds" -> AbsoluteTime[] - started,
         "implementation" -> dlogNormalizationImplementation|>]|>],

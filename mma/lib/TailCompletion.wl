@@ -1,9 +1,10 @@
 (* Private completion routines for SOLVE_TAIL. No task or artifact IO. *)
 Get[FileNameJoin[{DirectoryName[$InputFileName], "tail", "RationalPoleRepair.wl"}]];
 BeginPackage["CanonTailCompletion`"];
-CompleteAlgebraicTail; CompleteRationalTail; CompleteDLogTail; TailDiagnostics; ActivePositions;
+CompleteAlgebraicTail; CompleteRationalTail; CompleteDLogTail; TailDiagnostics; ActivePositions; SimplifyCanonicalTail;
 Begin["`Private`"];
 
+Get[FileNameJoin[{DirectoryName[$InputFileName], "tail", "ResidueComplexity.wl"}]];
 Get[FileNameJoin[{DirectoryName[$InputFileName], "tail", "DLogNormalization.wl"}]];
 
 regulatorFactor[expression_, variables_List, regulator_] := Times @@ (#[[1]]^#[[2]] & /@

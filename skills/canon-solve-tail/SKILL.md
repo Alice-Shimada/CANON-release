@@ -74,6 +74,26 @@ is retained, including inactive-to-active couplings. Already epsilon-factorized
 residues need no linear solve. This stage shares the remaining backend wall
 budget and retains the native normalization fallback.
 
+Successful solutions may receive a bounded internal representation improvement
+before CHECK_CANONICAL. The first feasible residue solve and its reference order
+are retained. When coefficients are large, a regular specialization of that
+already-proved intertwiner can realize a smaller reference target without a
+second linear solve. A separate diagonal rational scaling can reduce inherited
+canonical coefficients while preserving all zeros and coordinate subspaces.
+Both proposals require a strictly smaller total residue bit-height, no increase
+in its maximum, no new residue couplings, and bounded transformation-size growth. Compact outputs skip
+the search. For already-checked single-variable rational linear letters, residues
+are read directly at their poles; other letters retain the shared general fit.
+Other residue fields, size limits, singular samples, no improvement
+or an optional timeout retain the valid original solution. These improvements
+use the remaining existing wall budget (at most 0.5 and 1 second respectively,
+each capped at 2% of that stage's allocation); they add no input, workflow node,
+required evidence or independent-check replay. Each also has a 64 MiB additional
+Wolfram-memory limit and returns the original solution if that limit is reached.
+Optional diagnostics report an
+applied improvement or a bounded skip. This does not guarantee a minimal basis
+or a faster complete solve.
+
 For one rational variable, epsilon-Fuchsian lower/current diagonal blocks and
 fixed rational poles, a bounded lower shear first removes higher finite poles
 and polynomial infinity terms. Its 64 corrections, dimension 128 and two-million

@@ -68,6 +68,7 @@ If[!TrueQ[MatrixQ[selected["full_transformation"]] &&
     Together[Det[selected["full_transformation"]]] =!= 0 &&
     CanonMethodCard`ValidMatrixSystemQ[selected["transformed_matrices"], fullDE["variables"], fullDE["regulator"], dimension]],
   fail["INVALID_TAIL_INPUT", "The selected full transformation must be exact, invertible and correctly shaped."]];
+tailStarted = AbsoluteTime[];
 solution = CheckAbort[CanonTailCompletion`CompleteAlgebraicTail[fullDE, selected, tailOptions["max_wall_seconds"]],
   fail["EXECUTION_INTERRUPTED", "Tail completion was interrupted."]];
 solution = Join[solution, <|"builtin_completion" ->
@@ -131,6 +132,10 @@ If[!TrueQ[solution["solved"]],
     "alphabet" -> alphabet, "method" -> "canonica-off-diagonal", "solved" -> True|>];
 ];
 
+solution = CanonTailCompletion`SimplifyCanonicalTail[solution, variables, regulator,
+  Max[0, Min[1, tailOptions["max_wall_seconds"]/50,
+    tailOptions["max_wall_seconds"] - (AbsoluteTime[] - tailStarted)]]];
+
 value = <|"schema" -> "canon-neu/sector-transform/v1",
   "sector" -> fullDE["sector"], "family_id" -> fullDE["family_id"],
   "current_basis_id" -> fullDE["current_basis_id"],
@@ -147,5 +152,6 @@ path = CanonMethodCard`WriteWLArtifact[value, outputDir, "sector-transform.wl"];
 CanonMethodCard`WriteResult[task, outputDir, "PASS", "TAIL_READY",
   Join[backendArtifacts, <|"sector_transform" -> <|"type" -> "mathematica-expression",
     "path" -> FileNameTake[path]|>|>],
-  <|"candidate_id" -> core["candidate_id"], "method" -> solution["method"], "backend" -> backendEvidence,
-    "builtin_completion" -> solution["builtin_completion"]|>];
+  Join[<|"candidate_id" -> core["candidate_id"], "method" -> solution["method"], "backend" -> backendEvidence,
+    "builtin_completion" -> solution["builtin_completion"]|>,
+    KeyTake[solution, {"representation_simplification"}]]];

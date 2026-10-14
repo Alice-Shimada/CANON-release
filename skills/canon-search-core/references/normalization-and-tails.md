@@ -183,3 +183,26 @@ accepted prefix against the original ordered DE. If a core or tail remains
 unresolved, retain its scoped evidence. Distinguish an actual FINAL_CHECK result
 from a check that has not been run; do not predict its status from a core result.
 Neither a flat raw DE nor epsilon-form diagonal blocks establish completion.
+
+## Keep coefficient simplification inside the successful tail step
+
+For `R_l(eps) S(eps)/eps = S(eps) C_l`, a regular invertible value `S(mu)`
+gives `R_l(mu)/mu = S(mu) C_l S(mu)^-1`. Thus an already-proved intertwiner
+can yield a different constant canonical representative without solving the
+intertwiner again. The built-in tail module only tries this after its original
+solution has passed its internal exact checks, within a small remaining budget.
+It retains the original solution on any failed or bounded proposal. The
+reference point is nonzero; regularity at epsilon zero is not required.
+
+For an inherited block already equal to `eps C_l`, changing the reference point
+leaves `C_l` unchanged. The separate bounded diagonal constant similarity can
+reduce some of that existing coefficient growth. It uses one common scaling
+for every letter and variable, preserving all zero entries and coordinate
+subspaces. Its rational-coefficient search is optional; an unsupported constant
+field does not narrow the canonical solver's domain. This is a representation
+heuristic, not a complete constant-basis minimizer.
+
+Every adopted gauge change precedes the existing CHECK_CANONICAL. COMMIT only
+composes and stores its checked result; it does not change the mathematical
+gauge after that check. Neither a large rational coefficient nor a failed
+simplicity proposal changes the scientific routing or establishes an obstruction.
