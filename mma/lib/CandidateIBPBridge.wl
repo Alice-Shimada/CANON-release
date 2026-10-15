@@ -4,7 +4,7 @@ Needs["CanonMethodCard`", FileNameJoin[{DirectoryName[$InputFileName], "MethodCa
 Get[FileNameJoin[{DirectoryName[$InputFileName], "IBPReductionAudit.wl"}]];
 BeginPackage["CANON`CandidateIBPBridge`"];
 CompileCandidateIBPTargets::usage = "CompileCandidateIBPTargets[candidates, preparedFamily, masterBasis, preparedDerivatives, selection:\"enhanced-first\", auditOptions:<||>] validates audit options and builds exact scalar targets for candidate derivatives.";
-AttachCandidateIBPReduction::usage = "AttachCandidateIBPReduction[compiled, reduction] audits and attaches fully reduced CANON rules while preserving candidate IDs, or returns Failure.";
+AttachCandidateIBPReduction::usage = "AttachCandidateIBPReduction[compiled, reduction, previousAudit:Automatic, verifiedReductionSHA256:None] audits and attaches fully reduced CANON rules while preserving candidate IDs, or returns Failure. Receipt reuse requires caller-verified file identity.";
 ValidateCandidateIBPReduction::usage = "ValidateCandidateIBPReduction[compiled, reduction] checks supplied solved rules for ordered-basis identity and linear closure of the compiled non-master targets, without proving the IBP identities.";
 BuildCoreCandidates::usage = "BuildCoreCandidates[bridge, preparedFamily, sectorBasis, cut] selects a reduced row basis and independent single-row exchanges.";
 MasterDerivativeTargets::usage = "MasterDerivativeTargets[masters, preparedDerivatives] returns affine derivative targets for a DE-only IBP reduction.";
@@ -248,7 +248,8 @@ ValidateCandidateIBPReduction[compiled_, reduction_Association] := Module[
   Join[reduction, <|"masters" -> masters|>]
 ];
 
-AttachCandidateIBPReduction[compiled_, reduction_] := Module[{rules, dispatch, reduce, audit, identities, validated},
+AttachCandidateIBPReduction[compiled_, reduction_, previousAudit_ : Automatic,
+    verifiedReductionSHA256_ : None] := Module[{rules, dispatch, reduce, audit, identities, validated},
   If[AssociationQ[reduction],
     identities = Select[{"family_ref", "basis_ref"},
       KeyExistsQ[reduction, #] && reduction[#] =!= compiled[#] &];
@@ -258,7 +259,7 @@ AttachCandidateIBPReduction[compiled_, reduction_] := Module[{rules, dispatch, r
       "mismatched_fields" -> identities|>]]]
   ];
   audit = CANON`IBPReductionAudit`AuditIBPReduction[
-    reduction, Lookup[compiled, "ibp_audit_contract", None]];
+    reduction, Lookup[compiled, "ibp_audit_contract", None], previousAudit, verifiedReductionSHA256];
   If[audit["status"] =!= "PASS", Return[Failure[audit["code"], <|"audit" -> audit|>]]];
   validated = ValidateCandidateIBPReduction[compiled, reduction];
   If[FailureQ[validated], Return[validated]];

@@ -112,7 +112,7 @@ See [component composition](docs/components.md#composition-and-handoff).
 | `PREPARE_REDUCTION_TARGETS` | `canon-prepare-reduction-targets` | `mma/PrepareReductionTargets.wls` | `prepared_family`, `master_basis`; optional `prepared_derivatives` | `reduction_targets` |
 | `REDUCE_IBP` | `canon-reduce-ibp` | `mma/ReduceIBP.wls` | Legacy `reduction`, or `backend` config; optional `reduction_targets` and `master_basis` | `ibp_reduction` |
 | `CHECK_IBP` | `canon-reduce-ibp` | `mma/CheckIBPReduction.wls` | `ibp_reduction`, `ibp_contract`; optional `ibp_audit` | `ibp_audit` |
-| `REDUCE_CANDIDATE_IBP` | `canon-reduce-ibp` | `mma/ReduceCandidateIBP.wls` | `integral_candidates`, `prepared_family`, `master_basis`, `prepared_derivatives`; existing `ibp_reduction`, or selected `backend` plus required neutral descriptors, or legacy `reduction`; optional `ibp_audit_options` | `candidate_ibp_bridge`, `reduction_targets`, `ibp_audit` |
+| `REDUCE_CANDIDATE_IBP` | `canon-reduce-ibp` | `mma/ReduceCandidateIBP.wls` | `integral_candidates`, `prepared_family`, `master_basis`, `prepared_derivatives`; existing `ibp_reduction`, or selected `backend` plus required neutral descriptors, or legacy `reduction`; optional `ibp_audit_options`, `ibp_audit` | `candidate_ibp_bridge`, `reduction_targets`, `ibp_audit` |
 | `BUILD_CUT_DE` | `canon-build-cut-de` | `mma/BuildSectorCutDE.wls` | `prepared_family`, `master_basis`, `sector_manifest`, `ibp_reduction`; optional `prepared_derivatives`, `ibp_audit`, `ibp_audit_options` | `sector_basis`, `sector_cut_de`, `ordered_master_de` |
 | `SLICE_CUT_DE` | `canon-build-cut-de` | `mma/SliceSectorCutDE.wls` | `ordered_master_de`, `sector_manifest` | `sector_basis`, `sector_cut_de` |
 | `ROUTE_CORE_CANDIDATES` | `canon-search-core` | `mma/RouteCoreCandidates.wls` | `prepared_family`, `sector_basis`, `sector_cut_de`, `candidate_ibp_bridge` | `core_candidates` |
@@ -846,6 +846,19 @@ leave source masters unchanged and reduce every compiled non-master target to a
 linear combination of those masters. Identity rules for masters are unnecessary;
 rules requiring recursive back-substitution are not normalized inputs.
 
+`payload.ibp_audit` can bind a separately stored trusted receipt; otherwise the
+bridge looks for the producer's adjacent receipt. File identity is checked
+before loading and again after use. Matching receipts still check current target
+coverage and master order. For canonical flat rational WL exports of at least
+64 MiB, the default bridge selects a byte-preserving target view before native
+loading. It retains the complete source master list and order, and audits that
+new view against the independently compiled targets. The bridge's optional
+`reduction_view` records source/view hashes, sizes and rule counts. The input
+table's receipt cannot certify different view bytes. Small inputs, unsupported
+encodings and an explicit `Q(i)` coefficient field keep the native path. There
+is no additional step, required option or persistent cache; unused source rules
+are outside a view's audit scope.
+
 The common [IBP audit](#ibp-reduction-audit) returns `FAIL/IBP_CHECK_FAILED`
 whenever the output check does not pass. Missing targets, unclosed right-hand
 sides, unsupported syntax and timeout are diagnostic reasons in `summary`,
@@ -1230,6 +1243,8 @@ Its summary reports whether reuse occurred. The standalone
 The candidate compiler declares all candidate and raw-master derivative targets;
 `AttachCandidateIBPReduction` audits before substitution and returns a `Failure`
 on non-PASS. Successful bridges retain `ibp_audit_contract` and `ibp_audit`.
+Its optional third and fourth arguments pass the trusted receipt and verified
+reduction SHA256 to the same audit API; existing two-argument calls audit in full.
 `REDUCE_CANDIDATE_IBP` accepts `payload.ibp_audit_options` for the same options,
 without changing the selected reducer's configuration. Use the common JSON
 input/output pair through `run_step.py`. Output paths must be fresh. On audit

@@ -128,7 +128,7 @@
       "interface": {
         "inputs": ["integral_candidates", "prepared_family", "master_basis", "prepared_derivatives"],
         "alternatives": [["ibp_reduction"], ["backend"], ["reduction"]],
-        "optional_inputs": ["family_data", "reducer_family", "sector_manifest", "derivative_operator_selection", "ibp_audit_options"],
+        "optional_inputs": ["family_data", "reducer_family", "sector_manifest", "derivative_operator_selection", "ibp_audit_options", "ibp_audit"],
         "outputs": ["candidate_ibp_bridge", "reduction_targets", "ibp_audit"],
         "scope": "Compile symbolic candidate and master-derivative targets, use the selected reducer or supplied rules, and audit before substitution."
       }
