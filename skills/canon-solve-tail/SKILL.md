@@ -55,52 +55,17 @@ The default runner reports `summary.builtin_completion` with `attempted`,
 the built-in proposal; only the final result and independent checks establish
 the outgoing claim.
 
-The algebraic dlog normalization is an internal fallback, after the existing
-primitive and derivative proposals. It uses the same `max_wall_seconds` control
-(60 seconds by default), with fixed finite bounds: dimension 128, alphabet 128,
-400,000 equations, algebraic field basis 256, and two million stored sparse
-coefficients (with a separate bound on the resulting nullspace). It tries exact nonzero reference values and
-finite free-parameter choices; it does not solve arbitrary kinematic gauges or
-remove higher-order poles. Its optional
-`summary.builtin_completion.dlog_epsilon_normalization` receipt records the
-actual stage, including a time or size limit. Such a limit or failed search
-remains inconclusive. The rational backend retains its whole-input domain guard.
+Remaining constant dlog residues admit a bounded full-prefix epsilon
+normalization, including regulator-singular gauges. After rational D completion,
+the same solver and supported fixed-pole shear retain all prefix couplings and
+the native fallback. Their [domains and finite bounds](../canon-search-core/references/normalization-and-tails.md#bounds-of-the-built-in-completion)
+explain the scope of a stopped attempt; limits remain inconclusive.
 
-After rational D completion, the same full-prefix residue solver runs inside
-SOLVE_TAIL. It assembles individual linear coefficients, reduces rational rows
-first and orders them by sparsity; regulator-dependent rows are reduced exactly
-over the rational-function field. Every full-prefix equation and free direction
-is retained, including inactive-to-active couplings. Already epsilon-factorized
-residues need no linear solve. This stage shares the remaining backend wall
-budget and retains the native normalization fallback.
-
-Successful solutions may receive a bounded internal representation improvement
-before CHECK_CANONICAL. The first feasible residue solve and its reference order
-are retained. When coefficients are large, a regular specialization of that
-already-proved intertwiner can realize a smaller reference target without a
-second linear solve. A separate diagonal rational scaling can reduce inherited
-canonical coefficients while preserving all zeros and coordinate subspaces.
-Both proposals require a strictly smaller total residue bit-height, no increase
-in its maximum, no new residue couplings, and bounded transformation-size growth. Compact outputs skip
-the search. For already-checked single-variable rational linear letters, residues
-are read directly at their poles; other letters retain the shared general fit.
-Other residue fields, size limits, singular samples, no improvement
-or an optional timeout retain the valid original solution. These improvements
-use the remaining existing wall budget (at most 0.5 and 1 second respectively,
-each capped at 2% of that stage's allocation); they add no input, workflow node,
-required evidence or independent-check replay. Each also has a 64 MiB additional
-Wolfram-memory limit and returns the original solution if that limit is reached.
-Optional diagnostics report an
-applied improvement or a bounded skip. This does not guarantee a minimal basis
-or a faster complete solve.
-
-For one rational variable, epsilon-Fuchsian lower/current diagonal blocks and
-fixed rational poles, a bounded lower shear first removes higher finite poles
-and polynomial infinity terms. Its 64 corrections, dimension 128 and two-million
-Sylvester-entry limits are internal bounds. Unsupported roots, moving poles or
-diagonal blocks retain the existing fallback. The shear preserves both diagonal
-blocks and checks the complete exact differential gauge identity. This capability
-uses the existing SOLVE_TAIL request and independent CHECK_CANONICAL gate.
+A successful solution may receive a small bounded coefficient improvement
+before CHECK_CANONICAL. A skipped, singular, timed-out or unimproved proposal
+keeps the valid baseline. This [representation heuristic](../canon-search-core/references/normalization-and-tails.md#keep-coefficient-simplification-inside-the-successful-tail-step)
+adds no caller input or extra check, and guarantees neither a minimal basis nor
+a faster complete solve.
 
 See [normalization and tails](../canon-search-core/references/normalization-and-tails.md)
 for the gauge convention, equations and algebraic-letter construction.

@@ -206,3 +206,36 @@ Every adopted gauge change precedes the existing CHECK_CANONICAL. COMMIT only
 composes and stores its checked result; it does not change the mathematical
 gauge after that check. Neither a large rational coefficient nor a failed
 simplicity proposal changes the scientific routing or establishes an obstruction.
+
+The two representation searches use at most 0.5 and 1 second respectively,
+each capped at 2% of that stage's allocation and its remaining wall time,
+with 64 MiB additional Wolfram memory. Compact outputs skip them. Adoption requires lower total residue
+bit-height, no larger peak, no new couplings and bounded transformation growth.
+For checked single-variable rational linear letters, residues are read at the
+poles; other letters keep the general fit. Other fields or a failed limit keep
+the original solution.
+
+## Bounds of the built-in completion
+
+The algebraic fallback follows the primitive and derivative proposals inside
+SOLVE_TAIL. It uses `max_wall_seconds` (default 60), dimension and alphabet caps
+of 128, 400,000 equations, algebraic field basis 256 and two million stored sparse
+coefficients, with a separate finite nullspace bound. Exact nonzero reference
+values and finite free-parameter choices select an epsilon-rational intertwiner.
+This ansatz does not solve arbitrary kinematic gauges or remove higher poles.
+Its diagnostic records time/size limits; a failed search remains inconclusive,
+and the rational backend retains its whole-input domain guard.
+
+After rational D completion, coefficient-wise sparse equations reduce rational
+rows first, then regulator-dependent rows exactly over the rational-function
+field. Every full-prefix equation and free direction remains, including
+inactive-to-active couplings. Epsilon-factorized residues skip the linear solve.
+This stage shares the remaining backend wall budget and native fallback.
+
+For one rational variable, epsilon-Fuchsian lower/current diagonal blocks and
+fixed rational poles, a lower shear can remove higher finite poles and polynomial
+infinity terms. Bounds are 64 corrections, dimension 128 and two million
+Sylvester entries. Unsupported roots, moving poles or diagonal blocks keep the
+existing fallback. The shear preserves both diagonal blocks and checks the
+complete exact gauge identity. The outgoing full-prefix transform still goes
+to the existing independent CHECK_CANONICAL.
