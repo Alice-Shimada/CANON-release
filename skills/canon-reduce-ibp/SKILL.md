@@ -113,16 +113,14 @@ The same checks apply to artifacts returned by the selected reducer, including
 their optional SHA-256. A child PASS cannot bypass the bridge source-basis or
 target-closure contract and cannot publish a passing bridge from invalid data.
 
-The bridge accepts `payload.ibp_audit`, or discovers an adjacent file-bound
-receipt, and reuses it only after verifying the file and current audit scope.
-For canonical flat rational WL exports of at least 64 MiB, it automatically
-reads a byte-preserving view covering the current candidate and master-derivative
-targets before native loading. The view retains every source master and its
-order, records the source/view hashes, and receives its own native audit. A
-full-table receipt cannot certify a changed view. Small files, unsupported
-representations and an explicit `Q(i)` field retain the native reader. This
-changes no workflow step or required input; a view certifies only its selected
-rules, not unused rules in the full source table.
+The bridge reuses `payload.ibp_audit` or an adjacent receipt after checking file
+identity and current scope. Canonical flat rational WL exports of at least
+64 MiB automatically use a byte-preserving current-target view before native
+loading. It keeps every source master/order and source/view hashes, and receives
+its own native audit; a full-table receipt cannot certify a changed view.
+Small files, unsupported forms and explicit `Q(i)` keep the native reader.
+No step or required input is added. Views certify their selected rules only,
+not unused rules in the full source.
 
 The result is `PASS/CANDIDATES_REDUCED` with `candidate_ibp_bridge`,
 `reduction_targets` and `ibp_audit` descriptors. Invalid `ibp_audit_options` are
