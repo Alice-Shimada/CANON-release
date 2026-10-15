@@ -54,12 +54,6 @@ The default runner reports `summary.builtin_completion` with `attempted`,
 the built-in proposal; only the final result and independent checks establish
 the outgoing claim.
 
-Before assigning an expensive experimental tail capability, reuse the matching
-`summary.builtin_completion` receipt produced by the ordinary SOLVE_TAIL call.
-If none exists, run an applicable bounded attempt or record the concrete skip
-reason (unsupported domain, available budget, or selected replacement workflow).
-Carry this receipt or reason into the development assignment. Reuse unchanged
-evidence and honor the selected component's workflow.
 See [normalization and tails](../canon-search-core/references/normalization-and-tails.md)
 for the gauge convention, equations and algebraic-letter construction.
 
