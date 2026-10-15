@@ -66,7 +66,7 @@ there is no literal package-version equality gate. Optional-control evidence
 records the actual strategy, input hashes, bounds and attempts. No stopped route
 silently switches provider or rewrites the lower basis.
 
-## Capability and cost hierarchy
+## Optional controls and cost
 
 The ordinary call above is sufficient within its scope. Use optional controls
 only for the corresponding hypothesis or recorded failure; they add no workflow

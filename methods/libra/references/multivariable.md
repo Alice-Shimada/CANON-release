@@ -45,8 +45,8 @@ Fuchsification sequence. There is no sampling, epsilon-zero substitution,
 automatic spectrum normalization, or unbounded search over free-parameter choices.
 See the [reference and free-parameter contract](advanced-controls.md#exact-reference-and-finite-parameter-policy)
 for exact JSON values, finite points, validation and retained evidence.
-Use the card's [capability and cost hierarchy](../SKILL.md#capability-and-cost-hierarchy)
-for workflow selection; coefficient extraction remains a separate cost even
+The card's [optional controls and cost](../SKILL.md#optional-controls-and-cost)
+summarize these choices. Coefficient extraction remains a separate cost even
 when deduplication substantially reduces the solver input.
 
 This complements CANONICA's rational multivariable ansatz construction. It

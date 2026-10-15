@@ -118,7 +118,7 @@ Choose an applicable construction from section 1's goal, geometry, inputs and
 remaining budget. Honor a requested method within its contract. The table gives
 applicability examples, not execution order or required earlier failures.
 Do not repeat an unchanged completed attempt. Libra's
-[capability and cost hierarchy](../../methods/libra/SKILL.md#capability-and-cost-hierarchy)
+[optional controls and cost](../../methods/libra/SKILL.md#optional-controls-and-cost)
 describes its optional controls.
 
 | Condition | Method |
