@@ -33,6 +33,14 @@ regulator-free letters, including exact Wolfram algebraic expressions, and
 retains only letters with nonzero shared residue matrices. Alphabet inference
 occurs in SOLVE_TAIL; final checking uses the accepted alphabet.
 
+The published integral definitions supply the coefficient matrix U. On the
+checked square matrices over the exact commutative coefficient field, `T.U = I`
+proves both those definitions and invertibility. The default checker then
+verifies every entry of `A_i.T - D_i[T] - T.B_i = 0`, without computing a
+cumulative inverse or determinant. An invalid mandatory basis still fails;
+legacy gauge diagnostics cannot certify it. Poles or zeros at epsilon zero
+remain allowed for a generically invertible transformation.
+
 For large rational/algebraic systems, set `method_options.gauge_backend` to
 `fermat` and `method_options.package_entry` to the Fermatica entry. `FERMATPATH`
 must identify the Fermat executable. This explicitly selected backend proves

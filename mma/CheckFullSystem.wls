@@ -35,10 +35,23 @@ If[!TrueQ[CanonMethodCard`ValidMatrixSystemQ[ordered["matrices"], variables, reg
     ListQ[manifest["sectors"]] && AllTrue[manifest["sectors"], AssociationQ] &&
     ListQ[accepted["sector_trace"]] && ListQ[accepted["candidate_trace"]]],
   fail["Invalid matrix dimensions, exact coefficient domain, alphabet or trace."]];
-invertible = Together[Det[transformation]] =!= 0;
+(* The mandatory published basis supplies U in new_basis = U . old_basis.
+   For square matrices over the checked exact commutative field, T.U = I
+   proves invertibility as well as the basis definitions. No determinant,
+   second product or cumulative symbolic inverse is needed. *)
+basisRows = CanonMethodCard`IntegralCoefficientRows[accepted["basis"],
+  ordered["basis"], Head[First[ordered["basis"]]]];
+basisDefinition = MatrixQ[basisRows] && Dimensions[basisRows] === {dimension, dimension} &&
+  AllTrue[Flatten[basisRows], CanonMethodCard`ExactAlgebraicExpressionQ] &&
+  CanonMethodCard`ZeroMatrixQ[Normal[SparseArray[transformation].SparseArray[basisRows] -
+    IdentityMatrix[dimension, SparseArray]]];
+(* Retain the legacy diagnostics for an invalid mandatory basis. A fallback
+   gauge proof cannot make basis_definition pass. *)
+invertible = If[TrueQ[basisDefinition], True, Together[Det[transformation]] =!= 0];
 If[!TrueQ[invertible],
   CanonMethodCard`WriteResult[task, outputDir, "FAIL", "FULL_SYSTEM_FAIL", <||>,
-    <|"checks" -> <|"invertible_cumulative_transformation" -> False|>|>]; Quit[0]];
+    <|"checks" -> <|"invertible_cumulative_transformation" -> False,
+      "basis_definition" -> False|>|>]; Quit[0]];
 expectedTrace = KeyTake[#, {"id", "propagator_count"}] & /@
   manifest["sectors"];
 trace = accepted["sector_trace"];
@@ -46,11 +59,11 @@ remaining = Drop[expectedTrace, Length[trace]];
 backend = Lookup[Lookup[task["payload"], "method_options", <||>], "gauge_backend", "wolfram"];
 If[!MemberQ[{"wolfram", "fermat"}, backend], fail["Unknown gauge_backend; select wolfram or fermat."]];
 gaugeBackend = <|"name" -> backend|>;
+computed = accepted["matrices"];
 If[backend === "fermat",
   package = CanonMethodCard`ResolveMethodPackage[task, inputPath, "Fermatica`"];
   Get[package["entry"]];
   Fermatica`$FermatCMD = Environment["FERMATPATH"];
-  computed = accepted["matrices"];
   exactGlobalGauge = CanonMethodCard`FermatGaugeIdentityQ[
     ordered["matrices"], variables, accepted["transformation"], computed];
   gaugeBackend = Join[gaugeBackend, <|"entry" -> package["entry"],
@@ -59,19 +72,18 @@ If[backend === "fermat",
     "fermat_executable" -> Fermatica`$FermatCMD,
     "fermat_sha256" -> FileHash[Fermatica`$FermatCMD, "SHA256", "HexString"],
     "fermat_version" -> Fermatica`$FermatVersionString|>],
-  computed = CanonMethodCard`GaugeTransform[
-    ordered["matrices"], variables, accepted["transformation"]];
-  exactGlobalGauge = sameMatrices[computed, accepted["matrices"]]
+  If[TrueQ[basisDefinition],
+    exactGlobalGauge = And @@ MapThread[
+      CanonMethodCard`ZeroMatrixQ[Normal[
+        SparseArray[#1].SparseArray[transformation] - D[transformation, #2] -
+        SparseArray[transformation].SparseArray[#3]]] &,
+      {ordered["matrices"], variables, computed}],
+    computed = CanonMethodCard`GaugeTransform[ordered["matrices"], variables, transformation];
+    exactGlobalGauge = sameMatrices[computed, accepted["matrices"]]
+  ]
 ];
 residueMatrices = CanonMethodCard`DLogResidues[
   computed, variables, regulator, declaredAlphabet];
-
-(* Check the published integral definitions without forming a common denominator
-   over different integrals, or a second inverse of the cumulative matrix. *)
-basisRows = CanonMethodCard`IntegralCoefficientRows[accepted["basis"],
-  ordered["basis"], Head[First[ordered["basis"]]]];
-basisDefinition = !MemberQ[basisRows, $Failed] && CanonMethodCard`ZeroMatrixQ[
-  Normal[SparseArray[transformation].SparseArray[basisRows] - IdentityMatrix[dimension, SparseArray]]];
 
 checks = <|
   "artifact_identity" -> (
