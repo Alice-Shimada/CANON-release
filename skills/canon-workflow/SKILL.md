@@ -149,19 +149,17 @@ as new artifacts. Do not rerun a separate full audit solely because the workflow
 
 ## 4. Core selection
 
-Use [canon-search-core](../canon-search-core/SKILL.md) to choose one bounded
-hypothesis from the goal, family geometry, available inputs and retained
-rank/checker evidence. That skill owns integral proposals, their derivative/IBP
-preparation and direct-DE applicability. Its method table is not an execution
-ladder; exhaustive provider or candidate enumeration is unnecessary.
+Use [canon-search-core](../canon-search-core/SKILL.md) to choose a bounded
+hypothesis from the goal, geometry, inputs and retained checker evidence. Its
+method table gives applicability examples, not an execution ladder.
 
-Use the selected method card's normal entry first. Consult optional-control
-contracts when that attempt uses them. Bounded normalization, finite ansatzes
-and tail checkpoints are options of existing SEARCH_CORE or SOLVE_TAIL nodes.
-They keep the forward route
-and independent gates. INITIAL's official reference validation remains outside
-core selection and cannot establish CORE_PASS. Reuse accepted evidence and record
-a changed hypothesis with its bounds before a new attempt.
+Read the selected card's invocation contract and the controls actually used.
+A justified optional variant needs no earlier default trial. Normalization,
+finite ansatzes and tail checkpoints stay inside SEARCH_CORE or SOLVE_TAIL.
+A core pass covers its cut checks; later failed gates remain unresolved.
+INITIAL's official reference validation is outside core selection and cannot
+establish CORE_PASS. Reuse accepted artifacts and record the changed hypothesis
+and bounds before a new attempt.
 
 ## 5. Result routing
 

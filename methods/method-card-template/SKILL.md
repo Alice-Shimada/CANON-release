@@ -19,8 +19,8 @@ An instantiated card uses its stage's contract from
 
 - **Role / stage:** the operation and exact script step, or instruction-only
   guidance with no runner.
-- **Activation:** the existing workflow selector or explicit opt-in contract;
-  do not introduce a second routing order inside the card.
+- **Activation:** applicability under the existing selector or opt-in contract;
+  examples and cost heuristics do not require an earlier provider trial.
 - **Boundary:** required artifacts, identities and basis order, supported
   variables/coefficient domain, writable outputs, and objects held fixed.
 - **Attempt:** finite search/ansatz or algorithm stages, supported options,

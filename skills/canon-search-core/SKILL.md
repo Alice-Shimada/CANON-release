@@ -114,17 +114,17 @@ replacement is a new complete proposal; exhaustive subset search is not required
 
 ## 3. Select an applicable direct-DE method
 
-Choose an applicable construction or changed bounded attempt using section 1's
-goal, geometry, input evidence and remaining budget. Honor an explicitly requested
-method within its contract. The table lists applicability, not execution order; no CANONICA
-failure is required before Libra or INITIAL. Do not repeat an unchanged completed
-attempt. For Libra's controls and cost tradeoffs, use its
-[capability and cost hierarchy](../../methods/libra/SKILL.md#capability-and-cost-hierarchy).
+Choose an applicable construction from section 1's goal, geometry, inputs and
+remaining budget. Honor a requested method within its contract. The table gives
+applicability examples, not execution order or required earlier failures.
+Do not repeat an unchanged completed attempt. Libra's
+[capability and cost hierarchy](../../methods/libra/SKILL.md#capability-and-cost-hierarchy)
+describes its optional controls.
 
 | Condition | Method |
 |---|---|
 | One or a few normalized UT seeds have explicit evidence and full reduced rows, a rational one-variable cut, a declared alphabet, and a finite derivative allocation | [INITIAL](../../methods/initial/SKILL.md), `SEARCH_CORE` at `methods/initial/run.wls`. |
-| A rational/horizontal construction failed scientifically, or an argument based on epsilon=0 is being used to exclude an epsilon form; no diagnosis exists for this input | Run `DIAGNOSE_CORE` using the [residue-balance card](../../methods/residue-balance/SKILL.md), then select from its actual result. |
+| Relevant structural applicability remains unknown after a rational/horizontal failure or while reviewing an epsilon-zero obstruction | [DIAGNOSE_CORE](../../methods/residue-balance/SKILL.md) can clarify that scope. Known applicability permits selecting the supported construction directly. |
 | Diagnosis identifies one essential variable, possibly after exact homogeneous-scale separation, and residue-balance is untried | [residue-balance](../../methods/residue-balance/SKILL.md); allow regulator-singular transformations and check all original variables. |
 | CANONICA `nonrationalinv` is recorded, residue-balance is exhausted or outside scope, and the DE is regular at epsilon zero | [epsilon-zero](../../methods/epsilon-zero/SKILL.md), with finite polynomial/prefactor bounds |
 | A rational cut with a justified CANONICA core attempt | [CANONICA](../../methods/canonica/SKILL.md); retain the recursive or directed-block ansatz and bounds. |

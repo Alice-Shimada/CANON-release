@@ -55,7 +55,7 @@ Read `result.json`; the provider never returns a scientific `PASS` or `FAIL`.
 
 | Result | Next action |
 |---|---|
-| `PROVISIONAL/CANDIDATE_TRANSFORMATION` | Run `CHECK_CORE` on the returned `core_candidates`. After CORE_PASS, follow BUILD_FULL_DE → SOLVE_TAIL → CHECK_CANONICAL and FINAL_CHECK for the completed scope. |
+| `PROVISIONAL/CANDIDATE_TRANSFORMATION` | Pass `core_candidates` to `CHECK_CORE`, then follow the main workflow for the remaining scope. |
 | `INCONCLUSIVE/METHOD_EXHAUSTED` | Read the stopped stage and evidence. Change the bounded hypothesis when warranted; exhaustion does not establish nonexistence of a canonical basis. |
 | `INCONCLUSIVE/OUT_OF_SCOPE` | Select a supported construction or report the scoped capability gap. |
 | `ERROR/INVALID_OPTIONS` or `ERROR/INVALID_DIFFERENTIAL_SYSTEM` | Repair the named option, identity, shape or nonflat input before retrying. |
@@ -78,28 +78,16 @@ steps and have no mandatory order.
 | A finite multivariable Fuchsification proposal, or joint factorization of an already Fuchsian connection | [Explicit direction sequence](#explicit-multivariable-direction-sequence) |
 | Singular reference specialization or failed all-ones factor selection | [Exact reference and finite parameter policy](#exact-reference-and-free-parameter-choices) |
 
-Use retained stage costs; dimension alone is not a cost threshold and needs no
-trial solely to estimate it. Coefficient extraction and elimination can dominate.
-A capability gap or measured bottleneck belongs to separately scoped development;
-keep `GaussSolve` unless replacement evidence justifies a change. Record changed
-hypotheses and allocations in the existing decision note, following the workflow's
-[result and budget rules](../../skills/canon-workflow/SKILL.md#5-result-routing).
+Coefficient extraction and elimination can dominate; use retained costs and the
+chosen hypothesis rather than dimension alone to select a bounded attempt.
 
 ## Exact reference and free-parameter choices
 
 Defaults are exact `reference_regulator=1/2` and `free_parameter_strategy="ones"`.
-A `REFERENCE_EPSILON_SINGULAR` limit concerns the selected reference, not the
-generic symbolic system. The caller may select another exact reference; there
-is no automatic retry. JSON `0.5` is invalid: use an integer or an integer
-numerator/denominator object.
-
-A failed all-ones factor can motivate an explicit `bounded-rational-search`
-proposal: ones, zeros, then unit points deterministically. `free_parameter_max_trials`
-defaults to 64 and may be supplied only with that policy. Every accepted factor
-must be exact rational and generically invertible; the route's symbolic identities
-and independent CHECK_CORE still apply. Read the
-[option, validation and evidence contract](references/advanced-controls.md#exact-reference-and-finite-parameter-policy)
-when changing these controls. Neither control enlarges time or coefficient domains.
+A singular reference concerns that frame, not the generic symbolic system.
+Exact reference changes and bounded free-parameter choices follow the
+[option and evidence contract](references/advanced-controls.md#exact-reference-and-finite-parameter-policy).
+They share the selected attempt's bounds; there is no automatic retry.
 
 ## Explicit multivariable direction sequence
 
@@ -117,45 +105,17 @@ repeated directions and `[]` are allowed. An empty sequence requests shared
 factorization alone for an already Fuchsian connection. The provider neither adds
 directions nor retries a different order.
 
-Each requested `Fuchsify` transformation updates all directions. At the endpoint,
-every direction, including infinity, must be Fuchsian and epsilon factorized.
-Shared factorization uses exact coefficient equations in all declared variables
-and one `GaussSolve`; the factor must be kinematically constant, exact rational,
-generically invertible and satisfy the original equations and every directional
-identity. See [the multivariable construction](references/multivariable.md) for
-the equation space and package context.
-
-| Option | Default | Scope |
-|---|---:|---|
-| `factorization_max_equations` | 4096 | Positive integer cap on raw nonzero monomial coefficients before deduplication; exceeding it stops before solving. |
-| `max_wall_seconds` | 60 | Finite positive time limit shared by the whole multivariable proposal. |
-
-These two controls require `direction_sequence`. Equations are never truncated.
-Numeric-content deduplication reduces solve work but leaves the raw budget and
-coefficient-extraction cost unchanged. The summary reports raw
-`factorization_equation_count` and post-deduplication
-`factorization_solver_equation_count` (`null` until extraction and deduplication
-finish). No sampling or regulator-zero specialization replaces the symbolic solve;
-the selected exact reference must be defined.
-
-A stopped attempt retains `libra_diagnostic`: the last cumulative transformation,
-connection and local-step trace. The summary records stage, limits and counts.
-`TIME_BUDGET` with `timed_out=true` routes to operational recovery; it certifies
-an unfinished attempt. The diagnostic is evidence, not an accepted core or resume
-interface. This route requires no UT seeds, declared alphabet or full kinematic
-transformation ansatz, and changes no lower-sector basis.
+Every transformation updates all directions. The endpoint must be Fuchsian,
+including infinity, and admit one exact shared epsilon factorization. The
+[construction, limits and diagnostics](references/multivariable.md) describe
+that finite proposal. A stopped diagnostic is not an accepted core or a resume
+interface; timeout evidence follows the workflow's operational recovery.
 
 ## Explicit bounded normalization within SEARCH_CORE
 
-Select `normalization_strategy="bounded"` only for a supported one-variable
-integer-residue-offset hypothesis. It uses public `GetSubspaces`, `Projector`
-and `Balance` before the same Fuchsify/FactorOut stages. Its domain requires
-exact rational coefficients, epsilon-independent linear poles, a defined Fuchsian
-connection at epsilon zero and provably integer residue intercepts. Multivariable
-bounded normalization returns `INCONCLUSIVE/OUT_OF_SCOPE`.
-
-Read the [bounded normalization contract](references/advanced-controls.md#bounded-single-variable-normalization)
-when selecting it: that section defines the four finite budgets, subspace search,
-exact gauge checks, pole-rank and progress conditions, endpoint conventions and
-retained evidence. This remains an option of SEARCH_CORE with provisional output
-and the same independent CHECK_CORE gate.
+Select `normalization_strategy="bounded"` for a supported one-variable
+integer-residue-offset hypothesis. The
+[normalization contract](references/advanced-controls.md#bounded-single-variable-normalization)
+defines its exact domain, budgets, public balance operations and evidence.
+Multivariable normalization remains outside scope. This option returns the
+same provisional core for independent CHECK_CORE.

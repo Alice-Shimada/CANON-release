@@ -17,19 +17,16 @@ sectors.
 
 ## Routing boundary
 
-A card describes one bounded operation on declared scientific inputs, not all
-capabilities of a package. The workflow selects the unfinished operation; its
-step skill selects an applicable card. The card returns an artifact or a precise
-limit to that caller. It does not schedule workers, accept tasks, or silently
-switch to another provider. A documented finite sequence such as Libra's
-`Fuchsify` and `FactorOut` may implement one operation.
+A card provides scientific background and the call contract for one bounded
+operation. The agent chooses from the goal, geometry and retained evidence;
+applicability examples and cost notes do not impose a provider order or extra
+trial. Input/output contracts, actual capability bounds, user limits and the
+named independent checks remain binding. Internal stages such as Libra's
+`Fuchsify` and `FactorOut` implement the selected operation.
 
-Read each card's role, activation conditions, input scope, permitted changes,
-attempt bounds, and output/checker together. Cards are alternatives only when
-those contracts fit the same unresolved operation. A passing provider diagnostic
-does not replace the named independent checker. A screen/checker can issue a
-scoped check result; a router only proposes an action. The
-[template](method-card-template/SKILL.md) describes these roles.
+Cards return artifacts or scoped limits, without scheduling workers, accepting
+tasks or silently switching providers. A provider diagnostic cannot replace its
+checker. The [template](method-card-template/SKILL.md) distinguishes these roles.
 
 The groups below describe workflow availability, not quality or package-wide
 support. Main methods remain subject to core-selection rules. Specialized cards
