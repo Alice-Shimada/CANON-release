@@ -239,5 +239,7 @@ CanonMethodCard`WriteResult[task, outputDir, "PASS", "OK",
   <|"source_positions" -> positions, "lower_dimension" -> lowerDimension,
     "current_dimension" -> currentDimension,
     "candidate_ids" -> Lookup[fullDE["candidates"], "candidate_id"],
+    "rejected_completion_ids" -> Lookup[Select[fullDE["candidates"],
+      #["full_transformation"] === None &], "candidate_id", {}],
     "full_de_rebuilt" -> False, "zero_lower_block_assembly" -> zeroLowerAssembly,
     "block_backend" -> blockBackend|>];

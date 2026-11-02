@@ -2,6 +2,15 @@
 
 ## Release branch — 2026-11-02
 
+- Integrate Boxuan's standard-module improvements from PRs #21–#27: bounded
+  INITIAL seed search, multivariable Libra cores, CANONICA controls, full-prefix
+  dlog normalization and pole repair, and cumulative basis composition.
+- Add structural IBP auditing with file-bound receipt reuse and exact target
+  views; use the published basis as an inverse witness in final checking.
+  Retain the release's FLINT and construction-arithmetic options.
+- Keep INITIAL's fixed reference validation under its method directory, leaving
+  `examples/` for the manuscript's three result sets. Correct Singular dependency
+  guidance and portable tests, including very large exact rule coefficients.
 - Merge the pre-release fixes and retained local workflow changes: source and
   derivative bindings, exact reducer handoffs, and candidate-reduction checks.
 - Include optional batch sector slicing. Keep numerical point-DE production and
