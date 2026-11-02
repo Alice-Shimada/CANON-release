@@ -4,13 +4,16 @@ repoRoot = DirectoryName[DirectoryName[ExpandFileName[$InputFileName]]];
 Get[FileNameJoin[{repoRoot, "mma", "lib", "MethodCardCore.wl"}]];
 Get[FileNameJoin[{repoRoot, "mma", "lib", "DEBuilder.wl"}]];
 Get[FileNameJoin[{repoRoot, "mma", "lib", "SectorDE.wl"}]];
+Get[FileNameJoin[{repoRoot, "mma", "lib", "IBPReductionAudit.wl"}]];
 
 {inputPath, outputDir} = ExpandFileName /@ CanonMethodCard`ScriptArguments[];
 task = CanonMethodCard`ReadTask[inputPath, "BUILD_CUT_DE"];
 fail[result_Failure] := (
   CanonMethodCard`WriteResult[task, outputDir, "ERROR", result[[1]], <||>,
-    <|"reason" -> result[[2, "Message"]]|>]; Exit[1]
+    Join[KeyDrop[result[[2]], "Message"], <|"reason" -> result[[2, "Message"]]|>]]; Exit[1]
 );
+failClosed[reasonCode_String, reason_String] := fail[Failure["IBP_EXECUTION_FAILED",
+  <|"reason_code" -> reasonCode, "Message" -> reason|>]];
 
 prepared = CanonMethodCard`LoadArtifact[task, inputPath, "prepared_family"];
 If[FailureQ[prepared], fail[prepared]];
@@ -29,7 +32,37 @@ derivativePath = If[KeyExistsQ[task["payload"], "prepared_derivatives"],
   CanonMethodCard`ResolveArtifactPath[inputPath, task["payload", "prepared_derivatives"]], Automatic];
 normalized = CANON`SectorDE`LoadPreparedDerivatives[prepared, preparedPath, masterBasis, derivativePath];
 If[FailureQ[normalized], fail[normalized]];
-orderedMasterDE = CANON`SectorDE`BuildOrderedMasterDE[prepared, masterBasis, reduction, normalized];
+deFamily = CANON`SectorDE`DifferentialEquationFamily[prepared, normalized];
+reductionPath = CanonMethodCard`ResolveInputPath[inputPath,
+  task["payload", "ibp_reduction", "path"]];
+(* Standalone script boundary: verify file bytes once. Callers that already
+   verified an immutable artifact can pass its identity directly to the library. *)
+reductionSHA256 = Quiet @ Check[FileHash[reductionPath, "SHA256", "HexString"], $Failed];
+If[!StringQ[reductionSHA256] ||
+    (KeyExistsQ[task["payload", "ibp_reduction"], "sha256"] &&
+      task["payload", "ibp_reduction", "sha256"] =!= reductionSHA256),
+  failClosed["INVALID_IBP_AUDIT_INPUT", "reduction file identity could not be verified"]];
+previousIBPAudit = If[KeyExistsQ[task["payload"], "ibp_audit"] &&
+    task["payload", "ibp_audit"] =!= Null,
+  CanonMethodCard`LoadArtifact[task, inputPath, "ibp_audit"],
+  If[!KeyExistsQ[task["payload"], "ibp_audit"] &&
+      FileExistsQ[reductionPath <> ".audit.wl"],
+    Quiet @ Check[CanonMethodCard`ReadWLData[reductionPath <> ".audit.wl"], Automatic], Automatic]];
+If[FailureQ[previousIBPAudit],
+  failClosed["INVALID_IBP_AUDIT_INPUT", "declared ibp_audit could not be loaded"]];
+ibpAudit = CANON`IBPReductionAudit`AuditIBPReduction[reduction,
+  CANON`IBPReductionAudit`IBPAuditContract[prepared, masterBasis,
+    CANON`DEBuilder`DifferentialEquationTargets[deFamily, masterBasis["masters"]],
+    Lookup[task["payload"], "ibp_audit_options", <||>]], previousIBPAudit,
+  reductionSHA256];
+If[ibpAudit["status"] =!= "PASS",
+  CanonMethodCard`WriteResult[task, outputDir, ibpAudit["status"], ibpAudit["code"],
+    <||>, Join[ibpAudit["summary"], <|"ibp_audit" -> KeyTake[ibpAudit,
+      {"status", "code", "checks", "counts", "master_permutation", "reuse", "summary"}]|>]];
+  Exit[1]
+];
+orderedMasterDE = CANON`SectorDE`BuildOrderedMasterDE[prepared, masterBasis,
+  Join[reduction, <|"masters" -> masterBasis["masters"]|>], normalized];
 If[FailureQ[orderedMasterDE], fail[orderedMasterDE]];
 sliced = CanonMethodCard`SectorDEArtifacts[orderedMasterDE, sectorManifest, currentSector];
 If[sliced["resident_positions"] === {},
@@ -50,4 +83,5 @@ CanonMethodCard`WriteResult[task, outputDir, "PASS", "OK", <|
     "de_validity_scope" -> orderedMasterDE["validity", "scope"],
     "de_flat" -> orderedMasterDE["validity", "flat"],
     "prepared_derivative_input" -> normalized["input_form"],
-    "prepared_derivative_denominator_count" -> normalized["derivatives", "denominator_count"]|>];
+    "prepared_derivative_denominator_count" -> normalized["derivatives", "denominator_count"],
+    "ibp_audit" -> KeyTake[ibpAudit, {"status", "code", "checks", "counts", "master_permutation", "reuse"}]|>];

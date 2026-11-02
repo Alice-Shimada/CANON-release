@@ -51,7 +51,9 @@ check["closure/transcendental-coefficient", failure[validate[{G[3] -> Sin[x] G[1
 check["closure/malformed-left", failure[validate[{G[a_] :> G[1]}], "INVALID_REDUCTION"]];
 check["closure/duplicate-left", failure[validate[{G[3] -> G[1], G[3] -> G[2]}], "INVALID_REDUCTION"]];
 check["closure/source-immutable", failure[validate[{G[1] -> 2 G[1], G[3] -> G[2]}], "MASTER_BASIS_MISMATCH"]];
-check["closure/source-order", failure[validate[{G[3] -> G[1]}, <|"masters" -> {G[2], G[1]}|>], "MASTER_BASIS_MISMATCH"]];
+reordered = validate[{G[3] -> G[1]}, <|"masters" -> {G[2], G[1]}|>];
+check["closure/source-order", AssociationQ[reordered] && reordered["masters"] === compiled["masters"]];
+check["closure/source-set", failure[validate[{G[3] -> G[1]}, <|"masters" -> {G[1], G[4]}|>], "MASTER_BASIS_MISMATCH"]];
 check["closure/family-identity", failure[validate[{G[3] -> G[1]}, <|"family_ref" -> "wrong"|>], "SOURCE_BASIS_MISMATCH"]];
 check["closure/zero", AssociationQ[validate[{G[3] -> 0}]]];
 check["closure/identity-rule", AssociationQ[validate[{G[1] -> G[1], G[3] -> (1 + x) (G[1] + G[2])}]]];

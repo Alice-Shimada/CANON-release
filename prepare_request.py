@@ -20,20 +20,33 @@ def bind_request(template, declaring_file, destination):
     """Resolve artifact references; literal provider options remain data."""
     results = {}
 
-    def bind(value, origin):
+    def bind(value, origin, location=()):
         if isinstance(value, list):
-            return [bind(item, origin) for item in value]
+            return [bind(item, origin, (*location, index))
+                    for index, item in enumerate(value)]
         if not isinstance(value, dict):
             return value
         if "from_result" in value:
             source = resolve(origin, value["from_result"])
             if source not in results:
                 result = read_json(source)
-                if result["schema"] != "canon-neu/script-result/v1" or result["status"] not in {"PASS", "PROVISIONAL"}:
+                if result["schema"] != "canon-neu/script-result/v1":
                     raise ValueError(f"Result is not usable for artifact binding: {source}")
                 results[source] = result
-            return bind(results[source]["artifacts"][value["artifact"]], source)
-        bound = {key: bind(item, origin) for key, item in value.items()}
+            result = results[source]
+            checkpoint = (result["status"] == "INCONCLUSIVE" and
+                          result.get("step") == "SOLVE_TAIL" and
+                          result.get("code") == "TAIL_UNSOLVED" and
+                          value["artifact"] == "tail_checkpoint" and
+                          template["step"] == "SOLVE_TAIL" and
+                          location == ("tail_checkpoint",))
+            # Check every reference, including cache hits: a continuation does
+            # not make the producer's other unsuccessful artifacts usable.
+            if result["status"] not in {"PASS", "PROVISIONAL"} and not checkpoint:
+                raise ValueError(f"Result is not usable for artifact binding: {source}")
+            return bind(result["artifacts"][value["artifact"]], source, location)
+        bound = {key: bind(item, origin, (*location, key))
+                 for key, item in value.items()}
         if "path" in value:
             bound["path"] = os.path.relpath(resolve(origin, value["path"]), destination.parent)
         return bound

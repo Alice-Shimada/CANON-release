@@ -500,7 +500,7 @@ class TaskLifecycleTests(StateManagementTestCase):
         )
         for record in dependency["artifacts"]:
             path = Path(shown["project_root"]) / record["stored_path"]
-            self.assertEqual(path.parent, self.task_root / "artifacts")
+            self.assertEqual(path.parent, (self.task_root / "artifacts").resolve())
             if record["artifact_id"] in shared_inputs:
                 self.assertEqual(path.read_text(), shared_inputs[record["artifact_id"]])
         self.assertEqual(list(Path(shown["workspace"]).iterdir()), [])

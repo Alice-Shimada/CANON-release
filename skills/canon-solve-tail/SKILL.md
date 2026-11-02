@@ -14,7 +14,9 @@ python3 run_step.py INPUT_JSON OUTPUT_DIRECTORY
 ```
 
 Use a `SOLVE_TAIL` envelope with `full_sector_de` and `core_transform` from the
-same selected candidate. Provide `method_options.package_entry` for an installed
+same selected candidate. With the default component, the built-in proposals below
+run automatically before a needed rational backend solve. Provide
+`payload.method_options.package_entry` for an installed
 CANONICA when a rational backend solve is needed. Already solved and supported
 algebraic completions need no package call. Read `OUTPUT_DIRECTORY/result.json`;
 an exit code of zero alone does not mean success.
@@ -34,7 +36,8 @@ COMMIT_SECTOR. Do not splice in only the current-sector diagonal block.
 
 ## What the script tries automatically
 
-The script applies the following proposals to matching input structures.
+One SOLVE_TAIL invocation selects and applies these proposals from the input
+structure. The agent does not dispatch the internal branches separately.
 
 | Structure | Built-in proposal |
 |---|---|
@@ -42,10 +45,28 @@ The script applies the following proposals to matching input structures.
 | Affine normalized tail `R0 + eps R1` | An algebraic primitive of `R0` in every variable, followed by a lower-sector shear. |
 | One current master and one supported quadratic root | A neutral lower lift when needed, then a primitive with coefficient `1/(1+2 c eps)` from the scalar radicand residue. This can remove higher poles of a `1/q` primitive. |
 | Several current masters | A bounded completion from the simplest row and its first derivatives; an exact full-rank cut aligns the rows. |
-| Remaining rational coefficients | CANONICA off-diagonal completion and full-prefix epsilon normalization. |
+| Remaining algebraic connection with kinematically constant dlog residues | Solve the full-prefix residue intertwiner for an exact rational function of epsilon, including gauges singular at epsilon zero. |
+| Remaining rational coefficients | CANONICA off-diagonal completion, then supported fixed-pole lower-shear repair and full-prefix epsilon normalization. |
 
 Each completion still needs the existing exact epsilon and shared-dlog gates.
 None of these ansatzes is a complete solver for arbitrary algebraic tails.
+The default runner reports `summary.builtin_completion` with `attempted`,
+`method` and `solved`, even when a later backend stage fails. `solved` describes
+the built-in proposal; only the final result and independent checks establish
+the outgoing claim.
+
+Remaining constant dlog residues admit a bounded full-prefix epsilon
+normalization, including regulator-singular gauges. After rational D completion,
+the same solver and supported fixed-pole shear retain all prefix couplings and
+the native fallback. Their [domains and finite bounds](../canon-search-core/references/normalization-and-tails.md#bounds-of-the-built-in-completion)
+explain the scope of a stopped attempt; limits remain inconclusive.
+
+A successful solution may receive a small bounded coefficient improvement
+before CHECK_CANONICAL. A skipped, singular, timed-out or unimproved proposal
+keeps the valid baseline. This [representation heuristic](../canon-search-core/references/normalization-and-tails.md#keep-coefficient-simplification-inside-the-successful-tail-step)
+adds no caller input or extra check, and guarantees neither a minimal basis nor
+a faster complete solve.
+
 See [normalization and tails](../canon-search-core/references/normalization-and-tails.md)
 for the gauge convention, equations and algebraic-letter construction.
 
@@ -58,32 +79,54 @@ prerequisite for attempting the solve. Explicit letters, when available, use
 ordinary exact Wolfram expressions in a `canon-neu/declared-alphabet/v1` artifact.
 The shared-residue checker determines whether the proposed span is sufficient.
 
+## Bounded CANONICA controls and continuation
+
+The default rational backend uses `tail_strategy="monolithic"`; an ordinary call
+needs no finite D artifact or checkpoint. Select `subsector` only for a bounded
+block attempt or continuation. Its block partition is inferred from the actual
+DE. See [the optional backend contract](references/canonica-controls.md) for
+options, a supplied `d_ansatz`, checkpoint identity and budgets. Core-card options
+do not configure SOLVE_TAIL. These controls keep the same outgoing full-prefix
+transformation and independent acceptance gates.
+
 ## Replan from the actual obstruction
 
-Diagnostics describe the matrices retained after the built-in attempts, not a
-proof about every possible basis. `current_master_count`, `epsilon_factorized`,
+Read this section when SOLVE_TAIL remains unresolved. Diagnostic fields are
+output evidence; they add no required input or precondition to a normal call.
+They describe the matrices retained after the built-in attempts, not every
+possible basis. `current_master_count`, `epsilon_factorized`,
 `affine_in_epsilon`, `rational_coefficients` and `alphabet_candidate_count` let
 the coordinator distinguish the following cases without repeating the same run.
+
+`coefficient_scopes` gives row/column counts and exact nonrational-entry counts
+for `whole`, `current`, `current_to_lower`, `active_closure`, `inactive` and
+`inactive_to_active`. `active_positions` is the dependency closure seeded by
+all current rows in the retained post-proposal matrices; positions are one-based
+in the complete prefix. The `current` and `inactive` scopes are their square
+diagonal blocks. A nonrational lower block does not establish that the current
+block or its direct tail is nonrational. Conversely, a rational active square
+does not certify that lifting its transformation is safe: inspect inactive-to-active
+couplings and complete-prefix epsilon normalization. These fields diagnose scope;
+they neither relax the rational backend's whole-input guard nor replace the full
+gauge and dlog checks. Root counts alone do not establish an obstruction.
 
 | Evidence | Next bounded hypothesis |
 |---|---|
 | Epsilon factorization fails | Inspect exact `Together[B_i/eps]` and a failing coupling. Change the rational epsilon normalization or full integral representative; integer-power scans cannot remove mixed epsilon factors. |
 | Epsilon factorization passes, dlog fitting fails | Inspect both the letter span and pole orders on the algebraic cover. Root-odd terms need suitable algebraic letters; `dQ/q^3 = 2 dq/q^2` needs a basis repair before letters can suffice. |
 | `remaining_algebraic_tail_outside_rational_CANONICA_domain` | Built-in proposals did not solve this algebraic input. Use a motivated representative/Gram correction, an explicit algebraic-letter proposal, or a genuine rationalizing chart with its full Jacobian. Do not send the same input to the rational backend with a longer timeout. |
-| `backend_no_transformation` | Read `summary.backend_stage` and the `backend_failure` artifact, then change the failed ansatz or representative within budget. |
+| `backend_no_transformation` | Inspect the rational backend's retained output and change the failed ansatz or representative within budget. |
+| `subsector_budget_exhausted` with `tail_checkpoint` | Review the completed blocks and budget. Continue the bound checkpoint only when further bounded work is warranted. |
+| `subsector_no_transformation` | Use the recorded failing lower block and package messages to revise the finite D ansatz or full representative. Preserve completed-block evidence. |
+| `epsilon_normalization_no_transformation` | D completion alone is insufficient; inspect the full-prefix epsilon-normalization stage and its messages. |
 
-For a backend failure, `summary.backend_stage` is `TransformOffDiagonalBlock`
-(off-diagonal completion on the active closure) or `TransformDlogToEpsForm`
-(full-prefix epsilon normalization). The `backend_failure` descriptor points to
-`backend-failure.wl`, a `canon-neu/tail-backend-failure/v1` Association. It records
-the stage, candidate, resolved package entry, and immediate call context:
-variables, backend regulator, active positions, sector boundaries, initial
-transformation, matrices, and explicit options. `backend_return` contains the
-actual saved return under `HoldComplete`, so loading the artifact keeps that
-return inert. Wrong-sized, singular or inexact backend transformations are also retained as failed backend returns. The diagnostic makes no additional backend call. It preserves
-`INCONCLUSIVE/TAIL_UNSOLVED` and `backend_no_transformation`; a returned `False`
-does not identify a finer cause or prove that every ansatz is exhausted.
-Non-backend unsolved results omit these backend-specific fields and artifacts.
+For a backend failure, `summary.backend_stage` distinguishes off-diagonal
+completion from full-prefix epsilon normalization. The `backend_failure`
+descriptor retains the immediate call and inert saved return in
+`backend-failure.wl`. Use the [backend evidence contract](references/canonica-controls.md#retained-backend-failure)
+when inspecting that call. It makes no extra backend invocation; a returned
+`False` identifies no finer cause and does not exhaust every ansatz.
+Non-backend failures omit these backend-specific fields.
 
 For a family-based UT/canonical search, reconsider the bounded integral-candidate route
 if it has not supplied the needed full representative. Follow the evidence-based

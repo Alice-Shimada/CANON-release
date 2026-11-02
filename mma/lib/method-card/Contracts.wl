@@ -29,18 +29,32 @@ ExactRationalExpressionQ[expr_] := Module[{value, variables, numerator, denomina
     PolynomialQ[numerator, variables] && PolynomialQ[denominator, variables] && denominator =!= 0
 ];
 
+(* Check the expression tree, rather than treating every exact expression as
+   algebraic. In particular, a symbolic exponent or Exp/Log is outside this
+   field. Parameters remain symbolic and no branch-changing rewrite is used. *)
 ExactAlgebraicExpressionQ[expr_] := Which[
   IntegerQ[expr] || Head[expr] === Rational, True,
-  Head[expr] === Symbol, Context[expr] =!= "System`",
+  MatchQ[expr, _Symbol], Context[expr] =!= "System`",
   Head[expr] === Complex,
     ExactAlgebraicExpressionQ[Re[expr]] && ExactAlgebraicExpressionQ[Im[expr]],
-  MemberQ[{Root, AlgebraicNumber}, Head[expr]],
-    Precision[expr] === Infinity && TrueQ[Element[expr, Algebraics]],
-  MemberQ[{Plus, Times}, Head[expr]], AllTrue[List @@ expr, ExactAlgebraicExpressionQ],
+  Head[expr] === Plus || Head[expr] === Times,
+    And @@ (ExactAlgebraicExpressionQ /@ List @@ expr),
   Head[expr] === Power,
     (IntegerQ[Last[expr]] || Head[Last[expr]] === Rational) &&
       ExactAlgebraicExpressionQ[First[expr]],
+  Head[expr] === AlgebraicNumber, TrueQ[Element[expr, Algebraics]],
+  Head[expr] === Root, algebraicRootQ[expr],
   True, False
+];
+
+algebraicRootQ[expr_] := Module[{variable = Unique["root$"], polynomial, degree},
+  If[!MemberQ[{2, 3}, Length[expr]] || Head[First[expr]] =!= Function ||
+      !IntegerQ[expr[[2]]] || expr[[2]] < 1, Return[False]];
+  polynomial = Quiet @ Check[First[expr][variable], $Failed];
+  If[polynomial === $Failed || !PolynomialQ[polynomial, variable], Return[False]];
+  degree = Exponent[polynomial, variable];
+  IntegerQ[degree] && 1 <= expr[[2]] <= degree &&
+    And @@ (ExactAlgebraicExpressionQ /@ CoefficientList[polynomial, variable])
 ];
 
 ValidMatrixSystemQ[matrices_, variables_, regulator_, dimension_] :=

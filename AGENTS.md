@@ -108,6 +108,9 @@ local binaries, foundation libraries, research run directories or machine-local
 launchers. Task descriptions give the required entries, resource budget and path
 bases; workers use that installation configuration directly.
 
+Keep development-only records in Git-ignored directories; public documentation
+must not depend on them.
+
 ## Overall architecture
 
 One local CLI stores independent overall research tasks. The MCP tools expose

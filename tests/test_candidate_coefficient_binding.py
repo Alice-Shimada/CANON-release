@@ -222,7 +222,9 @@ def main():
                        ('basis.wl', BASIS), ('cut.wl', CUT)]:
         (work / name).write_text(text+'\n')
     (work/'negative-cut.wl').write_text(CUT.replace('(eps-1/2)', '(eps^2-1/2)')+'\n')
-    (work/'negative-rules.wl').write_text(REDUCTION.replace('(d-3)/(2 x)', '(1/2-eps^2)/x')+'\n')
+    # Reduction coefficients use the declared dimension d; d -> 4-2 eps
+    # gives the intended noncanonical (1/2-eps^2)/x counterexample.
+    (work/'negative-rules.wl').write_text(REDUCTION.replace('(d-3)/(2 x)', '(1/2-(4-d)^2/4)/x')+'\n')
     (work/'provider.wl').write_text(PROVIDER)
     (work/'provider-family.wl').write_text('<|"Family"-><|"Propagators"->{p},"LoopMomenta"->{k},"KinematicVariables"->{Global`x},"Constant"->Constant`x|>|>\n')
     (work/'provider-prepared.wl').write_text('''<|"family_ref"->"coefficient-fixture", "chart_id"->"same-chart", "topology"->"neutral",

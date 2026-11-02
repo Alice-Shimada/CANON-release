@@ -38,3 +38,13 @@ For an observed general-construction normalization bottleneck, the optional
 [construction arithmetic](../../docs/construction-arithmetic.md) for its exact
 coefficient domain, resource settings and failure contract. The default remains
 `"together"`; independent scientific checks are unchanged.
+
+The checked core must identify one candidate and bind the same cut identities.
+Full rows must have the declared source dimensions and their current-sector
+projection must be the exact inverse of that candidate's transformation.
+The default completes only the selected passing core. Explicit candidate-pool
+screening also retains construction-rejected proposals with
+`full_transformation -> None`. An inconsistent selected row map returns
+`ERROR/INVALID_CORE_COMPLETION` with `preferred_next_route="FIX_INPUT"`.
+CHECK_CORE's symbolic-inverse fallback verifies the mathematical core only;
+it does not repair an inconsistent full integral-row definition.

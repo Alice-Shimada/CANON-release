@@ -3,6 +3,7 @@
 $HistoryLength = 0;
 repoRoot = DirectoryName[DirectoryName[ExpandFileName[$InputFileName]]];
 Get[FileNameJoin[{repoRoot, "mma", "lib", "MethodCardCore.wl"}]];
+Get[FileNameJoin[{repoRoot, "mma", "lib", "PrefixComposition.wl"}]];
 {inputPath, outputDir} = ExpandFileName /@ CanonMethodCard`ScriptArguments[];
 task = CanonMethodCard`ReadTask[inputPath, "COMMIT_SECTOR"];
 sectorBasis = CanonMethodCard`LoadArtifact[task, inputPath, "sector_basis"];
@@ -52,16 +53,12 @@ If[canonical["accepted_prefix_id"] =!= parentID ||
     "current_dimension" -> currentDimension|>] ||
   AnyTrue[sectorTrace, CanonMethodCard`SameSectorQ[#, canonical["sector"]] &],
   fail["The checked mixed basis does not extend this previous prefix exactly once."]];
-T0 = If[previous === Null, IdentityMatrix[currentDimension], ArrayFlatten[{
-  {lowerTransformation, ConstantArray[0, {lowerDimension, currentDimension}]},
-  {ConstantArray[0, {currentDimension, lowerDimension}],
-    IdentityMatrix[currentDimension]}}]];
 Tfull = sectorTransform["transformation"];
-mixedBasis = Join[acceptedLower, currentBasis];
-newBasis = Inverse[Tfull].mixedBasis;
-composed = Map[Together, T0.Tfull, {2}];
-acceptedBasis = newBasis;
-transformation = composed;
+composition = CanonPrefixComposition`ComposePrefix[rawLower, acceptedLower,
+  lowerTransformation, currentBasis, Tfull];
+If[FailureQ[composition], fail[ToString[composition, InputForm]]];
+acceptedBasis = composition["basis"];
+transformation = composition["transformation"];
 matrices = canonical["matrices"];
 alphabet = canonical["alphabet"];
 sectorTrace = Append[sectorTrace, canonical["sector"]];
@@ -95,4 +92,7 @@ CanonMethodCard`WriteResult[task, outputDir, "PASS", "OK",
     "type" -> "mathematica-expression", "path" -> FileNameTake[path]|>|>,
   <|"prefix_id" -> prefix["prefix_id"],
     "accepted_sector_count" -> Length[sectorTrace],
+    "accepted_master_count" -> Length[acceptedBasis],
+    "previous_master_count" -> lowerDimension,
+    "new_master_count" -> currentDimension,
     "candidate_id" -> sectorTransform["candidate_id"]|>];

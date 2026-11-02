@@ -22,6 +22,8 @@ alphabet = If[task["payload", "declared_alphabet"] === Null, {},
 accepted = If[task["payload", "accepted_prefix"] === Null, Null,
   CanonMethodCard`LoadArtifact[task, inputPath, "accepted_prefix"]];
 
+invalid[code_, reason_] := (CanonMethodCard`WriteResult[task, outputDir, "ERROR",
+  code, <||>, <|"reason" -> reason, "preferred_next_route" -> "FIX_INPUT"|>]; Quit[1]);
 fail[reason_] := (CanonMethodCard`WriteResult[task, outputDir, "ERROR",
   "INVALID_FULL_DE_INPUT", <||>, <|"reason" -> reason|>]; Quit[1]);
 If[!AllTrue[{ordered, cut, coreCandidates, coreTransform}, AssociationQ] ||
@@ -74,7 +76,7 @@ zeroUpper = accepted =!= Null && Length[rawUpperBlocks] === Length[cut["variable
 (* Validate and project once before selecting the block assembly route. *)
 sourceProjection = Table[Boole[source === target],
   {source, coreCandidates["source_basis"]}, {target, rawBasis}];
-prepareRows[candidate_] := Module[{rows, currentRows, outside},
+prepareRows[candidate_] := Module[{rows, currentRows, outside, proposedT},
   If[StringQ[candidate["construction_rejection"]], Return[None]];
   rows = candidate["full_new_basis_rows"];
   If[!TrueQ[MatrixQ[rows] && Dimensions[rows] ===
@@ -86,11 +88,15 @@ prepareRows[candidate_] := Module[{rows, currentRows, outside},
     fail["A candidate has nonzero coefficients on masters outside the current prefix."]];
   rows = rows.sourceProjection;
   currentRows = rows[[All, lowerDimension + Range[currentDimension]]];
-  If[candidate["candidate_id"] === coreTransform["candidate_id"] &&
-    !TrueQ[MatrixQ[coreTransform["transformation"]] &&
-      Dimensions[coreTransform["transformation"]] === {currentDimension, currentDimension} &&
-      CanonMethodCard`ZeroMatrixQ[currentRows.coreTransform["transformation"] - IdentityMatrix[currentDimension]]],
-    fail["Full integral rows disagree with the independently checked cut transformation."]];
+  proposedT = candidate["transformation"];
+  If[!TrueQ[MatrixQ[proposedT] && Dimensions[proposedT] === {currentDimension, currentDimension} &&
+      AllTrue[Flatten[proposedT], CanonMethodCard`ExactAlgebraicExpressionQ] &&
+      CanonMethodCard`ZeroMatrixQ[currentRows.proposedT - IdentityMatrix[currentDimension]]] ||
+    (candidate["candidate_id"] === coreTransform["candidate_id"] &&
+      !TrueQ[MatrixQ[coreTransform["transformation"]] &&
+        Dimensions[coreTransform["transformation"]] === {currentDimension, currentDimension} &&
+        CanonMethodCard`ZeroMatrixQ[proposedT - coreTransform["transformation"]]]),
+    invalid["INVALID_CORE_COMPLETION", "Full integral rows disagree with the independently checked core."]];
   rows
 ];
 (* General tail solving consumes the passing core only. The independent pool
@@ -179,7 +185,7 @@ completion[candidate_, rows_] := Module[{currentRows, fullRows, transformation, 
     "full_transformation" -> None, "transformed_matrices" -> {}|>]];
   currentRows = rows[[All, lowerDimension + Range[currentDimension]]];
   fast = zeroUpper && zeroLowerRowsQ[rows];
-  inverse = CanonFFT`NormalizeMatrix["current_core_inverse_reduce", Inverse[currentRows]];
+  inverse = candidate["transformation"];
   lowerRows = If[lowerDimension === 0, {},
     If[fast, ConstantArray[0, {currentDimension, lowerDimension}],
       rows[[All, Range[lowerDimension]]].lowerTransformation]];

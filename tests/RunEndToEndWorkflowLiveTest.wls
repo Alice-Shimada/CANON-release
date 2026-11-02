@@ -2,6 +2,7 @@
 
 $HistoryLength = 0;
 repoRoot = DirectoryName[DirectoryName[ExpandFileName[$InputFileName]]];
+Get[FileNameJoin[{repoRoot, "mma", "lib", "MethodCardCore.wl"}]];
 {packageEntry, finiteFlowEntry, kira, runRoot} =
   ExpandFileName /@ Rest[$ScriptCommandLine];
 fixture = FileNameJoin[{repoRoot, "tests", "fixtures",
@@ -13,20 +14,22 @@ ClearAll[CANON`DEData`d, CANON`DEData`eps, CANON`DEData`s];
 sector = <|"id" -> 5, "propagator_count" -> 2|>;
 
 invoke[name_, step_, sectorValue_, payload_] := Module[
-  {input, output, process, result},
+  {input, output, process, result, python},
   input = FileNameJoin[{runRoot, name <> ".json"}];
   output = FileNameJoin[{runRoot, name}];
   Export[input, <|"schema" -> "canon-neu/script-input/v1",
     "task_id" -> name, "step" -> step, "sector" -> sectorValue,
     "payload" -> payload|>, "RawJSON"];
-  process = RunProcess[{"python3", FileNameJoin[{repoRoot, "run_step.py"}], input, output}, All,
+  python = Environment["CANON_PYTHON"];
+  If[!StringQ[python], python = "python3"];
+  process = RunProcess[{python, FileNameJoin[{repoRoot, "run_step.py"}], input, output}, All,
     ProcessDirectory -> repoRoot];
   result = Import[FileNameJoin[{output, "result.json"}], "RawJSON"];
   <|"process" -> process, "result" -> result, "output" -> output|>
 ];
-artifact[run_, name_] := <|"type" -> "mathematica-expression",
-  "path" -> FileNameJoin[{run["output"],
-    run["result", "artifacts", name, "path"]}]|>;
+artifact[run_, name_] := Join[run["result", "artifacts", name], <|
+  "path" -> CanonMethodCard`ResolveInputPath[FileNameJoin[{run["output"], "result.json"}],
+    run["result", "artifacts", name, "path"]]|>];
 sha[path_] := FileHash[path, "SHA256", "HexString"];
 
 spec = <|"schema" -> "canon-neu/family-spec/v1",
@@ -155,8 +158,8 @@ stageNames = {"PREPARE", "PROPOSE_INTEGRAL_CANDIDATES", "DISCOVER",
 stageOutcomes = AssociationThread[stageNames,
   Lookup[#1["result"], {"status", "code"}] & /@ stageRuns];
 Get[packageEntry];
-candidateValue = Get[candidates["path"]];
-familyData = Get[spec["family_data"]];
+candidateValue = CanonMethodCard`ReadWLData[candidates["path"]];
+familyData = CanonMethodCard`ReadWLData[spec["family_data"]];
 packageCandidates = Take[
   candidateValue["method_evidence", "evidence"][[
     1, "output", "CandidateCombinations"]],
@@ -165,10 +168,10 @@ packageCandidates = Take[
     Apply[CANON`DEData`j, Prepend[indices, CANON`DEData`tri]] /.
   Thread[familyData["Family", "KinematicVariables"] -> spec["variables"]] /.
   DlogBasis`DimensionalRegulator -> regulator;
-bridgeValue = Get[bridgePath];
-acceptedValue = Get[accepted["path"]];
-cursorValue = Get[cursor["path"]];
-canonicalDEValue = Get[canonicalDE["path"]];
+bridgeValue = CanonMethodCard`ReadWLData[bridgePath];
+acceptedValue = CanonMethodCard`ReadWLData[accepted["path"]];
+cursorValue = CanonMethodCard`ReadWLData[cursor["path"]];
+canonicalDEValue = CanonMethodCard`ReadWLData[canonicalDE["path"]];
 head = Head[First[bridgeValue["masters"]]];
 rhsIntegrals = DeleteDuplicates@Cases[Last /@ bridgeValue["rules"],
   item_ /; Head[Unevaluated[item]] === head :> item, {0, Infinity}];
@@ -212,8 +215,11 @@ implementationFiles = {"run_step.py", "components/default.json", "mma/ReduceIBP.
   "mma/BuildFullSectorDE.wls", "mma/SolveTail.wls", "mma/lib/TailCompletion.wl",
   "mma/CheckCanonical.wls", "mma/CommitSector.wls", "mma/NextSector.wls",
   "mma/CheckFullSystem.wls", "mma/lib/BaikovDerivative.wl",
-  "mma/lib/CandidateIBPBridge.wl", "mma/lib/DEBuilder.wl",
-  "mma/lib/MethodCardCore.wl"};
+  "mma/lib/CandidateIBPBridge.wl", "mma/lib/IBPReductionAudit.wl", "mma/lib/DEBuilder.wl",
+  "mma/lib/SectorDE.wl", "mma/lib/CanonicaTailControl.wl", "mma/lib/MethodCardCore.wl"};
+implementationFiles = Join[implementationFiles,
+  FileNameJoin[{"mma", "lib", "method-card", FileNameTake[#]}] & /@
+    Sort[FileNames["*.wl", FileNameJoin[{repoRoot, "mma", "lib", "method-card"}]]]];
 packageRoot = DirectoryName[packageEntry];
 packageFiles = {"DlogBasis.wl", "Kernel/DlogBasis.wl",
   "Kernel/FamilyAndCandidates.wl", "Kernel/LBLBaikov.wl",
@@ -228,7 +234,8 @@ receipt = <|
     "uniform_transcendentality" -> "not-proved"|>,
   "runtime" -> <|"wolfram" -> $Version <> "; " <> $SystemID,
     "kira" -> <|"path" -> kira, "sha256" -> sha[kira],
-      "version" -> StringTrim[RunProcess[{kira, "--version"}, "StandardOutput"]]|>,
+      "version" -> StringTrim[RunProcess[{kira, "--version"}, "StandardOutput",
+        ProcessDirectory -> runRoot]]|>,
     "dlogbasis_refine" -> AssociationThread[packageFiles,
       sha[FileNameJoin[{packageRoot, #}]] & /@ packageFiles]|>,
   "input_sha256" -> AssociationThread[fixtureFiles,

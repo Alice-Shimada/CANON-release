@@ -20,7 +20,8 @@ is not required for every task.
 | Generate integral candidates | [DlogBasis-refine](../external/DlogBasis-refine/README.md), entry `external/DlogBasis-refine/DlogBasis.wl`, a working [FiniteFlow](../external/FiniteFlow/README.md) Wolfram interface and native library, and [Singular](../external/Singular/README.md) for the module-lift step; all must be available where the Wolfram kernel executes |
 | Use Fermat-assisted exact algebra | [Fermatica](../external/Fermatica/README.md) and an installed [Fermat](../external/Fermat/README.md); provide `FERMATPATH` |
 | Use exact FLINT construction or final checks | An installed quadratic-pair utility built from `components/basis-diagnostic/flint_pair.cpp` against FLINT; supply its executable/source identities and one native thread. See [construction arithmetic](construction-arithmetic.md) and [the final-check component](../components/flint-final/README.md) for the supported domain and request fields |
-| Use the fixed INITIAL reference method | [INITIAL](../external/INITIAL/README.md), FiniteFlow, and the explicit reference/configuration files described in [external dependencies](../external/README.md) |
+| Run INITIAL official reference validation through its compatibility entries | [INITIAL](../external/INITIAL/README.md), FiniteFlow, and the explicit reference/configuration files described in [the validation example](../methods/initial/reference/README.md) |
+| Generate a core from normalized INITIAL seeds | INITIAL and FiniteFlow, including its native library; use [the INITIAL interface](../methods/initial/SKILL.md) with explicit component identities, threads and finite budgets |
 
 The directories in `external/` contain source snapshots for user installation,
 including their licenses and upstream instructions. They are not prebuilt
@@ -50,6 +51,7 @@ request fields. No personal installation directory is prescribed.
 | Wolfram `$Path`, `$LibraryPath` | Package lookup and native-library lookup, respectively |
 | `method_options.package_entry` | Entry file for the selected method |
 | `method_options.finite_flow_package_file` | FiniteFlow's Wolfram entry file |
+| `method_options.finite_flow_library` | FiniteFlow native-library file used by INITIAL, verified after loading |
 | `method_options.singular_executable` | Singular command or executable path |
 | Kira request `executable`, `options` | Reducer and resource options, for example `--parallel=1` |
 | `FERMATPATH` | Installed Fermat executable |

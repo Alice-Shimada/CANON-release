@@ -14,7 +14,7 @@ runStep[name_, script_, step_, sector_, payload_] := Module[{input, output, proc
   Export[input, <|"schema" -> "canon-neu/script-input/v1",
     "task_id" -> name, "step" -> step, "sector" -> sector,
     "payload" -> payload|>, "RawJSON"];
-  process = RunProcess[{"wolframscript", "-file",
+  process = RunProcess[{Replace[Environment["CANON_WOLFRAMSCRIPT"], Except[_String] -> "wolframscript"], "-file",
     FileNameJoin[{repoRoot, "mma", script}], input, output}];
   <|"process" -> process, "output" -> output,
     "result" -> Import[FileNameJoin[{output, "result.json"}], "RawJSON"]|>
@@ -158,22 +158,27 @@ ordered2 = <|"schema" -> "canon-neu/ordered-master-de/v1",
   "family_id" -> family, "basis_id" -> "fixture/raw-order",
   "coefficient_domain" -> "exact-rational-functions", "basis" -> {l0, j0, k0},
   "variables" -> {x}, "regulator" -> eps, "matrices" -> {raw2}|>;
-coreCandidates2 = Join[KeyTake[cut2, {"sector", "family_id", "basis_id", "basis", "variables", "regulator"}],
- <|"schema" -> "canon-neu/core-candidates/v1", "coefficient_domain" -> "exact-rational-functions",
-  "convention" -> "old_basis = transformation . new_basis", "source_basis" -> {l0, j0, k0},
+coreCandidates2 = Join[KeyDrop[cut2, {"schema", "matrices", "sector_boundaries"}],
+  <|"schema" -> "canon-neu/core-candidates/v1", "source_basis" -> {l0, j0, k0},
+  "convention" -> "old_basis = transformation . new_basis", "method" -> <|"id" -> "fixture"|>,
+  "candidate_group_pool" -> <|"declared" -> 1, "eligible" -> 1, "remaining" -> 0,
+    "unconsumed_candidates" -> 0, "pool_exhausted" -> True|>,
   "candidates" -> {<|"candidate_id" -> "third",
     "member_candidate_ids" -> {"third-member"},
     "construction_rejection" -> None,
-    "full_new_basis_rows" -> {{0, 0, 1}}|>}|>];
-coreTransform2 = Join[KeyTake[cut2, {"sector", "family_id", "basis_id", "basis", "variables", "regulator"}],
-  <|"candidate_id" -> "third", "transformation" -> {{1}}, "checks" -> <|"pass" -> True|>|>];
+    "full_new_basis_rows" -> {{0, 0, 1}}, "transformation" -> {{1}},
+    "transformed_matrices" -> cut2["matrices"]|>}|>];
 alphabet2 = <|"schema" -> "canon-neu/declared-alphabet/v1",
   "letters" -> {x, 1 - x, 1 + x}|>;
 basis2Path = put["basis-2", basis2];
 cut2Path = put["cut-2", cut2];
 ordered2Path = put["ordered-2", ordered2];
 coreCandidates2Path = put["core-candidates-2", coreCandidates2];
-coreTransform2Path = put["core-transform-2", coreTransform2];
+coreCheck2 = runStep["core-check-2", "CheckSectorCore.wls", "CHECK_CORE", sector2,
+  <|"sector_basis" -> descriptor[basis2Path], "sector_cut_de" -> descriptor[cut2Path],
+    "core_candidates" -> descriptor[coreCandidates2Path]|>];
+coreTransform2Path = FileNameJoin[{coreCheck2["output"],
+  coreCheck2["result", "artifacts", "core_transform", "path"]}];
 alphabet2Path = put["alphabet-2", alphabet2];
 build2 = runStep["build-2", "BuildFullSectorDE.wls", "BUILD_FULL_DE", sector2,
   <|"ordered_master_de" -> descriptor[ordered2Path],
@@ -184,7 +189,26 @@ build2 = runStep["build-2", "BuildFullSectorDE.wls", "BUILD_FULL_DE", sector2,
     "accepted_prefix" -> descriptor[accepted1Path]|>];
 full2 = artifact[build2, "full_sector_de"];
 
+(* Preserve the legacy nonzero upper-right route as well as the zero shortcut. *)
+orderedUpper = ReplacePart[ordered2, {"matrices", 1, 1, 3} -> 1/x];
+orderedUpperPath = put["ordered-upper", orderedUpper];
+buildUpper = runStep["build-upper", "BuildFullSectorDE.wls", "BUILD_FULL_DE", sector2,
+  <|"ordered_master_de" -> descriptor[orderedUpperPath],
+    "sector_cut_de" -> descriptor[cut2Path], "core_candidates" -> descriptor[coreCandidates2Path],
+    "core_transform" -> descriptor[coreTransform2Path],
+    "declared_alphabet" -> descriptor[alphabet2Path],
+    "accepted_prefix" -> descriptor[accepted1Path]|>];
+expectedUpper = Map[Together, Inverse[T0].(First[orderedUpper["matrices"]].T0-D[T0,x]), {2}];
+
 tests = {
+  VerificationTest[
+    Lookup[commit0["result", "summary"],
+      {"accepted_sector_count", "accepted_master_count", "previous_master_count", "new_master_count"}] ===
+      {1, 1, 0, 1} &&
+    Lookup[commit1["result", "summary"],
+      {"accepted_sector_count", "accepted_master_count", "previous_master_count", "new_master_count"}] ===
+      {2, 2, 1, 1},
+    True, TestID -> "reports-initial-and-cumulative-master-counts"],
   VerificationTest[
     Lookup[{check0["result"], commit0["result"]}, {"status", "code"}] ===
       {{"PASS", "CANONICAL_PASS"}, {"PASS", "OK"}} &&
@@ -240,7 +264,11 @@ tests = {
     full2["accepted_prefix_transformation"] === T0 &&
     sameMatrices[full2["source_matrices"], {source2}] &&
     full2["source_positions"] === {1, 2, 3},
-    True, TestID -> "committed-prefix-feeds-the-next-full-sector-build"]
+    True, TestID -> "committed-prefix-feeds-the-next-full-sector-build"],
+  VerificationTest[
+    buildUpper["result", "status"] === "PASS" &&
+    sameMatrices[artifact[buildUpper, "full_sector_de"]["source_matrices"], {expectedUpper}],
+    True, TestID -> "nonzero-upper-right-retains-original-exact-gauge"]
 };
 
 report = TestReport[tests];

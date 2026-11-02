@@ -116,20 +116,37 @@ replacement is a new complete proposal; exhaustive subset search is not required
 
 ## 3. Select an applicable direct-DE method
 
-Take the first applicable untried row for the unchanged input.
+Select one applicable untried method using the current evidence and remaining
+budget. The table gives useful triggers, not a mandatory provider chain. A
+particular method explicitly requested by the user retains priority within its
+contract. Keep section 1's bounded integral-search priority for defined families.
 
 | Condition | Method |
 |---|---|
+| One or a few normalized UT seeds have explicit evidence and full reduced rows, a rational one-variable cut, a declared alphabet, and a finite derivative allocation | [INITIAL](../../methods/initial/SKILL.md), `SEARCH_CORE` at `methods/initial/run.wls`. A small credible seed set makes this a direct candidate alongside CANONICA, Libra and epsilon-zero; it need not wait for CANONICA failure. |
 | A rational/horizontal method failed, or an argument based on epsilon=0 is being used to exclude an epsilon form; no diagnosis exists for this input | Run `DIAGNOSE_CORE` using the [residue-balance card](../../methods/residue-balance/SKILL.md), then select from its actual result. |
 | Diagnosis identifies one essential variable, possibly after exact homogeneous-scale separation, and residue-balance is untried | [residue-balance](../../methods/residue-balance/SKILL.md); allow regulator-singular transformations and check all original variables. |
 | CANONICA `nonrationalinv` is recorded, residue-balance is exhausted or outside scope, and the DE is regular at epsilon zero | [epsilon-zero](../../methods/epsilon-zero/SKILL.md), with finite polynomial/prefactor bounds |
 | The cut DE is rational and CANONICA has not failed on this input | [CANONICA](../../methods/canonica/SKILL.md) |
-| The rational cut DE has one variable, CANONICA did not produce a checked core, and the implemented Libra route is untried | [Libra](../../methods/libra/SKILL.md) |
+| The rational cut DE has one variable and Libra is applicable and untried | [Libra](../../methods/libra/SKILL.md); explicitly enable bounded normalization when integer residue offsets obstruct epsilon factorization. |
 | The rational cut DE is regular at epsilon zero and epsilon-zero is untried | [epsilon-zero](../../methods/epsilon-zero/SKILL.md) |
 | These choices are exhausted or inapplicable | Return exact failures and remaining scope to the coordinator; reconsider a changed integral hypothesis under section 1. |
 
 A direct-DE provider returns `core_candidates`; run CHECK_CORE directly, without
-an integral-candidate IBP bridge. A rational DE may require an algebraic
+an additional integral-candidate IBP bridge. INITIAL consumes already reduced
+seed rows or an existing bridge; preserve their full lower-sector coefficients.
+An unnormalized candidate, numerical match or finite-cut rank alone is not a
+credible UT seed. Prepare missing seed evidence or choose another applicable
+method rather than silently declaring it established. INITIAL's fixed official
+reference validation is a compatibility/example contract outside core selection.
+Its `VERIFIED_EVIDENCE` is not a general UT proof or an automatic normalization
+promotion for another seed. A core provider failure does not call that validator;
+return the failed hypothesis and budget to the coordinator.
+
+CANONICA can target one declared block with a hashed finite T ansatz, recording
+the failed stage and messages. Changing a diagnosed finite ansatz is a new
+bounded attempt; increasing time without changing a refuted hypothesis is not.
+A rational DE may require an algebraic
 transformation; see [normalization and tails](references/normalization-and-tails.md).
 Do not repeat a refuted rational transformation or reinstall a working provider
 because its scientific ansatz failed.

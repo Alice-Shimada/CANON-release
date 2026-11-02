@@ -1,7 +1,9 @@
 #!/usr/bin/env wolframscript
 
-repoRoot = DirectoryName[DirectoryName[$InputFileName]];
-arguments = Rest[$ScriptCommandLine];
+$HistoryLength = 0;
+repoRoot = DirectoryName[DirectoryName[ExpandFileName[$InputFileName]]];
+Get[FileNameJoin[{repoRoot, "mma", "lib", "MethodCardCore.wl"}]];
+arguments = CanonMethodCard`ScriptArguments[];
 If[!MemberQ[{2, 3}, Length[arguments]],
   Print["Usage: wolframscript -file tests/RunPentaboxIBPLiveTest.wls KIRA_EXECUTABLE FRESH_OUTPUT [THREADS]"];
   Exit[2]
@@ -11,10 +13,15 @@ fixture = FileNameJoin[{
   repoRoot, "tests", "fixtures", "kira-massless-two-loop-five-point-pentabox"
 }];
 output = ExpandFileName[arguments[[2]]];
-threads = If[Length[arguments] === 3, ToExpression[arguments[[3]]], 1];
+If[Length[arguments] === 3 &&
+    (!StringMatchQ[arguments[[3]], DigitCharacter ..] || FromDigits[arguments[[3]]] < 1),
+  Print["THREADS must be a positive integer."]; Exit[2]];
+threads = If[Length[arguments] === 3, FromDigits[arguments[[3]]], 1];
 requestPath = output <> ".request.json";
 resultDir = output <> ".result";
-resultPath = FileNameJoin[{resultDir, "ibp-reduction.wl"}];
+resultJSONPath = FileNameJoin[{resultDir, "result.json"}];
+If[AnyTrue[{output, requestPath, resultDir, output <> ".check"}, FileExistsQ],
+  Print["Require fresh reduction, request, result and check output paths."]; Exit[2]];
 request = <|
   "executable" -> First[arguments],
   "project" -> fixture,
@@ -27,37 +34,30 @@ request = <|
 Export[requestPath, <|"schema" -> "canon-neu/script-input/v1",
   "task_id" -> "pentabox-ibp-live-test", "step" -> "REDUCE_IBP", "sector" -> Null,
   "payload" -> <|"reduction" -> request|>|>, "RawJSON"];
-process = RunProcess[{"python3", FileNameJoin[{repoRoot, "run_step.py"}],
+python = Environment["CANON_PYTHON"];
+If[!StringQ[python], python = "python3"];
+process = RunProcess[{python, FileNameJoin[{repoRoot, "run_step.py"}],
   requestPath, resultDir
 }, All, ProcessDirectory -> repoRoot];
-If[process["ExitCode"] =!= 0 || FileType[resultPath] =!= File,
-  Print[InputForm[process]];
+reducerResult = Quiet @ Check[Import[resultJSONPath, "RawJSON"], $Failed];
+If[process["ExitCode"] =!= 0 || !AssociationQ[reducerResult] ||
+    Lookup[reducerResult, {"schema", "task_id", "step", "status"}] =!=
+      {"canon-neu/script-result/v1", "pentabox-ibp-live-test", "REDUCE_IBP", "PASS"},
+  Print[InputForm[<|"process" -> process, "result" -> reducerResult|>]];
   Exit[1]
 ];
-result = Block[{$Context = "CANON`DEData`", $ContextPath = {"System`"}}, Get[resultPath]];
-sourceLines[name_] := Select[
-  StringTrim @ StringReplace[
-    StringSplit[Import[FileNameJoin[{fixture, name}], "Text"], {"\r\n", "\n", "\r"}],
-    RegularExpression["#.*$"] -> ""
-  ],
-  # =!= "" &
-];
-{expectedMasters, expectedTargets} = Block[
-  {$Context = "CANON`DEData`", $ContextPath = {"System`"}},
-  ToExpression["{" <> StringRiffle[sourceLines[#], ","] <> "}"] & /@
-    {"preferred-masters", "targets"}
-];
-head = Head[First[expectedMasters]];
-rhsIntegrals = DeleteDuplicates @ Cases[
-  Last /@ result["rules"], item_ /; Head[Unevaluated[item]] === head :> item,
-  {0, Infinity}
-];
-passed = Keys[result] === {"masters", "rules"} &&
-  result["masters"] === expectedMasters &&
-  (First /@ result["rules"]) === expectedTargets &&
-  SubsetQ[expectedMasters, rhsIntegrals] && FreeQ[result, _Real];
-Print[InputForm[<|
-  "passed" -> passed, "masters" -> Length[result["masters"]],
-  "rules" -> Length[result["rules"]], "rhs_integrals" -> Length[rhsIntegrals]
-|>]];
-Exit[If[passed, 0, 1]];
+reductionDescriptor = Lookup[Lookup[reducerResult, "artifacts", <||>], "ibp_reduction", None];
+If[!AssociationQ[reductionDescriptor] || !StringQ[Lookup[reductionDescriptor, "path", None]],
+  Print[InputForm[reducerResult]]; Exit[1]];
+resultPath = CanonMethodCard`ResolveInputPath[resultJSONPath, reductionDescriptor["path"]];
+If[FileType[resultPath] =!= File ||
+    (KeyExistsQ[reductionDescriptor, "sha256"] &&
+      Quiet @ Check[FileHash[resultPath, "SHA256", "HexString"], $Failed] =!= reductionDescriptor["sha256"]),
+  Print["Declared reduction artifact is missing or its hash does not match."]; Exit[1]];
+wolfram = Environment["CANON_WOLFRAMSCRIPT"];
+If[!StringQ[wolfram], wolfram = "wolframscript"];
+check = RunProcess[{wolfram, "-file", FileNameJoin[{repoRoot, "tests", "CheckPentaboxIBP.wls"}],
+  resultPath, output <> ".check"}, All, ProcessDirectory -> repoRoot];
+Print[check["StandardOutput"]];
+If[check["StandardError"] =!= "", Print[check["StandardError"]]];
+Exit[If[check["ExitCode"] === 0, 0, 1]];

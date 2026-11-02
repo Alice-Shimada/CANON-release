@@ -51,10 +51,11 @@ CheckCoreCandidate[
   variables_List,
   regulator_Symbol,
   index_Integer,
-  domain_ : "exact-algebraic-functions"
+  inverseProposal_:Automatic, domain_:"exact-algebraic-functions"
 ] := Module[
   {candidateID, construction, transformation, declared, computed, residuals,
-    invertible, exactGauge, flat, epsilonForm, reasons, dimension, coefficientQ, reject},
+    invertible, exactGauge, flat, epsilonForm, reasons, certifiedInverse,
+    dimension, coefficientQ, reject, inverseVerification = "symbolic_inverse"},
   candidateID = candidate["candidate_id"];
   reject[reason_] := <|"candidate_id" -> candidateID, "index" -> index,
     "pass" -> False, "invertible" -> False, "rejection_signature" -> {reason}|>;
@@ -72,13 +73,30 @@ CheckCoreCandidate[
     ExactRationalExpressionQ, ExactAlgebraicExpressionQ];
   If[!AllTrue[Flatten[{transformation, declared}], coefficientQ],
     Return[reject["coefficient_domain_invalid"]]];
-  invertible = TrueQ[Together[Det[transformation]] =!= 0];
+  (* A supplied row matrix is only a proposal. Both exact inverse identities
+     must hold before it replaces symbolic determinant/inverse construction. *)
+  certifiedInverse = MatrixQ[inverseProposal] &&
+    Dimensions[inverseProposal] === Dimensions[transformation] &&
+    ZeroMatrixQ[transformation.inverseProposal - IdentityMatrix[Length[transformation]]] &&
+    ZeroMatrixQ[inverseProposal.transformation - IdentityMatrix[Length[transformation]]];
+  invertible = TrueQ[certifiedInverse] || TrueQ[Together[Det[transformation]] =!= 0];
   If[!invertible, Return[<|
     "candidate_id" -> candidateID, "index" -> index, "pass" -> False,
     "invertible" -> False, "rejection_signature" -> {"singular_transformation"}|>]];
-  computed = GaugeTransform[matrices, variables, transformation];
-  residuals = MapThread[Map[Together, #1 - #2, {2}] &, {computed, declared}];
-  exactGauge = And @@ (ZeroMatrixQ /@ residuals);
+  If[TrueQ[certifiedInverse],
+    inverseVerification = "two_sided_exact_identity";
+    residuals = MapThread[#1.transformation - D[transformation, #2] -
+      transformation.#3 &, {matrices, variables, declared}];
+    exactGauge = And @@ (ZeroMatrixQ /@ residuals);
+    (* The independently verified invertibility and exact source equation
+       uniquely determine B. No provider flag or numerical test is trusted. *)
+    computed = If[exactGauge, declared, MapThread[
+      Map[Together, inverseProposal.(#1.transformation - D[transformation, #2]), {2}] &,
+      {matrices, variables}]],
+    computed = GaugeTransform[matrices, variables, transformation];
+    residuals = MapThread[Map[Together, #1 - #2, {2}] &, {computed, declared}];
+    exactGauge = And @@ (ZeroMatrixQ /@ residuals)
+  ];
   flat = FlatConnectionQ[computed, variables];
   epsilonForm = EpsilonFactorizedQ[computed, regulator];
   reasons = Pick[
@@ -87,6 +105,7 @@ CheckCoreCandidate[
   <|
     "candidate_id" -> candidateID, "index" -> index, "pass" -> (reasons === {}),
     "invertible" -> invertible,
+    "inverse_verification" -> inverseVerification,
     "exact_gauge" -> exactGauge,
     "flat_connection" -> flat,
     "epsilon_factorized" -> epsilonForm,

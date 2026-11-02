@@ -4,6 +4,7 @@ $HistoryLength = 0;
 
 repoRoot = DirectoryName[DirectoryName[ExpandFileName[$InputFileName]]];
 Get[FileNameJoin[{repoRoot, "mma", "lib", "MethodCardCore.wl"}]];
+Get[FileNameJoin[{repoRoot, "mma", "lib", "IBPReductionAudit.wl"}]];
 temporary = CreateDirectory[];
 ClearAll[f, d, eps, x, y];
 
@@ -69,6 +70,16 @@ Put[<|
   "masters" -> {f[0], f[1], f[2]},
   "rules" -> {f[3] -> d f[0] + d f[1] + f[2]}
 |>, reductionPath];
+fixtureReduction = Get[reductionPath];
+fixtureReduction["ibp_audit"] = CANON`IBPReductionAudit`AuditIBPReduction[
+  fixtureReduction, <|"schema" -> "canon-neu/ibp-audit-contract/v1",
+    "integral_head" -> f, "index_count" -> 1, "coefficient_symbols" -> {d, x, y},
+    "expected_masters" -> {f[0], f[1], f[2]}, "required_targets" -> {f[2], f[3]},
+    "master_order" -> "exact"|>];
+Put[fixtureReduction, reductionPath];
+fileBoundAudit = fixtureReduction["ibp_audit"];
+fileBoundAudit["binding", "reduction_sha256"] = FileHash[reductionPath, "SHA256", "HexString"];
+Put[fileBoundAudit, reductionPath <> ".audit.wl"];
 Export[inputPath, <|
   "schema" -> "canon-neu/script-input/v1",
   "task_id" -> "BUILD-CUT-DE-TEST",
@@ -125,6 +136,8 @@ pentaboxSectorIDs = Total[
 ] & /@ pentaboxMasters;
 
 tests = {
+  VerificationTest[result["summary", "ibp_audit", "reuse", "used"], True,
+    TestID -> "BUILD-CUT-DE-reuses-final-file-bound-audit-before-matrices"],
   VerificationTest[
     Lookup[runs, "exit_code"] === {0, 0} &&
       SameQ @@ (FileHash[#["basis"], "SHA256", "HexString"] & /@ runs) &&

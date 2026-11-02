@@ -61,8 +61,9 @@ If[KeyExistsQ[task["payload"], "master_basis"],
   expected = Block[{$Context = "CANON`DEData`", $ContextPath = {"System`"}},
     CanonMethodCard`LoadArtifact[task, requestPath, "master_basis"]]["masters"];
   If[Sort[expected] =!= Sort[result["masters"]],
-    CanonMethodCard`WriteResult[task, outputDir, "INCONCLUSIVE", "MASTER_BASIS_MISMATCH", <||>,
-      <|"reason" -> "Native masters differ from the declared source basis; supply an explicit conversion."|>]; Exit[0]];
+    CanonMethodCard`WriteResult[task, outputDir, "FAIL", "IBP_CHECK_FAILED", <||>,
+      <|"reason_code" -> "MASTER_BASIS_MISMATCH",
+        "reason" -> "Native masters differ from the declared source basis; supply an explicit conversion."|>]; Exit[1]];
   result["masters"] = expected
 ];
 If[ValueQ[targetData],
@@ -72,8 +73,8 @@ If[ValueQ[targetData],
     Join[targetData["targets"], result["masters"]] /. dispatch, result["masters"], head];
   If[MemberQ[rows, $Failed] ||
       !AllTrue[(result["masters"] /. dispatch) - result["masters"], Together[#] === 0 &],
-    CanonMethodCard`WriteResult[task, outputDir, "INCONCLUSIVE", "INCOMPLETE_REDUCTION", <||>,
-      <|"reason" -> "Targets do not reduce completely in the declared source basis."|>]; Exit[0]];
+    CanonMethodCard`WriteResult[task, outputDir, "FAIL", "IBP_CHECK_FAILED", <||>,
+      <|"reason_code" -> "INCOMPLETE_REDUCTION", "reason" -> "Targets do not reduce completely in the declared source basis."|>]; Exit[1]];
   If[!AllTrue[Flatten[rows], CanonMethodCard`ExactRationalExpressionQ],
     CanonMethodCard`WriteResult[task, outputDir, "ERROR", "INVALID_REDUCTION", <||>,
       <|"reason" -> "Native coefficients must be finite exact rational functions."|>]; Exit[1]]

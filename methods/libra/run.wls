@@ -17,7 +17,9 @@ writeFailure[
 ] := (
   CanonMethodCard`WriteProviderResult[
     task, outputDir, status, code, <||>,
-    Join[<|"method_id" -> "libra-single-variable", "reason" -> reason|>, evidence]
+    Join[<|"method_id" -> "libra-single-variable", "reason" -> reason|>,
+      If[AssociationQ[normalizationEvidence],
+        <|"normalization" -> normalizationEvidence|>, <||>], evidence]
   ];
   Quit[If[status === "ERROR", 1, 0]]
 );
@@ -155,7 +157,16 @@ methodOptions = Lookup[Lookup[task, "payload", <||>], "method_options", <||>];
 If[!AssociationQ[methodOptions],
   writeFailure["ERROR", "INVALID_OPTIONS", "method_options must be an Association"]
 ];
-If[Complement[Keys[methodOptions], {"package_entry", "dependent_row_strategy"}] =!= {},
+normalizationBudgetDefaults = <|
+  "normalization_max_steps" -> 8,
+  "normalization_max_projectors" -> 64,
+  "normalization_max_dimension" -> 8,
+  "normalization_max_seconds" -> 30
+|>;
+If[Complement[Keys[methodOptions], Join[
+    {"package_entry", "dependent_row_strategy", "normalization_strategy"},
+    Keys[normalizationBudgetDefaults]
+  ]] =!= {},
   writeFailure["ERROR", "INVALID_OPTIONS", "method_options contains unknown options"]
 ];
 dependentRowStrategy = Lookup[methodOptions, "dependent_row_strategy", "automatic"];
@@ -165,6 +176,23 @@ If[!MemberQ[{"automatic", "sector-de-closure"}, dependentRowStrategy],
     "method_options.dependent_row_strategy must be automatic or sector-de-closure"
   ]
 ];
+normalizationStrategy = Lookup[methodOptions, "normalization_strategy", "none"];
+If[!MemberQ[{"none", "bounded"}, normalizationStrategy],
+  writeFailure["ERROR", "INVALID_OPTIONS",
+    "method_options.normalization_strategy must be none or bounded"]
+];
+normalizationBudgets = Join[normalizationBudgetDefaults,
+  KeyTake[methodOptions, Keys[normalizationBudgetDefaults]]];
+If[!And @@ (IntegerQ[#] && # > 0 & /@ Values[normalizationBudgets]),
+  writeFailure["ERROR", "INVALID_OPTIONS",
+    "Normalization budgets must be positive integers"]
+];
+If[normalizationStrategy === "none" &&
+    Intersection[Keys[methodOptions], Keys[normalizationBudgetDefaults]] =!= {},
+  writeFailure["ERROR", "INVALID_OPTIONS",
+    "Normalization budgets require normalization_strategy=bounded"]
+];
+normalizationEvidence = <|"strategy" -> normalizationStrategy|>;
 
 hierarchy = None;
 hierarchyPath = None;
@@ -211,9 +239,12 @@ If[!StringQ[entryHash] || !StringMatchQ[entryHash, RegularExpression["[0-9a-fA-F
 ];
 requiredSymbols = {
   "NewDSystem", "Fuchsify", "Transform", "FactorOut",
-  "OverallTransformation", "EFormQ", "TClosure",
-  "LeadingSeriesCoefficient", "PolesInfo"
+  "OverallTransformation", "EFormQ"
 };
+If[normalizationStrategy === "bounded",
+  requiredSymbols = Join[requiredSymbols, {"GetSubspaces", "Projector", "Balance"}]];
+If[dependentRowStrategy === "sector-de-closure",
+  requiredSymbols = Join[requiredSymbols, {"TClosure", "LeadingSeriesCoefficient", "PolesInfo"}]];
 loadSucceeded = TrueQ[Quiet[Check[(Get[entry]; True), False]]];
 If[!loadSucceeded,
   writeFailure["ERROR", "TOOL_ERROR", "Libra failed to load"]
@@ -221,6 +252,10 @@ If[!loadSucceeded,
 libraSymbolAvailableQ[symbolName_String] :=
   NameQ["Libra`" <> symbolName] || NameQ["Global`" <> symbolName];
 symbolsAvailable = And @@ (libraSymbolAvailableQ /@ requiredSymbols);
+If[normalizationStrategy === "bounded",
+  symbolsAvailable = symbolsAvailable && And @@
+    (NameQ["Libra`" <> #] & /@ {"GetSubspaces", "Projector", "Balance"})
+];
 If[!symbolsAvailable,
   writeFailure["ERROR", "TOOL_ERROR", "Libra lacks public symbols required by this card"]
 ];
@@ -229,8 +264,34 @@ Libra`$LibraUseFermat = False;
 variable = First[cut["variables"]];
 regulator = cut["regulator"];
 matrix = Map[Together, First[cut["matrices"]], {2}];
+If[normalizationStrategy === "bounded",
+  normalizationAdapter = FileNameJoin[{repoRoot, "methods", "libra", "BoundedNormalization.wl"}];
+  Get[normalizationAdapter];
+  normalization = CanonLibraNormalization`Normalize[
+    matrix, variable, regulator, normalizationBudgets];
+  normalizationEvidence = Join[normalization["evidence"], <|
+    "adapter_source" -> "methods/libra/BoundedNormalization.wl",
+    "adapter_sha256" -> FileHash[normalizationAdapter, "SHA256", "HexString"]|>];
+  If[!TrueQ[normalization["success"]],
+    writeFailure["INCONCLUSIVE",
+      If[MemberQ[{"DIMENSION_BUDGET", "STEP_BUDGET", "PROJECTOR_BUDGET",
+          "SECONDS_BUDGET", "NO_PROGRESS_PROJECTOR", "SUBSPACE_RESULT"},
+          normalization["limit_code"]], "METHOD_EXHAUSTED", "OUT_OF_SCOPE"],
+      normalization["reason"], <|"normalization" -> normalizationEvidence|>]
+  ];
+];
 If[!TrueQ[Quiet @ Check[NewDSystem[cardSystem, variable -> matrix]; True, False]],
   writeFailure["ERROR", "TOOL_ERROR", "Libra could not initialize the differential system"]
+];
+If[normalizationStrategy === "bounded",
+  If[!TrueQ[Quiet @ Check[
+      Transform[cardSystem, normalization["transformation"]]; True, False]] ||
+      !CanonMethodCard`ZeroMatrixQ[
+        cardSystem[variable] - normalization["matrix"]],
+    writeFailure["INCONCLUSIVE", "METHOD_EXHAUSTED",
+      "Libra could not apply the verified normalization transformation",
+      <|"normalization" -> normalizationEvidence|>]
+  ];
 ];
 fuchsTransformation = Quiet @ Check[Fuchsify[cardSystem, variable], $Failed];
 If[fuchsTransformation === $Failed || !MatrixQ[fuchsTransformation],
@@ -357,10 +418,12 @@ candidateArtifact = <|
       "transformed_matrices" -> {transformed},
       "provider_evidence" -> <|
         "check_eps_form" -> providerEFormQ,
-        "stages" -> {"Fuchsify", "FactorOut"},
+        "stages" -> If[normalizationStrategy === "bounded",
+          {"BoundedNormalization", "Fuchsify", "FactorOut"}, {"Fuchsify", "FactorOut"}],
         "factor_out_mu" -> 1/2,
         "use_fermatica" -> False,
-        "dependent_rows" -> strategyEvidence
+        "dependent_rows" -> strategyEvidence,
+        "normalization" -> normalizationEvidence
       |>
     |>
   }
@@ -381,7 +444,8 @@ resultPath = CanonMethodCard`WriteProviderResult[
     "tool" -> "Libra",
     "provider_check_eps_form" -> providerEFormQ,
     "candidate_count" -> 1,
-    "dependent_rows" -> strategyEvidence
+    "dependent_rows" -> strategyEvidence,
+    "normalization" -> normalizationEvidence
   |>
 ];
 If[resultPath === $Failed, Print["Failed to write result.json"]; Quit[1]];

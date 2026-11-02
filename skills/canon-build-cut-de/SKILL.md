@@ -22,6 +22,23 @@ The selected descriptor's optional SHA-256 is checked before loading. An explici
 descriptor overrides the embedded source; the unused embedded reference is not
 loaded or checked.
 
+Before constructing matrices, the script audits every reduction rule against the
+family parameters, complete master space and targets of the same affine master
+derivatives. The audit records the explicit permutation from reducer order to
+the declared basis order. Optional `payload.ibp_audit_options` sets the finite
+limits or coefficient field defined in the [IBP audit contract](../../INTERFACES.md#ibp-reduction-audit).
+A non-PASS returns `ERROR/IBP_EXECUTION_FAILED` or `FAIL/IBP_CHECK_FAILED` and
+publishes no DE. Read `summary.reason_code` and details to fix the invocation,
+extend named missing targets, correct the data, or finish a limited check first.
+The passing build summary retains the audit; a separate CHECK_IBP call is unnecessary.
+An unchanged candidate bridge's trusted passing receipt is reused after verifying
+its final file identity, domain, current target coverage and master-order mapping.
+The producer writes `candidate-ibp-bridge.wl.audit.wl`; the script discovers this adjacent file,
+or takes `payload.ibp_audit`. After registration/renaming, supply the separately
+registered receipt explicitly. No per-rule fingerprint scan is performed. Missing
+or mismatched receipts trigger a full audit. The summary's `ibp_audit.reuse.used`
+records the path.
+
 The script converts the accepted affine denominator records to the one
 `DEBuilder` family object and calls `BuildDifferentialEquations` exactly once on
 the complete ordered master basis and fully reduced rules. It then finds every

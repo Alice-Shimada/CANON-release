@@ -5,6 +5,18 @@ description: Run bounded Libra repair inside the 2x2 tail of an exact single-var
 
 # Libra structured repair
 
+## Routing contract
+
+- **Role / stage:** repair transformation provider, `REPAIR_WITH_LIBRA`.
+- **Activation:** specialized opt-in contract, with the explicit route and
+  pool-exhaustion evidence below; not an automatic core or tail fallback.
+- **Boundary:** transform only the `2x2` current block of the declared direct
+  sum; preserve the accepted `1x1` prefix and both zero cross blocks.
+- **Attempt:** one `Fuchsify` / `FactorOut` sequence within the task's execution
+  budget; no pool expansion, block enlargement, or other provider call.
+- **Handoff:** provisional `repair_candidate` to
+  `mma/CheckStructuredRepair.wls`; no in-place update of `accepted_prefix`.
+
 ## Trigger and prerequisites
 
 Use only when the task explicitly requests this opt-in repair contract.
@@ -19,6 +31,10 @@ this card retains a separately scoped explicit-input contract. General studies
 start at the [workflow entry](../../skills/canon-workflow/SKILL.md).
 
 ## Inputs and command
+
+Use the existing [route artifact](../../tests/fixtures/method_cards/structured-repair-route-decision.wl)
+and [repair request](../../tests/fixtures/method_cards/structured-repair-input.wl)
+as shape examples; bind their identities and evidence to the actual task.
 
 Run `python3 run_step.py INPUT.json OUTPUT_DIR` with step `REPAIR_WITH_LIBRA`.
 Inject a read-only Libra entry through

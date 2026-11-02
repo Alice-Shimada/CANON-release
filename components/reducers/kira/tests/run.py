@@ -180,7 +180,7 @@ def main():
         environment.update(CANON_WOLFRAMSCRIPT=str(slow_launcher),KIRA_TEST_REAL_WOLFRAM=runtime)
         marker=tree/"native-calls.txt"
         try:
-            value,source=run("import-timeout","REDUCE_IBP",("INCONCLUSIVE","KIRA_IMPORT_TIMEOUT"),
+            value,source=run("import-timeout","REDUCE_IBP",("ERROR","KIRA_IMPORT_TIMEOUT"),
                 changes={"import_timeout_seconds":0.05,"environment":{"KIRA_TEST_CALL_MARKER":str(marker)}})
             source_result=(source/"result.json").read_bytes()
             calls=marker.read_bytes()
@@ -211,7 +211,8 @@ def main():
                 environment.pop("CANON_WOLFRAMSCRIPT",None)
             else:
                 environment["CANON_WOLFRAMSCRIPT"]=previous_runtime
-        run("missing","REDUCE_IBP",("INCONCLUSIVE","NATIVE_OUTPUT_MISSING"),"missing")
+        value,_=run("missing","REDUCE_IBP",("FAIL","IBP_CHECK_FAILED"),"missing")
+        assert value["summary"]["reason_code"]=="NATIVE_OUTPUT_MISSING"
         run("nonzero","DISCOVER",("ERROR","KIRA_FAILED"),"nonzero")
         failed_launcher=tree/"backend files/failing-wolfram"
         failed_launcher.write_text("#!/usr/bin/env python3\nimport os,subprocess,sys\ncode=subprocess.call([os.environ['KIRA_TEST_REAL_WOLFRAM'],*sys.argv[1:]])\nsys.exit(7 if code==0 else code)\n")
@@ -227,9 +228,10 @@ def main():
                 environment.pop("CANON_WOLFRAMSCRIPT",None)
             else:
                 environment["CANON_WOLFRAMSCRIPT"]=previous_runtime
-        run("different-basis","REDUCE_IBP",("INCONCLUSIVE","NATIVE_BASIS_MISMATCH"),"different-basis")
-        run("unreduced","REDUCE_IBP",("INCONCLUSIVE","UNREDUCED_NATIVE_OUTPUT"),"unreduced")
-        run("nonlinear","REDUCE_IBP",("ERROR","NATIVE_RULES_NOT_LINEAR"),"nonlinear")
+        for name,reason in (("different-basis","NATIVE_BASIS_MISMATCH"),
+                            ("unreduced","UNREDUCED_NATIVE_OUTPUT"),("nonlinear","NATIVE_RULES_NOT_LINEAR")):
+            value,_=run(name,"REDUCE_IBP",("FAIL","IBP_CHECK_FAILED"),name)
+            assert value["summary"]["reason_code"]==reason
         numeric={**family,"invariants":[],"point":[{"variable":"s","value":"7"}],
                  "scalar_products":[{"momenta":["p","p"],"value":"7"}]}
         write(tree/"numeric-family.json",numeric)
@@ -260,7 +262,7 @@ def main():
             output,_=process.communicate(timeout=10)
             (destination/"driver.log").write_text(output)
             value=read(destination/"result.json")
-            assert value["code"]=="KIRA_INTERRUPTED" and value["status"]=="INCONCLUSIVE",value
+            assert value["code"]=="KIRA_INTERRUPTED" and value["status"]=="ERROR",value
             native_run=read(destination/"backend-run.json")
             assert native_run["commands"][0]["returncode"]==0,native_run
             assert not native_run["reduction_complete"]
@@ -268,12 +270,12 @@ def main():
             state=subprocess.run(["ps","-o","stat=","-p",str(pid)],text=True,capture_output=True).stdout.strip()
             assert not state or state.startswith("Z"),state
             records.append({"case":"cancel-zero","status":value["status"],"code":value["code"],"child_zero_exit":True,"descendant_stopped":True,"native_kind":"native-format-adapter-fixture"})
-            print("cancel-zero: INCONCLUSIVE/KIRA_INTERRUPTED despite native zero exit",flush=True)
+            print("cancel-zero: ERROR/KIRA_INTERRUPTED despite native zero exit",flush=True)
         finally:
             if process.poll() is None:
                 process.send_signal(signal.SIGTERM)
                 process.wait(timeout=10)
-        run("timeout","REDUCE_IBP",("INCONCLUSIVE","KIRA_TIMEOUT"),"timeout",changes={"timeout_seconds":0.2})
+        run("timeout","REDUCE_IBP",("ERROR","KIRA_TIMEOUT"),"timeout",changes={"timeout_seconds":0.2})
         old_tree=tree
         tree=work/"relocated tree with spaces"
         old_tree.rename(tree)

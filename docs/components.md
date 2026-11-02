@@ -26,7 +26,8 @@ python3 run_step.py INPUT.json OUTPUT_DIR --defaults
 ```
 
 The request's `step` selects the entry. `SEARCH_CORE` has several existing
-methods, selected explicitly with `--method canonica`, `libra` or `epsilon-zero`.
+methods, selected explicitly with `--method canonica`, `libra`, `initial`,
+`epsilon-zero` or `residue-balance`.
 There is no default search method or automatic fallback. A component package may
 also supply a single `SEARCH_CORE` entry, invoked without `--method`.
 
@@ -203,14 +204,20 @@ processes. In particular, default `REDUCE_CANDIDATE_IBP` calls `REDUCE_IBP`
 through the same runner, so replacing the reducer also affects the candidate
 bridge. `CANON_PYTHON` carries that interpreter for nested calls.
 
-Both IBP steps now take the common envelope and produce `result.json`:
+IBP production and auditing take the common envelope and produce `result.json`:
 
 | Step | Payload | Output artifact |
 |---|---|---|
 | `REDUCE_IBP` | Selected adapter's `backend` config descriptor, neutral family/target/master descriptors; the default also accepts the legacy `reduction` object | `ibp_reduction` |
-| `REDUCE_CANDIDATE_IBP` | `integral_candidates`, `prepared_family`, `master_basis`, `prepared_derivatives`, plus `backend` and needed neutral family descriptors; legacy `reduction` is still accepted by the default adapter | `candidate_ibp_bridge`, `reduction_targets` |
+| `REDUCE_CANDIDATE_IBP` | `integral_candidates`, `prepared_family`, `master_basis`, `prepared_derivatives`, plus an existing `ibp_reduction` or `backend` and needed neutral family descriptors; legacy `reduction` is still accepted by the default adapter | `candidate_ibp_bridge`, `reduction_targets`, `ibp_audit` |
+| `CHECK_IBP` | `ibp_reduction`, independent `ibp_contract`; optional trusted `ibp_audit` | `ibp_audit` |
 
-Their scientific WL contents are unchanged. The previous positional IBP CLI is
+Normalized reductions retain the common WL `masters`/`rules` representation.
+The default candidate bridge and symbolic DE builder audit this representation
+before substitution, permitting an explicit permutation into the declared master
+order. The bridge adds its audit contract and receipt; independent core, canonical
+and final checks retain their scope. Alternative producers and reconstruction
+checkers follow their declared contracts. The previous positional IBP CLI is
 replaced by this common interface; see the
 [request example](../interfaces/ibp-request.example.json). Reducer configuration
 inside legacy `reduction` belongs to the default Kira module. The candidate

@@ -35,6 +35,7 @@ INITIAL_COMPONENT_KEYS = (
 STRUCTURED_OUTPUT_ROOT = optional_entry("CANON_TEST_STRUCTURED_OUTPUT_ROOT")
 DLOGBASIS_REFINE_ENTRY = optional_entry("CANON_TEST_DLOGBASIS_REFINE_ENTRY")
 FINITEFLOW_ENTRY = optional_entry("CANON_TEST_FINITEFLOW_ENTRY")
+SINGULAR_ENTRY = optional_entry("CANON_TEST_SINGULAR_ENTRY")
 FIXTURE_LIBRA_ENTRY = FIXTURES / "structured-repair-tool.m"
 FIXTURE_LIBRA_SHA256 = hashlib.sha256(FIXTURE_LIBRA_ENTRY.read_bytes()).hexdigest()
 FIXTURE_ENTRY_EXPRESSION = 'Environment["CANON_TEST_FIXTURE_LIBRA_ENTRY"]'
@@ -578,12 +579,18 @@ EndPackage[];
         expected_transformation_fragment: str,
         *,
         relative_entry: bool,
+        method_options: dict | None = None,
+        dependent_row_hierarchy: Path | None = None,
     ) -> Path:
         provider_output = self.run_root / f"{method}-provider"
         provider_result = self.run_wls(
             ROOT / "methods" / method / "run.wls",
             self.provider_input(
-                method, package_entry, relative_entry=relative_entry
+                method,
+                package_entry,
+                relative_entry=relative_entry,
+                method_options=method_options,
+                dependent_row_hierarchy=dependent_row_hierarchy,
             ),
             provider_output,
         )
@@ -1067,6 +1074,94 @@ EndPackage[];
                 )
                 self.assertNotIn(result["status"], {"PASS", "FAIL"})
 
+    def test_canonica_ansatz_options_are_forwarded_and_recorded(self) -> None:
+        capture = self.run_root / "canonica-options.json"
+        entry = self.run_root / "CountingCANONICA.m"
+        entry.write_text('''BeginPackage["CANONICA`"];
+SectorBoundariesFromDE[a_] := {{1, Length[First[a]]}};
+Options[RecursivelyTransformSectors] = {VerbosityLevel -> 1,
+  TDeltaNumeratorDegree -> 0, TDeltaDenominatorDegree -> 0, DDeltaNumeratorDegree -> 0};
+RecursivelyTransformSectors[a_, vars_, bounds_, range_, OptionsPattern[]] := Module[{t},
+  Export[CAPTURE, <|"t_delta_numerator_degree" -> OptionValue[TDeltaNumeratorDegree],
+    "t_delta_denominator_degree" -> OptionValue[TDeltaDenominatorDegree],
+    "d_delta_numerator_degree" -> OptionValue[DDeltaNumeratorDegree]|>, "RawJSON"];
+  t = {{1, First[vars]}, {0, 1}};
+  {t, MapThread[Together[Inverse[t].(#1.t - D[t, #2])] &, {a, vars}]}
+];
+ExtractIrreducibles[___] := {};
+CheckEpsForm[___] := True;
+EndPackage[];
+'''.replace("CAPTURE", json.dumps(str(capture))), encoding="utf-8")
+        for label, degrees in (("default", {}), ("explicit", {
+            "t_delta_numerator_degree": 1, "t_delta_denominator_degree": 2,
+            "d_delta_numerator_degree": 3,
+        })):
+            with self.subTest(label=label):
+                expected = dict.fromkeys(("t_delta_numerator_degree",
+                    "t_delta_denominator_degree", "d_delta_numerator_degree"), 0)
+                expected.update(degrees)
+                output = self.run_root / f"canonica-{label}-options"
+                result = self.run_wls(ROOT / "methods/canonica/run.wls",
+                    self.provider_input("canonica", method_options={
+                        "package_entry": str(entry), **degrees}), output)
+                self.assertEqual(result["code"], "CANDIDATE_TRANSFORMATION")
+                self.assertEqual(json.loads(capture.read_text()), expected)
+                self.assertEqual(result["summary"]["ansatz_options"], expected)
+                candidate = output / result["artifacts"]["core_candidates"]["path"]
+                checked = self.run_wls(ROOT / "mma/CheckSectorCore.wls",
+                    self.check_input(f"T-CHECK-OPTIONS-{label}", candidate),
+                    self.run_root / f"check-options-{label}")
+                self.assertEqual(checked["code"], "CORE_PASS")
+
+    def test_canonica_invalid_options_do_not_load_the_package(self) -> None:
+        marker = self.run_root / "invalid-options-loaded.wl"
+        entry = self.run_root / "OptionSentinel.m"
+        entry.write_text(f'Put["LOADED", {json.dumps(str(marker))}]; Abort[];\n')
+        for index, options in enumerate(({"typo_degree": 2},
+                {"t_delta_numerator_degree": -1}, {"t_delta_denominator_degree": 0.5},
+                {"d_delta_numerator_degree": True})):
+            result = self.run_wls(ROOT / "methods/canonica/run.wls",
+                self.provider_input("canonica", method_options={
+                    "package_entry": str(entry), **options}),
+                self.run_root / f"invalid-options-{index}", expected_returncode=1)
+            self.assertEqual((result["status"], result["code"]), ("ERROR", "INVALID_OPTIONS"))
+            self.assertFalse(marker.exists())
+
+    def test_canonica_invalid_explicit_boundaries_do_not_start_search(self) -> None:
+        loaded, called = self.run_root / "bounds-loaded.wl", self.run_root / "bounds-called.wl"
+        entry = self.search_preflight_package("canonica", loaded, called)
+        for index, bounds in enumerate(("{{1,1}}", "{{1,2},{2,2}}", "{{0,2}}",
+                "{{1,3}}", "{1}", "{{1,1},{2,2}}")):
+            cut = self.mutated_wl(FIXTURES / "sector-cut-de.wl", f"bad-bounds-{index}",
+                (('"sector_boundaries" -> Automatic', f'"sector_boundaries" -> {bounds}'),))
+            result = self.run_wls(ROOT / "methods/canonica/run.wls",
+                self.provider_input("canonica", entry, sector_cut_de=cut),
+                self.run_root / f"bad-bounds-output-{index}", expected_returncode=1)
+            self.assertEqual(result["code"], "INVALID_DIFFERENTIAL_SYSTEM")
+            self.assertTrue(loaded.exists())
+            self.assertFalse(called.exists())
+
+    def test_libra_automatic_strategy_does_not_require_explicit_hierarchy_api(self) -> None:
+        entry = self.successful_fake_libra_entry(self.run_root / "automatic-only.wl")
+        with entry.open("a", encoding="utf-8") as stream:
+            stream.write('\nRemove["Libra`TClosure", "Libra`LeadingSeriesCoefficient", "Libra`PolesInfo"];\n')
+        result = self.run_wls(ROOT / "methods/libra/run.wls",
+            self.provider_input("libra", entry), self.run_root / "automatic-only-output")
+        self.assertEqual(result["code"], "CANDIDATE_TRANSFORMATION")
+
+    def test_canonica_valid_multiple_blocks_reach_the_provider(self) -> None:
+        loaded, called = self.run_root / "blocks-loaded.wl", self.run_root / "blocks-called.wl"
+        entry = self.search_preflight_package("canonica", loaded, called)
+        cut = self.mutated_wl(FIXTURES / "sector-cut-de.wl", "two-diagonal-blocks", (
+            ('"sector_boundaries" -> Automatic', '"sector_boundaries" -> {{1,1},{2,2}}'),
+            ("1 - eps + eps/(1 - x) - x eps/(1 + x)", "0"),
+        ))
+        result = self.run_wls(ROOT / "methods/canonica/run.wls",
+            self.provider_input("canonica", entry, sector_cut_de=cut),
+            self.run_root / "two-block-output")
+        self.assertEqual((result["status"], result["code"]), ("INCONCLUSIVE", "METHOD_EXHAUSTED"))
+        self.assertEqual(called.read_text().strip(), '"RecursivelyTransformSectors"')
+
     def test_libra_default_keeps_automatic_factorout_boundary(self) -> None:
         capture = self.run_root / "default-dependent-rows.wl"
         entry = self.successful_fake_libra_entry(capture)
@@ -1302,7 +1397,43 @@ Quit[If[derived === automatic, 0, 1]];
             '"transformation" -> {{1, x}, {0, 1}}',
             relative_entry=False,
         )
-        self.assertEqual(self.libra_tool_identity(candidate), "1.23")
+        self.libra_tool_identity(candidate)
+        self.assertIn(
+            hashlib.sha256(LIBRA_ENTRY.read_bytes()).hexdigest(),
+            candidate.read_text(encoding="utf-8"),
+        )
+
+    @unittest.skipUnless(
+        LIBRA_ENTRY is not None and LIBRA_ENTRY.is_file(),
+        "set CANON_TEST_LIBRA_ENTRY to run the real Libra explicit-hierarchy test",
+    )
+    def test_real_libra_explicit_hierarchy_provider_and_independent_checker(self) -> None:
+        assert LIBRA_ENTRY is not None
+        hierarchy = FIXTURES / "libra-dependent-row-hierarchy.wl"
+        candidate = self.assert_provider_closes_exact_core_loop(
+            "libra",
+            LIBRA_ENTRY,
+            '"transformation" -> {{1, x}, {0, 1}}',
+            relative_entry=False,
+            method_options={
+                "package_entry": str(LIBRA_ENTRY),
+                "dependent_row_strategy": "sector-de-closure",
+            },
+            dependent_row_hierarchy=hierarchy,
+        )
+        provider = json.loads(
+            (candidate.parent / "result.json").read_text(encoding="utf-8")
+        )
+        dependent_rows = provider["summary"]["dependent_rows"]
+        self.assertEqual(dependent_rows["dependent_row_strategy"], "sector-de-closure")
+        self.assertEqual(
+            dependent_rows["hierarchy_artifact_sha256"],
+            hashlib.sha256(hierarchy.read_bytes()).hexdigest(),
+        )
+        self.assertFalse(dependent_rows["mapped_sectors"])
+        self.assertLessEqual(
+            dependent_rows["combined_mask_nonzeros"], dependent_rows["max_mask_nonzeros"]
+        )
 
     @unittest.skipUnless(
         LIBRA_ENTRY is not None and LIBRA_ENTRY.is_file(),
@@ -1327,7 +1458,6 @@ Quit[If[derived === automatic, 0, 1]];
         candidate_text = " ".join(candidate.read_text(encoding="utf-8").split())
         provider_identity = self.libra_tool_identity(candidate)
         provider_sha256 = hashlib.sha256(LIBRA_ENTRY.read_bytes()).hexdigest()
-        self.assertEqual(provider_identity, "1.23")
         self.assertIn(
             '"transformation" -> {{1, 0, 0}, {0, 1, x}, {0, 0, 1}}',
             candidate_text,
@@ -1822,6 +1952,107 @@ Quit[If[derived === automatic, 0, 1]];
         self.assertTrue(result["summary"]["authenticated_libra_provenance"])
         self.assertFalse(marker.exists(), "checker executed the hashed provider package")
 
+    def initial_sentinel_components(self) -> tuple[dict, Path]:
+        install = self.run_root / "initial-components"
+        install.mkdir()
+        reference = install / "references"
+        reference.mkdir()
+        marker = self.run_root / "initial-package-loaded.wl"
+        entry = install / "INITIAL.m"
+        entry.write_text(f'Put["LOADED", {json.dumps(str(marker))}]; Abort[];\n')
+        binding = install / "FiniteFlow.m"
+        binding.write_text(entry.read_text())
+        native = install / "library.bin"
+        native.write_bytes(b"component fixture")
+        return dict(zip(INITIAL_COMPONENT_KEYS, map(str, (entry, binding, native, reference)))), marker
+
+    def test_initial_invalid_options_are_rejected_before_loading_components(self) -> None:
+        components, marker = self.initial_sentinel_components()
+        for index, (options, code) in enumerate((
+            ({"thread": 2}, "INVALID_OPTIONS"),
+            ({"threads": 0}, "TOOL_CONFIGURATION"),
+            ({"threads": 1.5}, "TOOL_CONFIGURATION"),
+            ({"threads": True}, "TOOL_CONFIGURATION"),
+        )):
+            result = self.run_wls(ROOT / "methods/initial/run.wls",
+                self.initial_provider_input(f"T-INITIAL-OPTIONS-{index}",
+                    components={**components, **options}),
+                self.run_root / f"initial-invalid-options-{index}", expected_returncode=1)
+            self.assertEqual((result["status"], result["code"]), ("ERROR", code))
+            self.assertFalse(marker.exists())
+
+    def test_initial_custom_load_failure_is_tool_error(self) -> None:
+        components, marker = self.initial_sentinel_components()
+        Path(components["finite_flow_package_file"]).write_text(
+            'BeginPackage["FiniteFlow`"]; Begin["`Private`"];\n'
+            f'fflowlib={json.dumps(components["finite_flow_library"])};\nEnd[]; EndPackage[];\n')
+        Path(components["package_entry"]).write_text('$Failed\n')
+        result = self.run_wls(ROOT / "methods/initial/run.wls",
+            self.initial_provider_input("T-INITIAL-LOAD-FAILURE", components=components),
+            self.run_root / "initial-load-failure", expected_returncode=1)
+        self.assertEqual((result["status"], result["code"]), ("ERROR", "TOOL_LOAD_FAILED"))
+        self.assertFalse(marker.exists())
+
+    def test_initial_rejected_output_location_remains_untouched(self) -> None:
+        components, marker = self.initial_sentinel_components()
+        existing = self.run_root / "existing-output"
+        existing.mkdir()
+        sentinel = existing / "keep.txt"
+        sentinel.write_text("existing user result")
+        alias = self.run_root / "reference-alias"
+        alias.symlink_to(components["reference_directory"], target_is_directory=True)
+        input_path = self.initial_provider_input("T-INITIAL-OUTPUT", components=components)
+        before = {p.relative_to(self.run_root): p.read_bytes()
+                  for p in self.run_root.rglob("*") if p.is_file()}
+        for output in (existing, Path(components["package_entry"]).parent / "forbidden-output",
+                       Path(components["reference_directory"]) / "forbidden-output",
+                       alias / "forbidden-output",
+                       self.run_root / "missing-parent" / "output"):
+            with self.subTest(output=output):
+                completed = subprocess.run([
+                    sys.executable, str(KERNEL_LAUNCHER), str(KERNEL),
+                    "-noinit", "-noprompt", "-script", str(ROOT / "methods/initial/run.wls"),
+                    str(input_path), str(output)], cwd=ROOT, text=True,
+                    capture_output=True, timeout=30)
+                time.sleep(2.0)
+                self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+                self.assertFalse((output / "result.json").exists())
+                if output != existing:
+                    self.assertFalse(output.exists())
+                self.assertEqual({p.relative_to(self.run_root): p.read_bytes()
+                                  for p in self.run_root.rglob("*") if p.is_file()}, before)
+                self.assertFalse(marker.exists())
+
+    def test_initial_missing_component_directories_remain_protected(self) -> None:
+        components, marker = self.initial_sentinel_components()
+        # Each component lives separately, so another entry cannot accidentally
+        # protect the directory under test. Missing references are covered too.
+        for index, key in enumerate(INITIAL_COMPONENT_KEYS):
+            directory = self.run_root / f"missing-component-{index}"
+            directory.mkdir()
+            alias = self.run_root / f"missing-component-alias-{index}"
+            alias.symlink_to(directory, target_is_directory=True)
+            missing = directory / "missing" / ("entry.wl" if key != "reference_directory" else "references")
+            changed = {**components, key: str(missing)}
+            input_path = self.initial_provider_input(f"T-MISSING-COMPONENT-{index}", components=changed)
+            # Use an existing parent inside the declared missing component root.
+            (directory / "missing").mkdir()
+            if key == "reference_directory":
+                output = alias / "missing" / "references"  # exact forbidden location
+            else:
+                output = alias / "missing" / "blocked-output"
+            before = {p.relative_to(self.run_root): p.read_bytes()
+                      for p in self.run_root.rglob("*") if p.is_file()}
+            completed = subprocess.run([sys.executable, str(KERNEL_LAUNCHER), str(KERNEL),
+                "-noinit", "-noprompt", "-script", str(ROOT / "methods/initial/run.wls"),
+                str(input_path), str(output)], cwd=ROOT, text=True, capture_output=True, timeout=30)
+            time.sleep(2.0)
+            self.assertEqual(completed.returncode, 2, completed.stdout + completed.stderr)
+            self.assertFalse(output.exists())
+            self.assertFalse(marker.exists())
+            self.assertEqual({p.relative_to(self.run_root): p.read_bytes()
+                              for p in self.run_root.rglob("*") if p.is_file()}, before)
+
     def test_initial_components_work_in_an_arbitrary_installation_layout(self) -> None:
         initial = self.run_root / "solver files" / "entry.wl"
         finite_flow = self.run_root / "algebra files" / "binding.wl"
@@ -1867,6 +2098,9 @@ Quit[If[derived === automatic, 0, 1]];
         )
         self.assertEqual(provider["code"], "EVIDENCE_AWAITING_VERIFICATION")
         self.assertEqual(marker.read_text().strip(), "3")
+        runtime = provider["summary"]["initial_runtime"]
+        self.assertFalse(runtime["adapter"]["applied"])
+        self.assertEqual(runtime["source"]["sha256"], hashlib.sha256(initial.read_bytes()).hexdigest())
         evidence = provider_output / provider["artifacts"]["ut_evidence"]["path"]
         checker = self.run_wls(
             ROOT / "mma" / "CheckUTEvidence.wls",
@@ -1882,6 +2116,8 @@ Quit[If[derived === automatic, 0, 1]];
     def test_initial_official_ladder_provider_and_independent_checker(self) -> None:
         assert INITIAL_TEST_CONFIG is not None
         components = json.loads(INITIAL_TEST_CONFIG.read_text(encoding="utf-8"))
+        # Native regression deliberately retains a single thread through CANON.
+        components["threads"] = 1
         for key in INITIAL_COMPONENT_KEYS:
             components[key] = str((INITIAL_TEST_CONFIG.parent / components[key]).resolve())
         provider_task_id = "T-INITIAL-OFFICIAL-PROVIDER"
@@ -1899,6 +2135,13 @@ Quit[If[derived === automatic, 0, 1]];
             ("PROVISIONAL", "EVIDENCE_AWAITING_VERIFICATION"),
         )
         self.assertNotIn(provider_result["status"], {"PASS", "FAIL"})
+        self.assertEqual(provider_result["summary"]["threads"], 1)
+        runtime = provider_result["summary"]["initial_runtime"]
+        self.assertEqual(runtime["adapter"]["applied"],
+                         hashlib.sha256(Path(components["package_entry"]).read_bytes()).hexdigest() ==
+                         "4b4fe726f45484f31b909dc34eef85d77068b3d6dfaf3404163f8f706fc3888c")
+        self.assertEqual(runtime["source"]["sha256"],
+                         hashlib.sha256(Path(components["package_entry"]).read_bytes()).hexdigest())
         evidence_path = provider_output / provider_result["artifacts"][
             "ut_evidence"
         ]["path"]
@@ -1920,7 +2163,7 @@ Quit[If[derived === automatic, 0, 1]];
             ("PASS", "VERIFIED_EVIDENCE"),
         )
         self.assertEqual(
-            checker_result["summary"],
+            {key: value for key, value in checker_result["summary"].items() if key != "interface"},
             {
                 "family_id": "initial-official-massless-3l4p",
                 "candidate_id": "official-planar-ladder-26x26",
@@ -1951,7 +2194,7 @@ Quit[If[derived === automatic, 0, 1]];
         self.assertFalse(result["artifacts"])
 
     def test_initial_provider_has_single_typed_publication_authority(self) -> None:
-        runner = (ROOT / "methods" / "initial" / "run.wls").read_text(
+        runner = (ROOT / "methods" / "initial" / "reference" / "run.wls").read_text(
             encoding="utf-8"
         )
         self.assertNotIn("CanonMethodCard`WriteResult[", runner)
@@ -1962,7 +2205,7 @@ Quit[If[derived === automatic, 0, 1]];
             runner.count('"INCONCLUSIVE", "METHOD_EXHAUSTED"'), 2
         )
 
-        checker = (ROOT / "mma" / "CheckUTEvidence.wls").read_text(
+        checker = (ROOT / "methods" / "initial" / "reference" / "check.wls").read_text(
             encoding="utf-8"
         )
         self.assertIn('"FAIL", "EVIDENCE_REJECTED"', checker)
@@ -2019,7 +2262,10 @@ Quit[If[derived === automatic, 0, 1]];
             "result = DlogBasis`DlogBasisSearch[",
             runner,
         )
-        self.assertIn('prepared["family_data", "path"]', runner)
+        self.assertIn(
+            'CanonMethodCard`ResolveArtifactPath[preparedPath, Lookup[prepared, "family_data", None]]',
+            runner,
+        )
         self.assertIn('methodOptions["loop_order"]', runner)
         self.assertIn('methodOptions["loop_dimensions"]', runner)
         for forbidden in (
@@ -2122,6 +2368,7 @@ Quit[If[derived === automatic, 0, 1]];
                     "package_entry": str(package_entry),
                     "package_revision": os.environ.get("CANON_TEST_DLOGBASIS_REVISION"),
                     "finite_flow_package_file": os.path.relpath(FINITEFLOW_ENTRY, self.run_root),
+                    **({"singular_executable": str(SINGULAR_ENTRY)} if SINGULAR_ENTRY is not None else {}),
                     "loop_order": [1, 2],
                     "loop_dimensions": [4, 4],
                     "numerator_positions": [],
@@ -2384,7 +2631,8 @@ If[
             ROOT / "methods" / "initial" / "run.wls",
             self.initial_provider_input(
                 "T-INITIAL-MISSING-COMPONENTS",
-                components={key: str(self.run_root / key) for key in INITIAL_COMPONENT_KEYS},
+                components={key: str(self.run_root / "missing-installation" / key)
+                            for key in INITIAL_COMPONENT_KEYS},
             ),
             output,
             expected_returncode=1,
@@ -2398,7 +2646,8 @@ If[
             ROOT / "methods" / "initial" / "run.wls",
             self.initial_provider_input(
                 "T-INITIAL-WRONG-IDENTITY",
-                components=dict.fromkeys(INITIAL_COMPONENT_KEYS, str(self.run_root / "unused")),
+                components=dict.fromkeys(INITIAL_COMPONENT_KEYS,
+                                         str(self.run_root / "unused-installation" / "unused")),
                 identity_updates={"initial_identity": "INITIAL unknown"},
             ),
             output,

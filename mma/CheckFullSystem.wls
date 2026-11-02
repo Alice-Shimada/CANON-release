@@ -55,10 +55,42 @@ measured["validate/matrix_domain_trace", If[!TrueQ[CanonMethodCard`ValidMatrixSy
     ListQ[manifest["sectors"]] && AllTrue[manifest["sectors"], AssociationQ] &&
     ListQ[accepted["sector_trace"]] && ListQ[accepted["candidate_trace"]]],
   fail["Invalid matrix dimensions, exact coefficient domain, alphabet or trace."]]];
-invertible = measured["invertibility", Together[Det[transformation]] =!= 0];
+(* Check the published integral definitions without forming a common denominator
+   over different integrals, or a second inverse of the cumulative matrix. *)
+basisRows = measured["basis_coefficients", CanonMethodCard`IntegralCoefficientRows[accepted["basis"],
+  ordered["basis"], Head[First[ordered["basis"]]]]];
+basisBackend = Lookup[Lookup[task["payload"], "method_options", <||>], "basis_backend", "wolfram"];
+If[!MemberQ[{"wolfram", "flint"}, basisBackend], fail["Unknown basis_backend; select wolfram or flint."]];
+basisArithmetic = <|"backend" -> basisBackend|>;
+basisDefinition = False;
+If[MatrixQ[basisRows] && Dimensions[basisRows] === {dimension, dimension} &&
+    AllTrue[Flatten[basisRows], CanonMethodCard`ExactAlgebraicExpressionQ],
+  basisResidual = measured["basis_product",
+    Normal[SparseArray[transformation].SparseArray[basisRows] - IdentityMatrix[dimension, SparseArray]]];
+  If[basisBackend === "flint",
+    flintExecutable = Lookup[Lookup[task["payload"], "method_options", <||>], "flint_executable", None];
+    If[!StringQ[flintExecutable], fail["flint_executable must identify the installed exact arithmetic utility."]];
+    flintExecutable = CanonMethodCard`ResolveInputPath[inputPath, flintExecutable];
+    Get[FileNameJoin[{repoRoot, "mma", "lib", "FlintBasisArithmetic.wl"}]];
+    flintResult = measured["basis_zero_flint",
+      CanonFlintBasis`FlintBasisZero[basisResidual, Append[variables, regulator],
+        flintExecutable, FileNameJoin[{outputDir, "basis-flint"}], progressEvent]];
+    If[FailureQ[flintResult],
+      CanonMethodCard`WriteResult[task, outputDir, "ERROR", "UNSUPPORTED_BASIS_ARITHMETIC",
+        <||>, <|"reason" -> ToString[flintResult, InputForm]|>]; Quit[1]];
+    basisDefinition = TrueQ[flintResult["zero"]];
+    basisArithmetic = Join[basisArithmetic, flintResult["runtime"]],
+    basisDefinition = basisZeroQ[basisResidual]
+  ]
+];
+
+(* T.U = I over the checked exact field proves invertibility. *)
+invertible = If[TrueQ[basisDefinition], True,
+  measured["invertibility", Together[Det[transformation]] =!= 0]];
 If[!TrueQ[invertible],
   CanonMethodCard`WriteResult[task, outputDir, "FAIL", "FULL_SYSTEM_FAIL", <||>,
-    <|"checks" -> <|"invertible_cumulative_transformation" -> False|>|>]; Quit[0]];
+    <|"checks" -> <|"invertible_cumulative_transformation" -> False,
+      "basis_definition" -> False|>|>]; Quit[0]];
 measured["prepare/sector_trace", expectedTrace = KeyTake[#, {"id", "propagator_count"}] & /@
   manifest["sectors"];
 trace = accepted["sector_trace"];
@@ -115,41 +147,20 @@ If[backend === "fermat",
     "fermat_executable" -> Fermatica`$FermatCMD,
     "fermat_sha256" -> FileHash[Fermatica`$FermatCMD, "SHA256", "HexString"],
     "fermat_version" -> Fermatica`$FermatVersionString|>],
-  computed = CanonMethodCard`GaugeTransform[
-    ordered["matrices"], variables, accepted["transformation"]];
-  exactGlobalGauge = sameMatrices[computed, accepted["matrices"]]
+  If[TrueQ[basisDefinition],
+    computed = accepted["matrices"];
+    exactGlobalGauge = And @@ MapThread[
+      CanonMethodCard`ZeroMatrixQ[Normal[
+        SparseArray[#1].SparseArray[transformation] - D[transformation, #2] -
+        SparseArray[transformation].SparseArray[#3]]] &,
+      {ordered["matrices"], variables, computed}],
+    computed = CanonMethodCard`GaugeTransform[ordered["matrices"], variables, transformation];
+    exactGlobalGauge = sameMatrices[computed, accepted["matrices"]]
+  ]
 ];
 ];
 residueMatrices = measured["dlog_residues", CanonMethodCard`DLogResidues[
   computed, variables, regulator, declaredAlphabet]];
-
-(* Check the published integral definitions without forming a common denominator
-   over different integrals, or a second inverse of the cumulative matrix. *)
-basisRows = measured["basis_coefficients", CanonMethodCard`IntegralCoefficientRows[accepted["basis"],
-  ordered["basis"], Head[First[ordered["basis"]]]]];
-basisBackend = Lookup[Lookup[task["payload"], "method_options", <||>], "basis_backend", "wolfram"];
-If[!MemberQ[{"wolfram", "flint"}, basisBackend], fail["Unknown basis_backend; select wolfram or flint."]];
-basisArithmetic = <|"backend" -> basisBackend|>;
-basisDefinition = False;
-If[!MemberQ[basisRows, $Failed],
-  basisResidual = measured["basis_product",
-    Normal[SparseArray[transformation].SparseArray[basisRows] - IdentityMatrix[dimension, SparseArray]]];
-  If[basisBackend === "flint",
-    flintExecutable = Lookup[Lookup[task["payload"], "method_options", <||>], "flint_executable", None];
-    If[!StringQ[flintExecutable], fail["flint_executable must identify the installed exact arithmetic utility."]];
-    flintExecutable = CanonMethodCard`ResolveInputPath[inputPath, flintExecutable];
-    Get[FileNameJoin[{repoRoot, "mma", "lib", "FlintBasisArithmetic.wl"}]];
-    flintResult = measured["basis_zero_flint",
-      CanonFlintBasis`FlintBasisZero[basisResidual, Append[variables, regulator],
-        flintExecutable, FileNameJoin[{outputDir, "basis-flint"}], progressEvent]];
-    If[FailureQ[flintResult],
-      CanonMethodCard`WriteResult[task, outputDir, "ERROR", "UNSUPPORTED_BASIS_ARITHMETIC",
-        <||>, <|"reason" -> ToString[flintResult, InputForm]|>]; Quit[1]];
-    basisDefinition = TrueQ[flintResult["zero"]];
-    basisArithmetic = Join[basisArithmetic, flintResult["runtime"]],
-    basisDefinition = basisZeroQ[basisResidual]
-  ]
-];
 
 checks = <|
   "artifact_identity" -> (

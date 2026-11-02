@@ -33,6 +33,12 @@ regulator-free letters, including exact Wolfram algebraic expressions, and
 retains only letters with nonzero shared residue matrices. Alphabet inference
 occurs in SOLVE_TAIL; final checking uses the accepted alphabet.
 
+The default Wolfram checker uses the mandatory published basis coefficients U.
+For checked square matrices over the exact commutative field, `T.U = I` proves
+both the definitions and invertibility. Every entry of
+`A_i.T - D_i[T] - T.B_i = 0` is checked without a cumulative inverse or determinant.
+An invalid basis still fails; generic gauges singular at epsilon zero are allowed.
+
 For exact rational functions or one unnested principal quadratic generator,
 `method_options.gauge_backend: "flint"` checks every entry of
 `A_i T - D_i T - T B_i = 0` using the installed exact FLINT engine. Set

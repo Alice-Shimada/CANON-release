@@ -28,6 +28,9 @@ class ComponentTest(unittest.TestCase):
         entries = run_step.load_components()
         scripts = set(ROOT.glob("mma/*.wls")) | set(ROOT.glob("methods/*/run.wls"))
         scripts.remove(ROOT / "methods/method-card-template/run.wls")
+        # The stable INITIAL entry dispatches to this implementation; it is
+        # not a second selectable method.
+        scripts.remove(ROOT / "methods/initial-core/run.wls")
         self.assertEqual({Path(entry["command"][-1]) for entry in entries.values()},
                          scripts | {ROOT / "prepare_request.py"})
         for key, entry in entries.items():
@@ -36,6 +39,11 @@ class ComponentTest(unittest.TestCase):
                 self.assertEqual(entry["command"], [sys.executable, str(ROOT / "prepare_request.py")])
                 continue
             text = Path(entry["command"][-1]).read_text()
+            if Path(entry["command"][-1]) == ROOT / "methods/initial/run.wls":
+                text += (ROOT / "methods/initial-core/run.wls").read_text()
+                text += (ROOT / "methods/initial/reference/run.wls").read_text()
+            elif Path(entry["command"][-1]) == ROOT / "mma/CheckUTEvidence.wls":
+                text += (ROOT / "methods/initial/reference/check.wls").read_text()
             steps = re.findall(r'ReadTask\[(?:inputPath|requestPath), "([A-Z_]+)"\]', text)
             self.assertIn(key.split("/")[0], steps)
 

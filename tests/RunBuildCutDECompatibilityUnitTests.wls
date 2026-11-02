@@ -11,7 +11,8 @@ master = Apply[h, Join[{1}, ConstantArray[0, 11]]];
 zeroRecords = ConstantArray[<|"constant" -> 0, "linear" -> {}|>, 12];
 legacy = <|"denominators" -> Range[12], "records" -> zeroRecords|>;
 
-runCase[name_String, variables_List, derivatives_Association] := Module[
+runCase[name_String, variables_List, derivatives_Association,
+    reductionDescriptorFields_Association : <||>] := Module[
   {directory, derivativesPath, preparedPath, mastersPath, sectorsPath,
    reductionPath, inputPath, outputPath, process, resultPath},
   directory = FileNameJoin[{temporary, name}];
@@ -77,7 +78,8 @@ runCase[name_String, variables_List, derivatives_Association] := Module[
       "prepared_family" -> <|"type" -> "mathematica-expression", "path" -> preparedPath|>,
       "master_basis" -> <|"type" -> "mathematica-expression", "path" -> mastersPath|>,
       "sector_manifest" -> <|"type" -> "mathematica-expression", "path" -> sectorsPath|>,
-      "ibp_reduction" -> <|"type" -> "mathematica-expression", "path" -> reductionPath|>
+      "ibp_reduction" -> Join[<|"type" -> "mathematica-expression", "path" -> reductionPath|>,
+        reductionDescriptorFields]
     |>
   |>, "RawJSON"];
   process = RunProcess[{
@@ -124,12 +126,22 @@ unreducedBuiltDE = runCase[
   {u},
   ReplacePart[legacy, {"records", 1, "constant"} -> 1]
 ];
+wrongHashRun = runCase["wrong-reduction-hash", {u}, legacy,
+  <|"sha256" -> StringRepeat["0", 64]|>];
 
 If[accepted["exit_code"] =!= 0,
   Print[InputForm[KeyTake[accepted, {"exit_code", "stdout", "stderr", "result"}]]]
 ];
 
 tests = {
+  VerificationTest[
+    wrongHashRun["exit_code"] =!= 0 &&
+      wrongHashRun["result", "status"] === "ERROR" &&
+      wrongHashRun["result", "code"] === "IBP_EXECUTION_FAILED" &&
+      wrongHashRun["result", "summary", "reason_code"] === "INVALID_IBP_AUDIT_INPUT" &&
+      wrongHashRun["result", "artifacts"] === <||> &&
+      !FileExistsQ[FileNameJoin[{wrongHashRun["output"], "ordered-master-de.wl"}]],
+    True, TestID -> "declared-reduction-hash-mismatch-stops-before-DE-publication"],
   VerificationTest[
     accepted["exit_code"] === 0 &&
       accepted["result", "status"] === "PASS" &&
@@ -157,8 +169,9 @@ tests = {
   ],
   VerificationTest[
     unreducedBuiltDE["exit_code"] =!= 0 &&
-      unreducedBuiltDE["result", "status"] === "ERROR" &&
-      unreducedBuiltDE["result", "code"] === "INVALID_DIFFERENTIAL_EQUATION" &&
+      unreducedBuiltDE["result", "status"] === "FAIL" &&
+      unreducedBuiltDE["result", "code"] === "IBP_CHECK_FAILED" &&
+      unreducedBuiltDE["result", "summary", "reason_code"] === "IBP_MISSING_TARGETS" &&
       unreducedBuiltDE["result", "artifacts"] === <||>,
     True,
     TestID -> "unreduced-built-de-cannot-publish-pass"

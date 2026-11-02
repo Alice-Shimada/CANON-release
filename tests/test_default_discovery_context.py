@@ -99,7 +99,7 @@ def main():
         write(base / "test-default-components.json",manifest)
         stack = components + [str(base / "test-default-components.json")]
 
-        def run(step, payload, output):
+        def run(step, payload, output, expected_exit=0):
             request = base / (output + ".json")
             write(request,{"schema":"canon-neu/script-input/v1","task_id":name+"-"+step,
                 "step":step,"sector":None,"payload":payload})
@@ -112,7 +112,7 @@ def main():
             with (base/(output+".log")).open("w") as log:
                 process=subprocess.run(cmd,env=env,stdout=log,stderr=subprocess.STDOUT,timeout=60)
             result=json.loads((base/output/"result.json").read_text())
-            assert process.returncode==0,(name,output,result)
+            assert process.returncode==expected_exit,(name,output,result)
             return result,desc
 
         discover, desc = run("DISCOVER",{"prepared_family":{"path":"family.wl"}},"discover")
@@ -128,9 +128,13 @@ def main():
             "executable":sys.executable,"options":[str(work/"mock-native.py"),native_head,mode],
             "jobs":["mock"],"topology":"F","targets":"targets"},
             "reduction_targets":{"path":"targets.wl"},"master_basis":{"path":basis}}
-        reduction, rd = run("REDUCE_IBP",payload,"reduce")
-        wanted="PASS" if expected_code=="IBP_REDUCED" else "INCONCLUSIVE"
-        assert (reduction["status"],reduction["code"])==(wanted,expected_code),(name,reduction)
+        reduction, rd = run("REDUCE_IBP",payload,"reduce",
+            0 if expected_code=="IBP_REDUCED" else 1)
+        if expected_code=="IBP_REDUCED":
+            assert (reduction["status"],reduction["code"])==("PASS",expected_code),(name,reduction)
+        else:
+            assert (reduction["status"],reduction["code"])==("FAIL","IBP_CHECK_FAILED"),(name,reduction)
+            assert reduction["summary"]["reason_code"]==expected_code and reduction["artifacts"]=={},(name,reduction)
         facts={}
         if not baseline:
             with (base / "readback.log").open("w") as log:

@@ -82,6 +82,16 @@
         "scope": "Organize the supplied ordered master list."
       }
     },
+    "CHECK_IBP": {
+      "command": ["{wolframscript}", "-file", "{canon}/mma/CheckIBPReduction.wls"],
+      "instructions": "../skills/canon-reduce-ibp/SKILL.md",
+      "interface": {
+        "inputs": ["ibp_reduction", "ibp_contract"],
+        "optional_inputs": ["ibp_audit"],
+        "outputs": ["ibp_audit"],
+        "scope": "Exact structural audit against independent targets, masters and coefficient symbols; no proof of IBP identities."
+      }
+    },
     "REDUCE_IBP": {
       "command": [
         "{wolframscript}",
@@ -114,7 +124,14 @@
         "-file",
         "{canon}/mma/ReduceCandidateIBP.wls"
       ],
-      "instructions": "../skills/canon-reduce-ibp/SKILL.md"
+      "instructions": "../skills/canon-reduce-ibp/SKILL.md",
+      "interface": {
+        "inputs": ["integral_candidates", "prepared_family", "master_basis", "prepared_derivatives"],
+        "alternatives": [["ibp_reduction"], ["backend"], ["reduction"]],
+        "optional_inputs": ["family_data", "reducer_family", "sector_manifest", "derivative_operator_selection", "ibp_audit_options", "ibp_audit"],
+        "outputs": ["candidate_ibp_bridge", "reduction_targets", "ibp_audit"],
+        "scope": "Compile symbolic candidate and master-derivative targets, use the selected reducer or supplied rules, and audit before substitution."
+      }
     },
     "BUILD_CUT_DE": {
       "command": [
@@ -131,14 +148,14 @@
           "ibp_reduction"
         ],
         "optional_inputs": [
-          "prepared_derivatives"
+          "prepared_derivatives", "ibp_audit", "ibp_audit_options"
         ],
         "outputs": [
           "ordered_master_de",
           "sector_basis",
           "sector_cut_de"
         ],
-        "scope": "Full symbolic DE from prepared affine derivatives and normalized rules."
+        "scope": "Full symbolic DE from prepared affine derivatives and structurally audited normalized rules."
       }
     },
     "SLICE_CUT_DE": {
@@ -209,6 +226,17 @@
         "{canon}/methods/libra/run.wls"
       ],
       "instructions": "../methods/libra/SKILL.md"
+    },
+    "SEARCH_CORE/initial": {
+      "command": ["{wolframscript}", "-file", "{canon}/methods/initial/run.wls"],
+      "instructions": "../methods/initial/SKILL.md",
+      "interface": {
+        "inputs": ["sector_basis", "sector_cut_de", "seed_request", "method_options"],
+        "alternatives": [["seed_rows"], ["candidate_ibp_bridge", "prepared_family"]],
+        "optional_inputs": ["declared_alphabet"],
+        "outputs": ["core_candidates"],
+        "scope": "One bounded INITIAL call from explicitly normalized rational single-variable seeds; CHECK_CORE required."
+      }
     },
     "SEARCH_CORE/epsilon-zero": {
       "command": [

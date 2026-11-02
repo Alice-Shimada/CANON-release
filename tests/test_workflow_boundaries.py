@@ -81,7 +81,7 @@ def main():
     base = dict(schema='canon-neu/sector-basis/v1', sector=sector, family_id='boundary', basis_id='raw/3', basis=[j,k])
     cut = {**base, 'schema':'canon-neu/sector-cut-de/v1', 'coefficient_domain':'exact-rational-functions',
            'variables':[x], 'regulator':eps, 'matrices':[WL('{{eps/x,0},{0,eps/(1-x)}}')], 'sector_boundaries':[[1,2]]}
-    candidate = dict(candidate_id='selected', member_candidate_ids=['j','k'], construction_rejection=None,
+    candidate = dict(candidate_id='selected', member_candidate_ids=['j','k'], construction_rejection=WL('None'),
         transformation=WL('DiagonalMatrix[{2,3}]'), transformed_matrices=cut['matrices'],
         full_new_basis_rows=WL('{{0,1/2,0,0},{0,0,1/3,0}}'))
     pool = {key:cut[key] for key in ('sector','family_id','basis_id','basis','variables','regulator')}
@@ -104,20 +104,20 @@ def main():
     for field, value in [('family_id','other'),('basis_id','other'),('basis',[k,j]),('variables',[WL('y')]),('regulator',WL('eta')),('sector',sector0)]:
         changed=copy.deepcopy(pool);changed[field]=value
         run('core-mismatch-'+field,'CHECK_CORE',{**core_payload,'core_candidates':artifact('mismatch-'+field,changed)},
-            ('ERROR','SOURCE_BASIS_MISMATCH'),sector)
+            ('ERROR','INVALID_INPUT'),sector)
     run('core-mismatch-basis-artifact','CHECK_CORE',{**core_payload,'sector_basis':artifact('reordered-basis',{**base,'basis':[k,j]})},
-        ('ERROR','SOURCE_BASIS_MISMATCH'),sector)
+        ('ERROR','INVALID_INPUT'),sector)
     for name, transform, matrices in [('shape',WL('{{1}}'),cut['matrices']),
             ('inexact',WL('DiagonalMatrix[{1.,1}]'),cut['matrices']),
             ('transcendental',WL('DiagonalMatrix[{Sin[x],1}]'),cut['matrices']),
             ('missing-direction',candidate['transformation'],[])]:
         changed=copy.deepcopy(pool);changed['candidates'][0].update(transformation=transform,transformed_matrices=matrices)
-        run('core-'+name,'CHECK_CORE',{**core_payload,'core_candidates':artifact('pool-'+name,changed)},('FAIL','CORE_FAIL'),sector)
+        run('core-'+name,'CHECK_CORE',{**core_payload,'core_candidates':artifact('pool-'+name,changed)},('ERROR','INVALID_INPUT'),sector)
     for name, transform in [('algebraic',WL('DiagonalMatrix[{Sqrt[2],1}]')),('epsilon-singular',WL('DiagonalMatrix[{1/eps,eps}]'))]:
         changed=copy.deepcopy(pool);changed['candidates'][0]['transformation']=transform
         run('core-'+name,'CHECK_CORE',{**core_payload,'core_candidates':artifact('pool-'+name,changed)},('PASS','CORE_PASS'),sector)
     bad_pool=copy.deepcopy(pool);bad_pool['candidate_group_pool']['eligible']=2
-    run('core-pool-count','CHECK_CORE',{**core_payload,'core_candidates':artifact('pool-count',bad_pool)},('ERROR','INVALID_CANDIDATE_POOL'),sector)
+    run('core-pool-count','CHECK_CORE',{**core_payload,'core_candidates':artifact('pool-count',bad_pool)},('ERROR','INVALID_INPUT'),sector)
 
     trace0=[dict(sector=sector0,current_basis_id='raw/1',candidate_id='lower',member_candidate_ids=['l'],method='fixture')]
     lower=dict(schema='canon-neu/accepted-prefix/v1',family_id='boundary',source_basis=[l],basis=[l],
@@ -132,6 +132,11 @@ def main():
                       accepted_prefix=lower_ref,declared_alphabet=artifact('alphabet',{'letters':[x,WL('1-x')]}))
     full_result,full_dir=run('full-good','BUILD_FULL_DE',full_payload,sector=sector)
     full_ref=result_ref(full_result,full_dir,'full_sector_de')
+    for name,prefix in [('missing',{'path':str(out/'missing-prefix.wl')}),
+                        ('wrong-type',artifact('wrong-prefix-type',WL('{}')))]:
+        result,dest=run('full-invalid-prefix-'+name,'BUILD_FULL_DE',
+            {**full_payload,'accepted_prefix':prefix},('ERROR','INVALID_FULL_DE_INPUT'),sector)
+        assert result['artifacts']=={} and (dest/'process.log').stat().st_size < 16384
     eager=copy.deepcopy(pool);eager['candidates'].append({**candidate,'candidate_id':'unused','full_new_basis_rows':[[1]]})
     eager_ref=artifact('unused-alternative',eager)
     run('full-skips-unused-completion','BUILD_FULL_DE',{**full_payload,'core_candidates':eager_ref},sector=sector)
@@ -142,7 +147,7 @@ def main():
         ('ERROR','INVALID_FULL_DE_INPUT'),sector)
     changed=copy.deepcopy(pool);changed['candidates'][0]['full_new_basis_rows']=WL('{{0,1,0,0},{0,0,1,0}}')
     run('full-binds-checked-cut-rows','BUILD_FULL_DE',{**full_payload,'core_candidates':artifact('wrong-full-rows',changed)},
-        ('ERROR','INVALID_FULL_DE_INPUT'),sector)
+        ('ERROR','INVALID_CORE_COMPLETION'),sector)
     changed={**ordered,'matrices':[WL('{{eps/x,0,0,1},{0,eps/x,0,0},{0,0,eps/(1-x),0},{0,0,0,eps/(1+x)}}')]}
     run('full-no-discarded-higher-coupling','BUILD_FULL_DE',{**full_payload,'ordered_master_de':artifact('unclosed-ordered',changed)},
         ('ERROR','INVALID_FULL_DE_INPUT'),sector)
@@ -164,6 +169,9 @@ def main():
         run('canonical-'+name,'CHECK_CANONICAL',{**canonical_payload,'sector_transform':r},('ERROR','INVALID_CANONICAL_INPUT'),sector)
     commit_payload=dict(previous_accepted_prefix=lower_ref,sector_basis=base_ref,sector_transform=trans_ref,canonical_sector_de=can_ref)
     commit_result,commit_dir=run('commit-good','COMMIT_SECTOR',commit_payload,sector=sector)
+    assert {key: commit_result['summary'][key] for key in (
+        'accepted_sector_count', 'accepted_master_count', 'previous_master_count', 'new_master_count')} == {
+        'accepted_sector_count': 2, 'accepted_master_count': 3, 'previous_master_count': 1, 'new_master_count': 2}
     accepted_ref=result_ref(commit_result,commit_dir,'accepted_prefix')
     run('commit-record-key-order','COMMIT_SECTOR',commit_payload,sector=reversed_sector)
     for name,updates in [('unchecked',{'full_checks':{}}),('other-transform',{'transformation':WL('IdentityMatrix[3]')}),('other-prefix',{'accepted_prefix_id':'other'})]:

@@ -22,6 +22,7 @@ SOURCE_FILES = [
     "components/profiles/mixed-reducers.json",
     "mma/BuildSectorCutDE.wls", "mma/lib/MethodCardCore.wl",
     "mma/lib/DEBuilder.wl", "mma/lib/CandidateIBPBridge.wl",
+    "mma/lib/IBPReductionAudit.wl",
     "skills/canon-build-cut-de/SKILL.md",
     *["components/parameterization/" + name for name in (
         "Prepare.wls", "Parameterization.wl", "components.json", "README.md",

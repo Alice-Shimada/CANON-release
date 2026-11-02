@@ -107,10 +107,10 @@ Apply these rules in order:
 | `CHECK_CORE` returned `PASS/CORE_PASS` | Run `BUILD_FULL_DE`. | [full DE](../canon-build-full-de/SKILL.md) |
 | An untested `core_candidates` artifact exists | Run `CHECK_CORE`. | [core check](../canon-check-core/SKILL.md) |
 | An integral-candidate IBP bridge exists but no routed core pool | Run `ROUTE_CORE_CANDIDATES`. | [core search](../canon-search-core/SKILL.md) |
-| Integral candidates exist but have not been reduced | Keep them. Complete any missing candidate derivative inputs, then run `REDUCE_CANDIDATE_IBP`. | [IBP](../canon-reduce-ibp/SKILL.md) |
+| Integral candidates exist but have not been reduced | Keep them. Complete missing derivative inputs, then run `REDUCE_CANDIDATE_IBP`, including its IBP audit before substitution. | [IBP](../canon-reduce-ibp/SKILL.md) |
 | The current `sector_basis` and `sector_cut_de` exist, with no untested candidate | Select a core method using **Core selection** below. | [core search](../canon-search-core/SKILL.md) |
 | The original `ordered_master_de` exists, but the current cut is absent | Run `SLICE_CUT_DE`. Reuse the original DE. | [cut DE](../canon-build-cut-de/SKILL.md) |
-| Masters/sectors exist and derivative targets have complete IBP coverage | Run `BUILD_CUT_DE` once. | [cut DE](../canon-build-cut-de/SKILL.md) |
+| Masters/sectors and reduction rules exist for the derivative targets | Run `BUILD_CUT_DE` once; its audit confirms coverage/closure before constructing matrices. | [cut DE](../canon-build-cut-de/SKILL.md) |
 | No original DE exists; symbolic parameterized family data exist but physical derivative records are absent | Run `PREPARE_DERIVATIVES`. Agents do not write the records. | [physical derivatives](../canon-prepare-derivatives/SKILL.md) |
 | Masters/sectors exist, with symbolic derivatives but no target artifact | Run `PREPARE_REDUCTION_TARGETS`. | [targets](../canon-prepare-reduction-targets/SKILL.md) |
 | Derivative targets exist but lack IBP rules | Run `REDUCE_IBP` for those targets. | [IBP](../canon-reduce-ibp/SKILL.md) |
@@ -124,7 +124,7 @@ The order is ascending `(propagator_count, sector_id)`, preserving resident
 master order within each sector.
 
 Every executable step uses the common input/output pair and writes `result.json`.
-For default `SEARCH_CORE`, select `--method canonica`, `libra`, `epsilon-zero`
+For default `SEARCH_CORE`, select `--method canonica`, `libra`, `initial`, `epsilon-zero`
 or `residue-balance`
 as directed by core selection; the runner does not choose a method.
 
@@ -134,6 +134,18 @@ within its current running task; collect the child result when the terminal
 checkpoint arrives, then apply scientific routing. Do not treat a successful
 launch or a completion notification as a passed scientific check. The optional
 execution package's instructions define submit, collect, cancel and watch calls.
+
+For a raw reduction handed off without DE construction or a candidate bridge,
+run `CHECK_IBP` through `run_step.py` and the task's component selection, with independent declarations
+before delivery. The embedded audit avoids a duplicate standalone call when
+proceeding directly through either consuming script.
+For unchanged accepted reductions, reuse the trusted PASS bound to the final
+file. The candidate command saves it at `candidate-ibp-bridge.wl.audit.wl`; consumers discover
+this adjacent receipt or take an explicit `payload.ibp_audit` descriptor. After
+artifact registration/renaming, pass that separately registered receipt explicitly.
+Consumers verify file identity and current targets/master order; a mismatch invokes
+the full audit. No per-rule fingerprint scan is needed. Publish changed reductions
+as new artifacts. Do not rerun a separate full audit solely because the workflow advanced.
 
 ## 4. Core selection
 
@@ -156,6 +168,16 @@ throughout worker handoffs. Record tested decision rules with their inputs,
 bounds and checker evidence so later choices can improve without broadening the
 scientific claim or repeating accepted work.
 
+When core selection selects a direct-DE construction, a small explicitly normalized UT seed set
+can select INITIAL's seeded core card alongside the other SEARCH_CORE providers.
+Use `run_step.py` with explicit `SEARCH_CORE` and `--method initial` for the default
+provider. The legacy official
+ladder evidence steps are reference validation only; they cannot satisfy
+CORE_PASS, select a method, or run automatically after a failed core attempt.
+Libra's bounded normalization and CANONICA's finite block ansatz extend this same
+node. CANONICA's subsector D solving and checkpoints extend SOLVE_TAIL. Every
+proposal retains the existing independent checks and forward-routing order.
+
 ## 5. Result routing
 
 Read `status`, `code` and `summary`; exit code zero is not scientific success.
@@ -165,8 +187,8 @@ prefix. A new attempt must change the stated failing hypothesis or input.
 | Result or evidence | Next action |
 |---|---|
 | A matching exact CORE_PASS exists, including when an older diagnostic claimed an obstruction | Reuse that positive witness and follow forward routing to BUILD_FULL_DE. A diagnostic cannot veto a passing gauge identity. |
-| Missing IBP targets or unreduced integrals | Extend coverage for those targets, then repeat only the affected construction. Candidate assessment follows complete reduction. |
-| Native/exported master count differs from the declared source basis | Compare exact ordered lists, target coverage and closure using the IBP skill. Counts alone neither establish missing masters nor justify a larger seed. |
+| `ERROR/IBP_EXECUTION_FAILED` | Fix the audit invocation, inputs or options using the diagnostic details. |
+| `FAIL/IBP_CHECK_FAILED` | Read `summary.reason_code` and details through the IBP skill. Extend named target coverage, fix the declared data/order, or complete a timed-out or unsupported check before consumption. A nonpassing gate does not exhaust an IBP method or establish missing masters. |
 | An input/schema/tool error with a result file | Fix the named field, path, convention or installation in the step's skill, then resume that operation using unaffected artifacts. |
 | `CORE_FAIL`, `CANDIDATE_BUDGET_EXHAUSTED`, or `SELECT_CORE_METHOD` | Read the candidate rejection/rank and return to core selection. Do not call SOLVE_TAIL for a failed core. |
 | `TAIL_UNSOLVED` | Follow the tail skill's diagnostic table. It distinguishes epsilon dependence, missing letters/higher poles and the rational backend domain. |

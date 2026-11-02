@@ -71,10 +71,19 @@ An optional package can replace any subset of steps while keeping the published
 scientific inputs and outputs. The default scientific route is:
 
 ```text
-PREPARE → DISCOVER → IBP and ordered DE
+PREPARE → DISCOVER → IBP → IBP audit → ordered DE
   → sector core proposal → CHECK_CORE → full-prefix construction and tail repair
   → CHECK_CANONICAL → COMMIT_SECTOR → next sector → FINAL_CHECK
 ```
+
+The [IBP audit](INTERFACES.md#ibp-reduction-audit) checks the unified reduction
+against independently declared targets, masters and coefficient symbols.
+`BUILD_CUT_DE` and candidate reduction include it before consumption; standalone
+`mma/CheckIBPReduction.wls` checks imported or delivered reductions. It verifies
+structural integrity and coverage; the subsequent mathematical gates are still required.
+The producer binds its passing receipt to the final file. Consumers check file
+identity and current target/master requirements, avoiding repeated structural
+audits or per-rule fingerprint scans of an unchanged accepted artifact.
 
 For integral-basis discovery from a family (UT or canonical), choose a small
 proposal from the geometry and current evidence: selected dots and normalization,
@@ -82,9 +91,15 @@ a justified Gram construction, or a bounded DlogBasis-refine search. Integral
 proposals continue through candidate IBP reduction and the same checks.
 CANONICA supplies rational DE transformations and Libra the implemented
 single-variable route when a direct-DE approach is justified. A supplied-DE-only
-task can start there. The [routing skill](skills/canon-workflow/SKILL.md) explains when
-to change routes and retain useful method experience; an exhaustive numerator/dot
-search is not required. The
+task can start there. With explicitly normalized UT seeds, a declared alphabet
+and a rational one-variable cut, [INITIAL](methods/initial/SKILL.md) also supplies
+a bounded core candidate through `methods/initial/run.wls` with explicit
+`SEARCH_CORE`. Its original fixed official ladder flow is retained as
+[reference validation and compatibility](methods/initial/reference/README.md).
+Optional Libra normalization and CANONICA finite T/D ansatz controls extend the
+existing core/tail nodes; subsector tail checkpoints can resume bounded work.
+The [routing skill](skills/canon-workflow/SKILL.md) explains when
+to change routes and retain useful method experience; an exhaustive numerator/dot search is not required. The
 [method cards](methods/README.md) describe their actual scopes.
 
 A successful final check returns a canonical basis and DE in the declared

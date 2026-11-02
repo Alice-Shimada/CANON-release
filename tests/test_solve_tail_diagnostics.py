@@ -38,7 +38,10 @@ record[stage_, variables_, boundaries_, initial_, matrices_, options_, response_
   response
 ];
 TransformOffDiagonalBlock[v_, b_, t_, a_, o___Rule] := Module[{change, response},
-  change = {{1,0},{First[v]/(1+eps First[v]),1}};
+  (* Retain an unsupported moving pole in the epsilon-failure fixture. The
+     successful fixture becomes zero after D and now needs no native normalizer. *)
+  change = If[mode === "epsilon-failure", IdentityMatrix[2],
+    {{1,0},{First[v]/(1+eps First[v]),1}}];
   response = If[mode === "off-diagonal-failure",
     {False, {17, "fixture off-diagonal return", TailDiagnosticFixture`pending[]}},
     {t.change, CanonMethodCard`GaugeTransform[a,v,change]}];
@@ -84,6 +87,14 @@ With[{x=CANON`DEData`x,eps=CANON`DEData`eps},
     (success["transformed_matrices"]==={ConstantArray[0,{3,3}]})]];
 already=read["already-ready/output/sector-transform.wl"];
 AssociateTo[facts,"already-ready/identity"->(already["transformation"]===IdentityMatrix[3])];
+Get[FileNameJoin[{canon,"mma","lib","TailCompletion.wl"}]];
+emptyLower=CanonTailCompletion`TailDiagnostics[
+  <|"regulator"->CANON`DEData`eps,"block_boundaries"-><|"lower_dimension"->0|>|>,
+  <|"transformation"->IdentityMatrix[2],"matrices"->{ConstantArray[0,{2,2}]},"alphabet"->{}|>];
+AssociateTo[facts,"no-lower/all-current-active"->(emptyLower["active_positions"]==={1,2})];
+AssociateTo[facts,"no-lower/empty-scopes"->And@@(
+  emptyLower["coefficient_scopes",#,"nonrational_entry_count"]===0& /@
+  {"inactive","inactive_to_active","current_to_lower"})];
 Export[FileNameJoin[{base,"readback.json"}],<|"wolfram_version"->$Version,"checks"->facts|>,"RawJSON"];
 Exit[If[And@@Values[facts],0,1]];
 '''
@@ -128,11 +139,16 @@ def main():
         "backend-success": "1/(1+eps x)^2",
         "algebraic-unsolved": "eps/Sqrt[1+x+x^3]",
         "already-ready": "0",
+        "inactive-algebraic-coupling": "1/(1+eps x)^2",
     }
     for name, tail in cases.items():
         case = work / name
         case.mkdir()
-        (case / "full.wl").write_text(FULL_DE.replace("TAIL", tail))
+        full = FULL_DE.replace("TAIL", tail)
+        if name == "inactive-algebraic-coupling":
+            full = full.replace('{0,0,0},{0,0,0}',
+                '{0,0,0},{1/Sqrt[1+x+x^3],eps/Sqrt[1+x+x^3],0}')
+        (case / "full.wl").write_text(full)
         (case / "core.wl").write_text('<|"schema"->"canon-neu/core-transform/v1","candidate_id"->"fixture","basis_id"->"fixture/7","basis"->{j3},"family_id"->"tail-diagnostic-fixture","sector"-><|"id"->7,"propagator_count"->3|>,"variables"->{x},"regulator"->eps,"checks"-><|"pass"->True|>|>\n')
         if name in ("off-diagonal-failure", "epsilon-failure", "backend-success"):
             (case / "CANONICA.m").write_text(BACKEND.replace("MODE", name))
@@ -159,28 +175,47 @@ def main():
         assert process.returncode == 0, (name, process.returncode)
         result = json.loads((case / "output/result.json").read_text())
         calls = (case / "calls.txt").read_text().splitlines() if (case / "calls.txt").exists() else []
-        expected_calls = ["TransformOffDiagonalBlock"] if name == "off-diagonal-failure" else (
+        expected_calls = ["TransformOffDiagonalBlock"] if name in ("off-diagonal-failure", "backend-success") else (
             ["TransformOffDiagonalBlock", "TransformDlogToEpsForm"]
-            if name in ("epsilon-failure", "backend-success") else [])
+            if name == "epsilon-failure" else [])
         assert calls == expected_calls, (name, calls)
         if name.endswith("failure"):
+            reason = ("backend_no_transformation" if name == "off-diagonal-failure"
+                      else "epsilon_normalization_no_transformation")
             assert (result["status"], result["code"], result["summary"]["reason"]) == (
-                "INCONCLUSIVE", "TAIL_UNSOLVED", "backend_no_transformation"), result
+                "INCONCLUSIVE", "TAIL_UNSOLVED", reason), result
             assert result["summary"]["backend_stage"] == expected_calls[-1], result
-            assert result["artifacts"] == {"backend_failure": {
-                "type": "mathematica-expression", "path": "backend-failure.wl"}}, result
-        elif name == "algebraic-unsolved":
+            assert result["artifacts"]["backend_failure"] == {
+                "type": "mathematica-expression", "path": "backend-failure.wl"}, result
+            assert set(result["artifacts"]) == {"backend_failure", "method_messages"}, result
+        elif name in ("algebraic-unsolved", "inactive-algebraic-coupling"):
             assert (result["status"], result["code"], result["summary"]["reason"]) == (
                 "INCONCLUSIVE", "TAIL_UNSOLVED",
                 "remaining_algebraic_tail_outside_rational_CANONICA_domain"), result
             assert result["artifacts"] == {} and "backend_stage" not in result["summary"], result
+            if name == "inactive-algebraic-coupling":
+                diagnostic = result["summary"]["diagnostics"]
+                assert diagnostic["active_positions"] == [1, 3], diagnostic
+                assert diagnostic["inactive_positions"] == [2], diagnostic
+                scopes = diagnostic["coefficient_scopes"]
+                assert {key: value["nonrational_entry_count"] for key, value in scopes.items()} == {
+                    "whole": 2, "current": 0, "current_to_lower": 0,
+                    "active_closure": 0, "inactive": 1, "inactive_to_active": 1}, diagnostic
         else:
             method = "canonica-off-diagonal" if name == "backend-success" else "candidate-completion"
-            assert (result["status"], result["code"], result["summary"]) == (
-                "PASS", "TAIL_READY", {"candidate_id": "fixture", "method": method}), result
-            assert result["artifacts"] == {"sector_transform": {
-                "type": "mathematica-expression", "path": "sector-transform.wl"}}, result
+            assert (result["status"], result["code"]) == ("PASS", "TAIL_READY"), result
+            assert result["summary"]["candidate_id"] == "fixture", result
+            assert result["summary"]["method"] == method, result
+            assert result["artifacts"]["sector_transform"] == {
+                "type": "mathematica-expression", "path": "sector-transform.wl"}, result
+            assert set(result["artifacts"]) == ({"sector_transform", "method_messages"}
+                if name == "backend-success" else {"sector_transform"}), result
             assert not (case / "output/backend-failure.wl").exists()
+        builtin = result["summary"]["builtin_completion"]
+        assert builtin["attempted"] is True and builtin["solved"] == (name == "already-ready"), result
+        assert isinstance(builtin["method"], str), result
+        if name == "already-ready":
+            assert result["summary"].get("diagnostics") is None, result
         results[name] = {"returncode": process.returncode, "calls": calls, "result": result}
     readback = work / "readback.wls"
     readback.write_text(READBACK)

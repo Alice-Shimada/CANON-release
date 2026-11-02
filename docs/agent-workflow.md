@@ -153,6 +153,15 @@ only when selected, so optional code can live outside the checkout.
 The route distinguishes successful intermediate results, provisional candidates,
 method exhaustion and operational failure. In particular:
 
+- Reductions pass the [IBP audit](../INTERFACES.md#ibp-reduction-audit) before use.
+  Declare targets, master space/order and coefficient symbols from their producers.
+  `BUILD_CUT_DE` and the candidate bridge include the gate; standalone `CHECK_IBP`
+  handles reductions delivered separately. Failures distinguish execution errors
+  from a nonpassing output check; specific reasons remain in diagnostic details.
+  Timeout or unsupported syntax does not establish bad data or method exhaustion.
+  Keep the passing receipt bound to the final reduction file. Consumers verify
+  artifact identity and current coverage/order, then reuse the accepted checks.
+  Publish changes as new artifacts; changed inputs/domains invalidate reuse.
 - For a defined-family UT/canonical search, select a small proposal from the
   geometry and existing evidence: dots and normalization for suitable simple
   sectors, Gram constructions for a concrete numerator/dimensional/contact
