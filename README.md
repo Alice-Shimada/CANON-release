@@ -1,3 +1,8 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/branding/canon/candidate-b-gluon-axle/canon-icon-reverse.svg">
+  <img src="assets/branding/canon/candidate-b-gluon-axle/canon-icon.svg" alt="CANON cannon with an epsilon projectile and a gluon-line wheel axle" width="160" height="160">
+</picture>
+
 # CANON
 
 **Agent-assisted construction of canonical differential equations for Feynman integrals.**
