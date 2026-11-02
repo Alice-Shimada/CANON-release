@@ -1,0 +1,118 @@
+$HistoryLength=0;
+scriptArgs = If[ListQ[$ScriptCommandLine] && Length[$ScriptCommandLine] > 1,
+  Rest[$ScriptCommandLine], Drop[$CommandLine, First @ FirstPosition[$CommandLine, "-script"] + 1]];
+{repoRoot,inputPath,outputDir}=ExpandFileName /@ scriptArgs;
+Get[FileNameJoin[{repoRoot,"mma","lib","MethodCardCore.wl"}]];
+task=CanonMethodCard`ReadTask[inputPath,"VERIFY_FLINT_FIXTURES"];
+base=task["payload","fixture_directory"];results=task["payload","result_directory"];
+same[a_,b_] := Dimensions[a]===Dimensions[b]&&AllTrue[Flatten[a-b],TrueQ[FullSimplify[Together[#]]===0]&];
+phases={"source_current_lower_reduce","current_core_inverse_reduce","candidate_lower_transform_reduce","candidate_full_gauge_reduce"};
+checks=Association@Table[case["name"]->Module[
+ {name=case["name"],receipt,expected,full,candidate,identity,runtime,events,operations,native,map,facts},
+ receipt=Import[results<>"/"<>name<>"/result.json","RawJSON"];
+ events=If[FileExistsQ[results<>"/"<>name<>"/normalization-events.jsonl"],Import[results<>"/"<>name<>"/normalization-events.jsonl","Lines"],{}];
+ events=ImportString[#,"RawJSON"]&/@events;
+ If[case["expected_status"]==="ERROR",
+   facts=<|"scoped_error"->(receipt["status"]==="ERROR"&&receipt["code"]===case["expected_code"]),
+     "no_full_artifact"->!FileExistsQ[results<>"/"<>name<>"/full-sector-de.wl"],
+     "no_normalized_artifact"->!FileExistsQ[results<>"/"<>name<>"/normalized.wl"],
+     "actual_error_backend"->(If[case["error_backend"]===Null,True,receipt["summary","normalization_backend"]===case["error_backend"]])|>;
+   If[case["name"]==="policy-failed-reconstruction",
+     facts=Join[facts,<|"actual_error_phase"->AnyTrue[events,
+       Lookup[#,"event",None]==="error"&&Lookup[#,"phase",None]==="candidate_lower_transform_reduce"&&
+       Lookup[#,"backend",None]==="finiteflow"&],
+       "no_backend_fallback"->AllTrue[Select[events,MemberQ[phases,Lookup[#,"phase",None]]&],
+         Lookup[#,"backend",None]===case["effective_map"][#["phase"]]&]|>]];
+   If[KeyExistsQ[case,"effective_map"],facts=Join[facts,<|"error_effective_map"->
+     (receipt["summary","normalization_backends"]===case["effective_map"])|>]];
+   If[Lookup[case,"kind",None]==="probe",
+    facts=Join[facts,<|"actual_input_is_matrix"->MatrixQ[CanonMethodCard`ReadWLData[case["input_matrix_path"]]]|>];
+    If[case["expected_code"]==="UNSUPPORTED_ARITHMETIC_DOMAIN",facts=Join[facts,<|"actual_domain_rejected_before_native"->!AnyTrue[events,MemberQ[{"flint_native","FermatBlockTogether"},Lookup[#,"operation",None]]&]|>]];
+    If[KeyExistsQ[case,"environment"],facts=Join[facts,<|"actual_native_normalization_reached"->AnyTrue[events,MemberQ[{"flint_native","FermatBlockTogether"},Lookup[#,"operation",None]]&]|>]]
+   ];
+   If[Lookup[case,"kind",None]==="initboundary",
+    facts=Join[facts,<|"error_is_before_native_initialization"->!AnyTrue[events,Lookup[#,"event",None]==="initialized"||MemberQ[{"flint_native","FermatBlockTogether"},Lookup[#,"operation",None]]&],
+     "actual_early_error_backend"->AnyTrue[events,Lookup[#,"event",None]==="error"&&Lookup[#,"backend",None]==="flint"&&Lookup[#,"phase",None]===Null&]|>]];
+   facts,
+ If[Lookup[case,"kind",None]==="probe",
+   expected=CanonMethodCard`ReadWLData[case["expected_matrix_path"]];
+   full=CanonMethodCard`ReadWLData[results<>"/"<>name<>"/normalized.wl"];
+   candidate=CanonMethodCard`ReadWLData[case["input_matrix_path"]];
+   runtime=Import[results<>"/"<>name<>"/arithmetic-runtime.json","RawJSON"];
+   map=case["effective_map"];
+   native=Import[results<>"/"<>name<>"/flint-normalization-1/readback.json","RawJSON"];
+   operations=Select[events,MemberQ[{"start","end"},Lookup[#,"event",None]]&];
+   <|"public_pass"->(receipt["status"]==="PASS"),
+     "independent_prescribed_nonzero_matrix"->same[full,expected],
+     "independent_input_identity"->same[full,candidate],
+     "nonzero_result_observed"->AnyTrue[Flatten[full],!TrueQ[FullSimplify[Together[#]]===0]&],
+     "shape_and_pair_count"->(Dimensions[full]===Dimensions[expected]&&native["runtime","count"]===Times@@Dimensions[expected]),
+     "declared_variables_only"->(Complement[DeleteDuplicates[Cases[full,_Symbol,Infinity]],DeleteDuplicates[Cases[candidate,_Symbol,Infinity]]] === {}),
+     "constant_internal_slot_no_leak"->If[StringStartsQ[name,"constant-"],native["variables"]==={}&&TrueQ[native["constant_dummy_slot"]]&&native["native_variable_count"]===1,True],
+     "nonzero_native_receipt"->(native["runtime","all_zero"]===False),
+     "full_effective_map"->(runtime["normalization_backends"]===map),
+     "flint_runtime_binding"->(runtime["flint_runtime","executable"]===task["payload","declared_flint_executable"]&&
+      runtime["flint_runtime","executable_sha256"]===task["payload","declared_flint_executable_hash"]&&
+      runtime["flint_runtime","threads"]===1&&runtime["flint_runtime","header_version"]===task["payload","declared_flint_version"]&&runtime["flint_runtime","runtime_version"]===task["payload","declared_flint_version"]),
+     "actual_phase_backend"->AllTrue[operations,Lookup[#,"phase",None]==="candidate_lower_transform_reduce"&&Lookup[#,"backend",None]==="flint"&],
+     "only_selected_native_initialized"->(!KeyExistsQ[runtime,"native_library"]&&!KeyExistsQ[runtime,"fermat_runtime"]),
+     "three_stage_timings"->(Sort[Keys[native["timings"]]]===Sort[{"flint_serialize","flint_native","flint_readback"}]&&AllTrue[Values[native["timings"]],NumericQ[#]&&#>=0&]),
+     "operations_closed"->(Count[Lookup[events,"event"],"start"]===Count[Lookup[events,"event"],"end"])
+   |>,
+ expected=CanonMethodCard`ReadWLData[Lookup[case,"expected_path",base<>"/"<>case["expected_name"]<>"-expected.wl"]];
+ full=CanonMethodCard`ReadWLData[results<>"/"<>name<>"/full-sector-de.wl"];
+ candidate=First[full["candidates"]];
+ identity=MapThread[#1.expected["raw_transformation"]-D[expected["raw_transformation"],#2]-
+   expected["raw_transformation"].#3&,{expected["raw"],full["variables"],candidate["transformed_matrices"]}];
+ runtime=Import[results<>"/"<>name<>"/arithmetic-runtime.json","RawJSON"];
+ map=case["effective_map"];native=MemberQ[Values[map],"finiteflow"];
+ operations=Select[events,MemberQ[{"start","end"},Lookup[#,"event",None]]&];
+ <|"public_pass"->(receipt["status"]==="PASS"),
+   "standard_schema"->(full["schema"]==="canon-neu/full-prefix-candidates/v1"),
+   "row_map"->same[candidate["new_basis_rows"],expected["mixed_rows"]],
+   "inverse_direction"->same[candidate["full_transformation"],expected["mixed_transformation"]],
+   "source_matrices"->same[full["source_matrices"],expected["source_matrices"]],
+   "source_composition"->same[full["accepted_prefix_transformation"].candidate["full_transformation"],expected["raw_transformation"]],
+   "independent_expected_target"->same[candidate["transformed_matrices"],expected["target"]],
+   "independent_raw_gauge_identity"->AllTrue[identity,CanonMethodCard`ZeroMatrixQ],
+   "full_effective_map"->(runtime["normalization_backends"]===map),
+   "default_backend_recorded"->(runtime["default_backend"]===case["default_backend"]),
+   "aggregate_backend_recorded"->(runtime["backend"]===If[Length[DeleteDuplicates[Values[map]]]===1,First[Values[map]],"mixed"]),
+   "all_four_phases_present"->(Sort[DeleteDuplicates[Lookup[operations,"phase"]]]===Sort[phases]),
+   "actual_event_backend"->AllTrue[operations,KeyExistsQ[map,#["phase"]]&&#["backend"]===map[#["phase"]]&],
+   "all_requested_operations_closed"->(Count[Lookup[events,"event"],"start"]===Count[Lookup[events,"event"],"end"]&&Length[operations]>0),
+   "native_only_if_effective_phase_requires_it"->If[native,TrueQ[runtime["native_loaded"]],
+      !KeyExistsQ[runtime,"native_library"]&&!FileExistsQ[results<>"/"<>name<>"/native-load-readback.json"]],
+   "native_threads_and_binding"->If[native,runtime["finiteflow_threads"]===1&&runtime["reconstruction_NThreads"]===1&&
+     runtime["FFNThreads"]===1&&runtime["native_function_library"]===task["payload","declared_native_library"]&&
+     runtime["native_library_sha256"]===task["payload","declared_native_hash"],True],
+   "native_entry_calls_match_phase_map"->AllTrue[Select[operations,Lookup[#,"operation",None]==="FFTogether"&],
+      map[#["phase"]]==="finiteflow"&&#["backend"]==="finiteflow"&],
+   "required_native_work_observed"->If[native,AnyTrue[operations,Lookup[#,"operation",None]==="FFTogether"&],True],
+   "fermat_only_if_effective"->(KeyExistsQ[runtime,"fermat_runtime"]===MemberQ[Values[map],"fermat"]),
+   "fermat_installation_identity"->If[MemberQ[Values[map],"fermat"],With[{fr=runtime["fermat_runtime"]},
+      fr["package_entry"]===task["payload","declared_fermat_entry"]&&fr["package_sha256"]===task["payload","declared_fermat_entry_hash"]&&
+      fr["executable"]===task["payload","declared_fermat_executable"]&&fr["executable_sha256"]===task["payload","declared_fermat_executable_hash"]&&
+      StringQ[fr["package_version"]]&&StringLength[fr["package_version"]]>0&&
+      StringQ[fr["executable_version"]]&&StringLength[fr["executable_version"]]>0&&fr["threads"]===1],True],
+   "fermat_native_work_observed"->If[MemberQ[Values[map],"fermat"],
+      AnyTrue[operations,Lookup[#,"operation",None]==="FermatBlockTogether"&],True],
+   "fermat_calls_match_phase"->AllTrue[Select[operations,Lookup[#,"operation",None]==="FermatBlockTogether"&],
+      map[#["phase"]]==="fermat"&&#["backend"]==="fermat"&],
+   "flint_only_if_effective"->(KeyExistsQ[runtime,"flint_runtime"]===MemberQ[Values[map],"flint"]),
+   "flint_runtime_binding"->If[MemberQ[Values[map],"flint"],With[{fr=runtime["flint_runtime"]},
+      fr["executable"]===task["payload","declared_flint_executable"]&&fr["executable_sha256"]===task["payload","declared_flint_executable_hash"]&&
+      fr["header_version"]===task["payload","declared_flint_version"]&&fr["runtime_version"]===task["payload","declared_flint_version"]&&fr["threads"]===1],True],
+   "flint_three_stages_observed"->If[MemberQ[Values[map],"flint"],
+      AllTrue[{"flint_serialize","flint_native","flint_readback"},MemberQ[Lookup[operations,"operation",None],#]&],True],
+   "flint_calls_match_phase"->AllTrue[Select[operations,StringStartsQ[Lookup[#,"operation",""],"flint_"]&],
+      map[#["phase"]]==="flint"&&#["backend"]==="flint"&],
+   "same_clock_timings_nonnegative"->AllTrue[operations,NumericQ[#["elapsed_seconds"]]&&#["elapsed_seconds"]>=0&&
+      (!KeyExistsQ[#,"operation_seconds"]||#["operation_seconds"]>=0)&]|>
+ ]]],{case,task["payload","cases"]}];
+all=AllTrue[Values[checks],AllTrue[Values[#],TrueQ]&];
+Export[outputDir<>"/checks.json",<|"all_pass"->all,"checks"->checks,"check_count"->Total[Length/@Values[checks]],
+  "scientific_acceptance"->False,"method"->"Existing T013 prescribed targets and unchanged exact System Together/FullSimplify gauge identities; added explicit policy/runtime/event checks."|>,"RawJSON"];
+CanonMethodCard`WriteResult[task,outputDir,If[all,"PASS","FAIL"],"FIXTURE_CHECKS",
+  <|"checks"-><|"type"->"json","path"->"checks.json"|>|>,<|"all_pass"->all,"scientific_acceptance"->False|>];
+Quit[If[all,0,1]];

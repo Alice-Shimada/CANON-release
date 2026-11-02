@@ -1,0 +1,14 @@
+$HistoryLength=0;
+args=If[ListQ[$ScriptCommandLine]&&Length[$ScriptCommandLine]>1,Rest[$ScriptCommandLine],Drop[$CommandLine,First@FirstPosition[$CommandLine,"-script"]+1]];
+{repoRoot,inputPath,outputDir}=ExpandFileName/@args;
+Get[repoRoot<>"/mma/lib/MethodCardCore.wl"];
+task=CanonMethodCard`ReadTask[inputPath,"PREPARE_STREAM_FIXTURE"];
+{x,y,z,w,u}=Symbol/@{"CanonStream`x","CanonStream`y","CanonStream`z","CanonStream`w","CanonStream`u"};
+p=Total[Flatten[Table[x^a y^b z^c w^d,{a,0,7},{b,0,7},{c,0,7},{d,0,7}]]];
+coefficient=Expand[(1-u)p]/(1-u)-p+1;
+matrix=ConstantArray[coefficient,{16,8}];
+expected=ConstantArray[1,{16,8}];
+CanonMethodCard`WriteWLArtifact[matrix,outputDir,"matrix.wl"];
+CanonMethodCard`WriteWLArtifact[expected,outputDir,"expected.wl"];
+Export[outputDir<>"/fixture.json",<|"dimensions"->{16,8},"polynomial_monomials"->4096,"coefficient_leaf_count"->LeafCount[coefficient],"all_identical_entries"->AllTrue[Flatten[matrix],SameQ[#,coefficient]&],"prescribed_nonzero_result"->"All entries exactly one; independently checked later with System Together."|>,"RawJSON"];
+CanonMethodCard`WriteResult[task,outputDir,"PASS","FIXTURE_READY",<|"matrix"-><|"type"->"mathematica-expression","path"->"matrix.wl"|>,"expected"-><|"type"->"mathematica-expression","path"->"expected.wl"|>|>,<|"scientific_acceptance"->False|>];Quit[0];

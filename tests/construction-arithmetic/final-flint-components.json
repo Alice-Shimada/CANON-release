@@ -1,0 +1,38 @@
+{
+  "schema": "canon-neu/components/v1",
+  "workflow": "FINAL-FLINT.md",
+  "steps": {
+    "FINAL_CHECK": {
+      "command": [
+        "{python}",
+        "{package}/final-host.py",
+        "{canon}/mma/CheckFullSystem.wls"
+      ],
+      "instructions": "FINAL-FLINT.md"
+    },
+    "PREPARE_FINAL_GAUGE_FIXTURES": {
+      "command": [
+        "{python}",
+        "{package}/run.py",
+        "{package}/PrepareFinalGaugeFixtures.wls"
+      ],
+      "instructions": "FINAL-FLINT.md"
+    },
+    "VERIFY_FINAL_GAUGE_FIXTURES": {
+      "command": [
+        "{python}",
+        "{package}/run.py",
+        "{package}/VerifyFinalGaugeFixtures.wls"
+      ],
+      "instructions": "FINAL-FLINT.md"
+    },
+    "PROBE_FINAL_GAUGE": {
+      "command": [
+        "{python}",
+        "{package}/run.py",
+        "{package}/ProbeFinalGauge.wls"
+      ],
+      "instructions": "FINAL-FLINT.md"
+    }
+  }
+}

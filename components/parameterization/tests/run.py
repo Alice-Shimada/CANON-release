@@ -12,26 +12,15 @@ import sys
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--canon", required=True, type=Path)
-    parser.add_argument("--point-de", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
-    canon, source_point, output = args.canon.resolve(), args.point_de.resolve(), args.output.resolve()
+    canon, output = args.canon.resolve(), args.output.resolve()
     output.mkdir(parents=True, exist_ok=False)
     tree = output / "tree"
     package = tree / "parameterization"
     shutil.copytree(Path(__file__).resolve().parents[1], package)
-    point_package = tree / "point-de"
-    point_package.mkdir()
-    for name in ("PointDE.wl", "Run.wls", "README.md"):
-        shutil.copyfile(source_point / name, point_package / name)
-    point_manifest = {"schema": "canon-neu/components/v1", "steps": {
-        step: {"command": ["{wolframscript}", "-file", "{package}/Run.wls", "{canon}"], "instructions": "README.md"}
-        for step in ("PREPARE_POINT", "BUILD_POINT_DE")}}
-    (point_package / "components.json").write_text(json.dumps(point_manifest, indent=2))
     selection = {"schema": "canon-neu/components/v1", "steps": {
-        "PREPARE": {"from": "parameterization/components.json"},
-        "PREPARE_POINT": {"from": "point-de/components.json"},
-        "BUILD_POINT_DE": {"from": "point-de/components.json"}}}
+        "PREPARE": {"from": "parameterization/components.json"}}}
     (tree / "selection.json").write_text(json.dumps(selection, indent=2))
     invocations = []
 
@@ -84,14 +73,6 @@ def main():
         assert not keys(data) & forbidden
         assert not Path(data["family_data"]["path"]).is_absolute()
 
-    (tree / "vector-masters.wl").write_text('<|"schema"->"canon-neu/master-basis/v1","family_ref"->"synthetic-bubble","basis_ref"->"bubble-master","masters"->{B[1,1,0,0,0]}|>\n')
-    (tree / "vector-candidates.wl").write_text('<|"schema"->"canon-neu/point-candidates/v1","basis_id"->"x-times-bubble","rows"->{{<|"indices"->{1,1,0,0,0},"numerator"->x[1]|>}}|>\n')
-    (tree / "vector-point.wl").write_text('<|"schema"->"canon-neu/point-spec/v1","family_id"->"synthetic-bubble","basis_id"->"bubble-restored","chart_id"->"indexed-scale","frame_id"->"divide-by-x","scope"-><|"included_sectors"->{3},"excluded_sectors"->"others"|>,"point"->{x[1]->2},"frame"->{{1/x[1]}}|>\n')
-    (tree / "vector-rules.wl").write_text('{B[0,2,0,0,0]->0,B[1,2,0,0,0]->-(d-3)/16 B[1,1,0,0,0]}\n')
-    request("point-prepare.json", "PREPARE_POINT", {"family_data": desc("vector/family-data.wl"),
-        "master_basis": desc("vector-masters.wl"), "candidates": desc("vector-candidates.wl"), "point_spec": desc("vector-point.wl")})
-    request("point-build.json", "BUILD_POINT_DE", {"prepared_point": desc("point/prepared-point.wl"),
-        "ibp_reduction": {**desc("vector-rules.wl"), "kinematics": "vector/family-data.wl"}})
     request("discover.json", "DISCOVER", {"prepared_family": desc("scalar/prepared-family.wl")})
     request("scalar-build.json", "BUILD_CUT_DE", {"prepared_family": desc("scalar/prepared-family.wl"),
         "master_basis": desc("parameterization/examples/scalar-master-basis.wl"),
@@ -102,9 +83,7 @@ def main():
     relocated = output / "relocated" / "tree"
     relocated.parent.mkdir()
     shutil.move(tree, relocated)
-    tree, package, point_package = relocated, relocated / "parameterization", relocated / "point-de"
-    run(tree / "point-prepare.json", tree / "point", "POINT_PREPARED")
-    run(tree / "point-build.json", tree / "point-de-result", "POINT_DE_BUILT")
+    tree, package = relocated, relocated / "parameterization"
     run(tree / "discover.json", tree / "discovery", "SECTORS_READY")
     run(tree / "scalar-build.json", tree / "scalar-de", "OK")
 
@@ -113,7 +92,7 @@ def main():
         raise RuntimeError("Set CANON_WOLFRAMSCRIPT or put wolframscript on PATH")
     receipt = output / "scientific-checks.json"
     process = subprocess.run([runtime, "-file", str(package / "tests" / "Checks.wls"), str(canon),
-                              str(package), str(point_package), str(tree), str(receipt)], capture_output=True,
+                              str(package), str(tree), str(receipt)], capture_output=True,
                              text=True, timeout=120)
     (output / "checks.log").write_text(process.stdout + process.stderr)
     checks = json.loads(receipt.read_text())

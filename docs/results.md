@@ -1,36 +1,59 @@
 # Reading results
 
-The current mathematical output is a pair of Wolfram Language Associations:
-`canonical-basis.wl` and `canonical-de.wl`. Read these saved files directly in
-Mathematica; this does not require an agent host, Kira, or the candidate-generation
-packages.
+## Release examples
 
-The example directories are:
+The [three article examples](../examples/README.md) contain plain Wolfram
+expressions. Reading them requires only Wolfram Language. No agent host, native
+reducer or external algebra package is needed.
 
-| Example | Result directory |
-| --- | --- |
-| One-loop example | [examples/one-loop](../examples/one-loop/) |
-| Two-loop five-point example | [examples/2l5p](../examples/2l5p/) |
-| Unpublished 40-master example (legacy output format) | [examples/unpublished-40](../examples/unpublished-40/) |
-
-Each example's README records its input, conventions, and the scope of the saved
-evidence. Historical results describe the calculation that produced them; they
-are not a claim that the current checkout has rerun that calculation.
-
-The one-loop and two-loop five-point examples use the current result pair. The
-40-master example preserves its original `final-canonical-system.m` and
-`dlog-decomposition.m`; use that example's README to load its legacy fields and
-letter registry. The reader and field reference below apply to the current pair.
-
-## Open the files
-
-In a fresh Wolfram session, set `exampleDirectory` to the example you want:
+Use a fresh session, with the checkout as the working directory:
 
 ```wl
-exampleDirectory = "/absolute/path/to/CANON/examples/one-loop";
-basisData = Get[FileNameJoin[{exampleDirectory, "canonical-basis.wl"}]];
-deData = Get[FileNameJoin[{exampleDirectory, "canonical-de.wl"}]];
+exampleDirectory = "examples/three-loop";
+basis = Get[FileNameJoin[{exampleDirectory, "canonical-basis.wl"}]];
+alphabet = Get[FileNameJoin[{exampleDirectory, "alphabet.wl"}]];
+Atilde = Get[FileNameJoin[{exampleDirectory, "Atilde.wl"}]];
 
+{Length[basis], Length[alphabet], Dimensions[Atilde]}
+(* {40, 3, {40, 40}} *)
+
+(* Replace the letter labels by their exact expressions. *)
+letterRules = Table[W[a] -> alphabet[[a]], {a, Length[alphabet]}];
+AtildePhysical = Atilde /. letterRules;
+First[basis]
+alphabet
+```
+
+The equation is `d basis = eps d Atilde . basis`. The matrix contains `Log[W[a]]`
+with exact rational coefficients and no overall epsilon. Its row and column
+indices follow `basis` exactly. `alphabet[[a]]` defines the same letter in every
+entry; the files contain no implicit matrix-order conversion.
+
+For example, directional DE matrices can be read from the logarithmic form:
+
+```wl
+variables = {s, u}; (* the three-loop example *)
+matrices = Table[eps D[AtildePhysical, x], {x, variables}];
+```
+
+This differentiates the supplied logarithmic representation; it is not an IBP
+calculation or a new global-gauge check. The [example guide](../examples/README.md)
+gives the other families' variable orders and integral definitions. Local
+branches and additive log constants do not change the differential equation;
+the export does not prescribe physical boundary constants.
+
+## Full workflow artifacts
+
+A new successful workflow writes two Associations, `canonical-basis.wl` and
+`canonical-de.wl`, containing the cumulative transformation and verification
+metadata as well as the mathematical outputs. This is the full artifact format;
+the expression-only files in `examples/` deliberately contain fewer objects.
+
+To read a full output pair from a completed calculation:
+
+```wl
+basisData = Get[FileNameJoin[{resultDirectory, "canonical-basis.wl"}]];
+deData = Get[FileNameJoin[{resultDirectory, "canonical-de.wl"}]];
 sourceBasis = basisData["source_basis"];
 canonicalBasis = basisData["basis"];
 transformation = basisData["transformation"];
@@ -39,20 +62,7 @@ regulator = deData["regulator"];
 matrices = deData["matrices"];
 letters = deData["alphabet"];
 residues = deData["residue_matrices"];
-
-<|"masters" -> Length[canonicalBasis],
-  "variables" -> variables,
-  "matrix_dimensions" -> (Dimensions /@ matrices),
-  "letters" -> Length[letters]|>
-
-First[canonicalBasis]
-letters
-Lookup[deData, {"check_scope", "checks"}, Missing["NotRecorded"]]
 ```
-
-This code only loads and displays the saved data. It does not construct or check
-differential equations. In Mathematica, `I` is the imaginary unit, so the code
-uses `sourceBasis` instead of the mathematical symbol $I$ below.
 
 ## Transformation and DE conventions
 
@@ -82,7 +92,7 @@ direction. Letters may be exact algebraic expressions, including square roots.
 
 ## Current output fields
 
-The current writer is [CheckFullSystem.wls](../mma/CheckFullSystem.wls). It emits
+The full workflow writer is [CheckFullSystem.wls](../mma/CheckFullSystem.wls). It emits
 the two files only with `PASS / ALL_PASS`; its `result.json` links them through
 `canonical_basis` and `canonical_de` artifact descriptors.
 
@@ -105,8 +115,8 @@ The current final check covers input identity and basis/sector order, completion
 of the sector trace, cumulative-transformation invertibility, the exact global
 gauge identity, symbolic flatness, regulator factorization, and constant residues
 shared across all variables. Its Wolfram backend recomputes the transformed
-matrices; its Fermat backend checks the exact gauge identity against the supplied
-matrices. Inspect the saved `check_scope`, `gauge_backend`, and example README for
+matrices; its Fermat and optional FLINT backends check the exact gauge identity
+against the supplied matrices in their documented arithmetic domains. Inspect the saved `check_scope`, `gauge_backend`, and example README for
 the result you are reading rather than assigning current checks to an older file.
 
 An epsilon-form DE alone does not establish boundary values, branch prescriptions,

@@ -1,0 +1,41 @@
+$HistoryLength=0;
+args=If[ListQ[$ScriptCommandLine]&&Length[$ScriptCommandLine]>1,Rest[$ScriptCommandLine],Drop[$CommandLine,First@FirstPosition[$CommandLine,"-script"]+1]];
+{repoRoot,inputPath,outputDir}=ExpandFileName/@args;
+Get[repoRoot<>"/mma/lib/MethodCardCore.wl"];
+task=CanonMethodCard`ReadTask[inputPath,"PREPARE_FINAL_GAUGE_FIXTURES"];
+{x,y,eps,f}=Symbol/@{"CANON`DEData`x","CANON`DEData`y","CANON`DEData`eps","CANON`DEData`f"};
+lf=-4*x*y+(-x-y+1)^2;le=x^2-2*x*y+y^2-2*x-2*y+1;
+variables={x,y};basis={f[1],f[2]};trace={<|"id"->1,"propagator_count"->0|>,<|"id"->2,"propagator_count"->1|>};
+norm[m_]:=Map[Together,m,{2}];
+put[name_,value_]:=(CanonMethodCard`WriteWLArtifact[value,outputDir,name<>".wl"];<|"path"->name<>".wl"|>);
+seal[p_]:=With[{b=KeyDrop[p,"prefix_id"]},Join[<|"prefix_id"->"sha256:"<>Hash[b,"SHA256","HexString"]|>,b]];
+records={};
+Do[
+ uf={{1/(1+x),0},{x/((1+x)*(1+y)),eps^3*If[name==="quadratic",Sqrt[lf],1]}};
+ ue=uf/.Power[b_,p_Rational]/;b===lf:>le^p;
+ tf=norm[Inverse[uf]];te=norm[Inverse[ue]];
+ target={eps*(DiagonalMatrix[{1,2}]/x+DiagonalMatrix[{3,4}]/(x+y)),eps*(DiagonalMatrix[{2,3}]/y+DiagonalMatrix[{3,4}]/(x+y))};
+ raw=MapThread[norm[(D[tf,#2]+tf.#1).Inverse[tf]]&,{target,variables}];
+ raw=raw/.Power[base_,power_Rational]/;base===le:>lf^power;
+ accepted=seal@<|"schema"->"canon-neu/accepted-prefix/v1","parent_prefix_id"->Null,"family_id"->"final-fixture/"<>name,
+ "coefficient_domain"->"exact-algebraic-functions","source_basis"->basis,"basis"->uf.basis,"convention"->"old_source_basis = transformation . accepted_basis",
+ "transformation"->te,"variables"->variables,"regulator"->eps,"alphabet"->{x,y,x+y},"matrices"->target,"sector_trace"->trace,
+ "candidate_trace"->(<|"sector"->#,"candidate_id"->"independent-fixture"|>&/@trace)|>;
+ refs=<|"prepared_family"->put[name<>"-prepared",<|"schema"->"canon-neu/prepared-family/v1","family_ref"->accepted["family_id"],"basis_ref"->"raw/"<>name,"variables"->variables,"regulator"->eps|>],
+ "master_basis"->put[name<>"-master",<|"schema"->"canon-neu/master-basis/v1","family_ref"->accepted["family_id"],"basis_ref"->"raw/"<>name,"masters"->basis|>],
+ "sector_manifest"->put[name<>"-manifest",<|"schema"->"canon-neu/sector-manifest/v1","sectors"->trace|>],
+ "ordered_master_de"->put[name<>"-ordered",<|"schema"->"canon-neu/ordered-master-de/v1","family_id"->accepted["family_id"],"basis_id"->"raw/"<>name,"basis"->basis,"variables"->variables,"regulator"->eps,"matrices"->raw|>],
+ "accepted_prefix"->put[name<>"-accepted",accepted]|>;
+ put[name<>"-expected",<|"target"->target,"raw"->raw,"variables"->variables,"transformation"->te,"basis_rows"->uf,"basis"->basis|>];
+ Export[outputDir<>"/"<>name<>".json",<|"schema"->"canon-neu/script-input/v1","step"->"FINAL_CHECK","task_id"->"final-fixture/"<>name,"payload"->refs|>,"RawJSON"];
+ AppendTo[records,<|"name"->name,"expected"->name<>"-expected.wl"|>],
+ {name,{"rational","quadratic"}}];
+base=Import[outputDir<>"/rational.json","RawJSON"];
+badGauge=seal@Join[CanonMethodCard`ReadWLData[outputDir<>"/rational-accepted.wl"],<|"matrices"->ReplacePart[target,1->(First[target]+eps*IdentityMatrix[2]/x)]|>];
+badBasis=seal@Join[CanonMethodCard`ReadWLData[outputDir<>"/rational-accepted.wl"],<|"basis"->(CanonMethodCard`ReadWLData[outputDir<>"/rational-accepted.wl"]["basis"]+{f[1],0})|>];
+Do[b=base;b["payload"]=Join[b["payload"],<|"accepted_prefix"->put[First[pair],Last[pair]]|>];Export[outputDir<>"/"<>First[pair]<>".json",b,"RawJSON"],{pair,{{"bad-gauge",badGauge},{"bad-basis",badBasis}}}];
+Do[name=pair[[1]];m=pair[[2]];put[name<>"-probe",<|"matrices"->{m,ConstantArray[0,{2,2}]},"variables"->variables,"transformation"->IdentityMatrix[2],"target"->ConstantArray[0,{2,2,2}]|>],
+ {pair, {{"unequal",{{Sqrt[1+x]+Sqrt[1+y],0},{0,1}}},{"nested",{{Sqrt[1+Sqrt[1+x]],0},{0,1}}},{"inexact",{{1.+x,0},{0,1}}}}}];
+Export[outputDir<>"/fixture-index.json",<|"fixtures"->records,"radicands"-><|"structurally_distinct"->(lf=!=le),"exact_equal"->TrueQ[Together[lf-le]===0]|>,
+ "mixed_basis_residual_raw_distinct"->Length[DeleteDuplicates[Cases[Normal[SparseArray[te].SparseArray[uf]-IdentityMatrix[2,SparseArray]],Power[b_,p_Rational]:>b,Infinity]]]|>,"RawJSON"];
+CanonMethodCard`WriteResult[task,outputDir,"PASS","FIXTURES_PREPARED",<|"index"-><|"type"->"json","path"->"fixture-index.json"|>|>,<|"scientific_acceptance"->False|>];

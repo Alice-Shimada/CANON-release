@@ -1,0 +1,13 @@
+{
+  "schema": "canon-neu/components/v1",
+  "steps": {
+    "BUILD_FULL_DE": {
+      "command": [
+        "{python}",
+        "{package}/../../run.py",
+        "{package}/BuildFullSectorDE.wls"
+      ],
+      "instructions": "README.md"
+    }
+  }
+}

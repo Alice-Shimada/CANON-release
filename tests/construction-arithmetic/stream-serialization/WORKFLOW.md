@@ -1,0 +1,1 @@
+Read selected --describe and full component workflows. Prepare one fixed moderate fixture, run only changed-writer applicable checks plus tiny FINAL and necessary frozen BUILD, then independent exact verifier. CPU21/libs1/RSS4GiB; percall180+15+60; fixed1800 from first native fixture start+120 collection, no reset. No physical research continuation.

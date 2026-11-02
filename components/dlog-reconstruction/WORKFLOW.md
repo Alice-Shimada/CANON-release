@@ -1,7 +1,7 @@
 # Reconstruction workflow
 
 Start with a sample set in one declared family, basis, chart, root frame and
-scope. Keep full matrices and symbolic epsilon. Use the point-DE producer or an
+scope. Keep full matrices and symbolic epsilon. Use an
 independent producer of the documented schema; this package does not launch it.
 
 1. Supply raw analytic letters. If only bounded exact one-forms are available,

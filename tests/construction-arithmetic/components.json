@@ -1,0 +1,102 @@
+{
+  "schema": "canon-neu/components/v1",
+  "workflow": "README.md",
+  "steps": {
+    "PREPARE_FFT_FIXTURES": {
+      "command": [
+        "{python}",
+        "{package}/run.py",
+        "{package}/BuildFixtures.wls"
+      ],
+      "instructions": "README.md"
+    },
+    "VERIFY_FFT_FIXTURES": {
+      "command": [
+        "{python}",
+        "{package}/run.py",
+        "{package}/VerifyFixtures.wls"
+      ],
+      "instructions": "README.md"
+    },
+    "PREPARE_BLOCK_FIXTURES": {
+      "command": [
+        "{python}",
+        "{package}/run.py",
+        "{package}/BuildFullBlockFixtures.wls"
+      ],
+      "instructions": "README.md"
+    },
+    "VERIFY_BLOCK_FIXTURES": {
+      "command": [
+        "{python}",
+        "{package}/run.py",
+        "{package}/VerifyFullBlockFixtures.wls"
+      ],
+      "instructions": "README.md"
+    },
+    "BUILD_FULL_DE": {
+      "command": [
+        "{wolframscript}",
+        "-file",
+        "{canon}/mma/BuildFullSectorDE.wls"
+      ],
+      "instructions": "../../skills/canon-build-full-de/SKILL.md"
+    },
+    "VERIFY_PHASE_FIXTURES": {
+      "command": [
+        "{python}",
+        "{package}/run.py",
+        "{package}/VerifyPhaseFixtures.wls"
+      ],
+      "instructions": "README.md"
+    },
+    "VERIFY_FERMAT_FIXTURES": {
+      "command": [
+        "{python}",
+        "{package}/run.py",
+        "{package}/VerifyFermatFixtures.wls"
+      ],
+      "instructions": "README.md"
+    },
+    "PREPARE_FERMAT_BLOCK_FIXTURES": {
+      "command": [
+        "{python}",
+        "{package}/run.py",
+        "{package}/BuildFermatBlockFixtures.wls"
+      ],
+      "instructions": "README.md"
+    },
+    "NORMALIZE_FERMAT_FIXTURE": {
+      "command": [
+        "{python}",
+        "{package}/run.py",
+        "{package}/NormalizeFermatFixture.wls"
+      ],
+      "instructions": "README.md"
+    },
+    "VERIFY_FLINT_FIXTURES": {
+      "command": [
+        "{python}",
+        "{package}/run.py",
+        "{package}/VerifyFlintFixtures.wls"
+      ],
+      "instructions": "README.md"
+    },
+    "NORMALIZE_FLINT_FIXTURE": {
+      "command": [
+        "{python}",
+        "{package}/run.py",
+        "{package}/NormalizeFlintFixture.wls"
+      ],
+      "instructions": "README.md"
+    },
+    "EARLY_ARITHMETIC_RUNTIME_FIXTURE": {
+      "command": [
+        "{python}",
+        "{package}/run.py",
+        "{package}/EarlyArithmeticRuntimeFixture.wls"
+      ],
+      "instructions": "README.md"
+    }
+  }
+}

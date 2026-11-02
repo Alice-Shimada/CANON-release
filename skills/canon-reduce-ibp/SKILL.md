@@ -26,7 +26,7 @@ For symbolic master derivatives, obtain the target artifact through
 [PREPARE_REDUCTION_TARGETS](../canon-prepare-reduction-targets/SKILL.md), then
 bind it into this request. That step uses the same prepared derivative source as
 `BUILD_CUT_DE`. Candidate derivatives continue through `REDUCE_CANDIDATE_IBP`;
-the optional point/frame workflow uses its declared `PREPARE_POINT` interface.
+a separate point/frame consumer is needed for specialized fixed-point data.
 
 The `reduction` fields `project`, `output` and executable paths containing a separator are
 resolved relative to the request JSON. A bare executable name is found on PATH;

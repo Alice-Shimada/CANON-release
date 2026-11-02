@@ -1,0 +1,85 @@
+$HistoryLength=0;
+args=If[ListQ[$ScriptCommandLine]&&Length[$ScriptCommandLine]>1,Rest[$ScriptCommandLine],Drop[$CommandLine,First@FirstPosition[$CommandLine,"-script"]+1]];
+{repoRoot,inputPath,outputDir}=ExpandFileName/@args;
+Get[repoRoot<>"/mma/lib/MethodCardCore.wl"];
+task=CanonMethodCard`ReadTask[inputPath,"VERIFY_RADICAND_FIXTURES"];
+results=task["payload","result_directory"];
+same[a_,b_]:=Dimensions[a]===Dimensions[b]&&AllTrue[Flatten[a-b],TrueQ[FullSimplify[Together[#]]===0]&];
+phases={"source_current_lower_reduce","current_core_inverse_reduce","candidate_lower_transform_reduce","candidate_full_gauge_reduce"};
+readJSON[path_]:=Import[path,"RawJSON"];
+frameFiles[dir_]:=FileNames["radicand-frame.json",dir,2];
+binding[r_]:=With[{fr=r["flint_runtime"]},fr["executable"]===task["payload","declared_flint_executable"]&&
+ fr["executable_sha256"]===task["payload","declared_flint_executable_hash"]&&fr["threads"]===1&&
+ fr["header_version"]===task["payload","declared_flint_version"]&&fr["runtime_version"]===task["payload","declared_flint_version"]];
+checks=Association@Table[case["name"]->Module[
+ {name=case["name"],dir,receipt,events,operations,facts,input,expected,actual,runtime,native,frame,frames,full,candidate,identity,map,x},
+ dir=results<>"/"<>name;receipt=readJSON[dir<>"/result.json"];
+ events=If[FileExistsQ[dir<>"/normalization-events.jsonl"],ImportString[#,"RawJSON"]&/@Import[dir<>"/normalization-events.jsonl","Lines"],{}];
+ operations=Select[events,MemberQ[{"start","end"},Lookup[#,"event",None]]&];map=case["effective_map"];
+ If[case["expected_status"]==="ERROR",
+  facts=<|"scoped_domain_error"->(receipt["status"]==="ERROR"&&receipt["code"]===case["expected_code"]),
+   "error_backend"->(receipt["summary","normalization_backend"]==="flint"),
+   "effective_map"->(receipt["summary","normalization_backends"]===map),
+   "no_full_output"->!FileExistsQ[dir<>"/full-sector-de.wl"],"no_normalized_output"->!FileExistsQ[dir<>"/normalized.wl"]|>;
+  If[case["kind"]==="full-gauge",
+   facts=Join[facts,<|"specific_old_error_reason"->(receipt["summary","reason"]===case["expected_reason"]),
+    "specific_full_gauge_phase"->AnyTrue[events,Lookup[#,"event",None]==="error"&&Lookup[#,"phase",None]===case["expected_error_phase"]&],
+    "lower_native_completed_before_full_rejection"->AnyTrue[events,Lookup[#,"event",None]==="end"&&Lookup[#,"phase",None]==="candidate_lower_transform_reduce"&&Lookup[#,"operation",None]==="flint_native"&],
+    "rejected_full_phase_never_reached_native"->!AnyTrue[events,Lookup[#,"phase",None]==="candidate_full_gauge_reduce"&&Lookup[#,"operation",None]==="flint_native"&]|>],
+   input=CanonMethodCard`ReadWLData[case["input_matrix_path"]];
+   facts=Join[facts,<|"typed_real_matrix_input"->MatrixQ[input],
+    "nonzero_input"->AnyTrue[Flatten[input],!TrueQ[FullSimplify[Together[#]]===0]&],
+    "rejected_before_native"->!AnyTrue[events,Lookup[#,"operation",None]==="flint_native"&],
+    "actual_error_phase"->AnyTrue[events,Lookup[#,"event",None]==="error"&&Lookup[#,"phase",None]==="candidate_lower_transform_reduce"&]|>];
+   If[StringStartsQ[name,"new-"],
+    frame=readJSON[dir<>"/flint-normalization-1/radicand-frame.json"];
+    facts=Join[facts,<|"small_rejected_frame_retained"->(AssociationQ[frame]&&NumericQ[frame["frame_seconds"]]&&frame["frame_seconds"]>=0),
+     "correct_domain_frame"->If[MemberQ[{"new-unequal","new-square-related","new-sign-related"},name],
+      frame["status"]==="rejected_distinct_radicands"&&frame["raw_distinct_radicand_count"]===2&&frame["canonical_distinct_radicand_count"]===2,
+      frame["status"]==="rejected_nonrational_or_nested_radicand"&&frame["canonical_distinct_radicand_count"]===Null]|>],
+    facts=Join[facts,<|"specific_old_error_reason"->(receipt["summary","reason"]==="Only one explicit quadratic generator is supported.")|>]]
+  ];facts,
+  runtime=readJSON[dir<>"/arithmetic-runtime.json"];
+  facts=<|"public_pass"->(receipt["status"]==="PASS"),"full_effective_map"->(runtime["normalization_backends"]===map),
+   "default_backend"->(runtime["default_backend"]===case["default_backend"]),"installed_native_binding"->binding[runtime],
+   "no_unselected_native_initialized"->(!KeyExistsQ[runtime,"native_library"]&&!KeyExistsQ[runtime,"fermat_runtime"]),
+   "all_operations_closed"->(Length[operations]>0&&Count[Lookup[events,"event"],"start"]===Count[Lookup[events,"event"],"end"]),
+   "actual_phase_backend"->AllTrue[operations,KeyExistsQ[map,Lookup[#,"phase",None]]&&#["backend"]===map[#["phase"]]&],
+   "four_normalization_stages_observed"->AllTrue[{"flint_radicand_canonicalize","flint_serialize","flint_native","flint_readback"},MemberQ[Lookup[operations,"operation",None],#]&],
+   "same_clock_timings_nonnegative"->AllTrue[operations,NumericQ[#["elapsed_seconds"]]&&#["elapsed_seconds"]>=0&&(!KeyExistsQ[#,"operation_seconds"]||NumericQ[#["operation_seconds"]]&&#["operation_seconds"]>=0)&]|>;
+  If[case["kind"]==="probe",
+   input=CanonMethodCard`ReadWLData[case["input_matrix_path"]];expected=CanonMethodCard`ReadWLData[case["expected_matrix_path"]];actual=CanonMethodCard`ReadWLData[dir<>"/normalized.wl"];
+   native=readJSON[dir<>"/flint-normalization-1/readback.json"];frame=native["radicand_frame"];
+   facts=Join[facts,<|"typed_matrix_input"->MatrixQ[input],"independent_prescribed_nonzero_matrix"->same[actual,expected],
+    "independent_input_identity"->same[actual,input],"nonzero_result"->AnyTrue[Flatten[actual],!TrueQ[FullSimplify[Together[#]]===0]&],
+    "shape_pair_count"->(Dimensions[actual]===Dimensions[expected]&&native["runtime","count"]===Times@@Dimensions[expected]),
+    "nonzero_native_stdout_receipt"->(native["runtime","all_zero"]===False&&StringLength[Import[dir<>"/flint-normalization-1/native.stdout","Text"]]>0),
+    "variables_do_not_leak"->(Complement[DeleteDuplicates[Cases[actual,_Symbol,Infinity]],DeleteDuplicates[Cases[input,_Symbol,Infinity]]] === {}),
+    "four_stage_timings"->(Sort[Keys[native["timings"]]]===Sort[{"flint_radicand_canonicalize","flint_serialize","flint_native","flint_readback"}]&&AllTrue[Values[native["timings"]],NumericQ[#]&&#>=0&]),
+    "frame_accepted"->(frame["status"]==="accepted_single_frame"&&TrueQ[frame["exact_raw_to_canonical_equality"]]),
+    "distinct_counts"->Which[name==="new-rational-retained",frame["raw_distinct_radicand_count"]===0&&frame["canonical_distinct_radicand_count"]===0,
+     name==="new-single-retained",frame["raw_distinct_radicand_count"]===1&&frame["canonical_distinct_radicand_count"]===1,
+     True,frame["raw_distinct_radicand_count"]===2&&frame["canonical_distinct_radicand_count"]===1]|>];
+   If[name==="new-principal-square",x=Symbol["CANON`DEData`x"];
+    facts=Join[facts,<|"principal_branch_preserved_at_exact_negative_argument"->same[actual/.x->-2,{{2,-1}}],
+     "not_replaced_by_signed_linear_root"->!same[actual/.x->-2,{{-2,1}}]|>]],
+   expected=CanonMethodCard`ReadWLData[case["expected_path"]];full=CanonMethodCard`ReadWLData[dir<>"/full-sector-de.wl"];candidate=First[full["candidates"]];
+   identity=MapThread[#1.expected["raw_transformation"]-D[expected["raw_transformation"],#2]-expected["raw_transformation"].#3&,{expected["raw"],full["variables"],candidate["transformed_matrices"]}];
+   frames=readJSON/@frameFiles[dir];
+   facts=Join[facts,<|"standard_full_schema"->(full["schema"]==="canon-neu/full-prefix-candidates/v1"),
+    "new_basis_rows"->same[candidate["new_basis_rows"],expected["mixed_rows"]],"inverse_direction"->same[candidate["full_transformation"],expected["mixed_transformation"]],
+    "source_matrices"->same[full["source_matrices"],expected["source_matrices"]],
+    "raw_source_composition"->same[full["accepted_prefix_transformation"].candidate["full_transformation"],expected["raw_transformation"]],
+    "independent_prescribed_target"->same[candidate["transformed_matrices"],expected["target"]],
+    "independent_raw_gauge_identity"->AllTrue[identity,same[#,ConstantArray[0,Dimensions[#]]]&],
+    "nonzero_transformed_target"->AnyTrue[Flatten[candidate["transformed_matrices"]],!TrueQ[FullSimplify[Together[#]]===0]&],
+    "all_four_phases_present"->(Sort[DeleteDuplicates[Lookup[operations,"phase"]]]===Sort[phases]),
+    "merged_equal_radicands_observed"->AnyTrue[frames,#["raw_distinct_radicand_count"]===2&&#["canonical_distinct_radicand_count"]===1&],
+    "all_frames_accepted_with_exact_equality"->(Length[frames]>0&&AllTrue[frames,#["status"]==="accepted_single_frame"&&TrueQ[#["exact_raw_to_canonical_equality"]]&])|>]
+  ];facts
+ ]],{case,task["payload","cases"]}];
+all=Length[checks]>0&&AllTrue[Values[checks],AssociationQ[#]&&Length[#]>0&&AllTrue[Values[#],TrueQ]&];
+Export[outputDir<>"/checks.json",<|"all_pass"->all,"checks"->checks,"check_count"->Total[Length/@Values[checks]],
+ "scientific_acceptance"->False,"method"->"Independent prescribed exact matrices and complete raw gauge using System Together/FullSimplify; no numeric equality or branch identification in grouping."|>,"RawJSON"];
+CanonMethodCard`WriteResult[task,outputDir,If[all,"PASS","FAIL"],"FIXTURE_CHECKS",<|"checks"-><|"type"->"json","path"->"checks.json"|>|>,<|"all_pass"->all,"scientific_acceptance"->False|>];
+Quit[If[all,0,1]];

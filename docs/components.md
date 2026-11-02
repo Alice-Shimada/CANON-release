@@ -48,6 +48,11 @@ and runnable method cards to their current implementations. All defaults are
 active until a custom package is explicitly selected. Direct `.wls` invocation
 remains a low-level entry and bypasses component selection.
 
+The optional [FLINT final-check package](../components/flint-final/README.md)
+selects the exact global gauge checker with the same fourteen acceptance gates.
+Append its manifest to the caller's existing selection and provide the installed
+arithmetic runtime through the documented method options.
+
 Selection is read afresh for each call. Repeated `--components` arguments compose
 packages in the given order; later definitions override earlier ones. An explicit
 selection replaces the inherited selection. `--defaults` ignores it entirely.
@@ -276,50 +281,26 @@ retain their separate acceptance roles.
 
 ## Optional sampled reconstruction and local execution
 
-- [point-de](../components/point-de/README.md): derivative preparation, reduced
-  point DE construction with an explicit frame, and a sample-set index.
-- [dlog-reconstruction](../components/dlog-reconstruction/README.md): fit raw
-  analytic letters to training DE samples and verify against independent samples.
-  The output declares its finite-sample validation scope; it does not use the
-  default exact-global-gauge `ALL_PASS` claim.
-- [local-jobs](../components/local-jobs/README.md): detached local execution,
-  collection, cancellation and completion-only notification through a supplied
-  callback command. It does not change scientific acceptance or research state.
+[dlog-reconstruction](../components/dlog-reconstruction/README.md) fits raw
+analytic letters to caller-supplied training DE samples and verifies them against
+independent samples. Its result declares finite-sample validation scope; it does
+not inherit the default exact-global-gauge `ALL_PASS` claim. The release does
+not include a numerical point-DE producer.
 
-Select only the packages needed for a task. Their manifests and instructions
-remain usable outside this checkout. No remote execution or agent-specific
-callback transport is required by the runner.
-
-For example, compose the three independent packages for a local sampled-DE
-task, keeping the same selection on each subsequent call:
+[local-jobs](../components/local-jobs/README.md) provides detached local execution,
+collection, cancellation and completion-only callbacks. It does not change
+scientific acceptance or research state. For reconstruction from supplied samples:
 
 ```sh
 python3 run_step.py INPUT.json OUTPUT_DIR \
-  --components components/point-de/components.json \
   --components components/dlog-reconstruction/components.json \
   --components components/local-jobs/components.json
 ```
 
-The point package produces a `de_sample_set` artifact; pass that descriptor as
-the reconstruction request's `sample_set`, alongside separately supplied raw
-letters. Job collection returns a descriptor for the original scientific
-result. Resolve each relative descriptor from the file that declares it when
-writing the next request.
-
-The [cross-package test](../tests/test_sampled_components.py) uses a small
-analytic bubble with supplied reduction rules. It constructs actual point DEs,
-collects two training samples and one held-out sample, moves the package and
-artifact tree, then reconstructs and independently checks the known dlog form.
-It also runs one point as a local job and tests a fake callback. Run it with a
-fresh output directory and the configured Wolfram runtime:
-
-```sh
-python3 tests/test_sampled_components.py --canon . --work /path/to/fresh-test-work
-```
-
-The test uses one kernel at a time and starts no physical reduction campaign or
-live host callback. Package-specific tests and supported mathematical scope are
-documented in each package's README.
+Supply the documented `sample_set` and raw-letter artifacts. Preserve the same
+component selection on subsequent calls, and resolve relative descriptors from
+the declaring file. The reconstruction package includes independent synthetic
+fixtures for its fitting and validation contracts.
 
 ## Parameterization and reduction boundaries
 
@@ -344,15 +325,11 @@ reduction. Their shared adapter dependency is explicit in the manifests.
 
 The ordinary `BUILD_CUT_DE` consumes full symbolic normalized reductions and
 prepared derivative data from any producer. Fixed-point reductions belong to
-`BUILD_POINT_DE`, with their explicit kinematics binding. A backend with its own DE engine can instead implement
+a separately supplied point-DE consumer, with explicit kinematics binding. A backend with its own DE engine can instead implement
 that step directly, returning the same complete ordered DE and sector artifacts.
 Different native integral encodings are normalized explicitly. A changed master
 set needs a declared basis conversion; reordering identical masters is distinct
 from changing the basis.
-
-The old [twistor-kira3](../components/twistor-kira3/README.md) name is retained only
-as a migration profile. Its former coupled implementation is replaced by these
-independent packages; new requests keep chart and backend configuration separate.
 
 The [default binder regression](../tests/test_default_binder.py) checks preparation
 without Kira settings, actual discovery-to-DE handoff after relocation, and

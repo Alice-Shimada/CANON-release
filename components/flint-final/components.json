@@ -1,0 +1,14 @@
+{
+  "schema": "canon-neu/components/v1",
+  "workflow": "WORKFLOW.md",
+  "steps": {
+    "FINAL_CHECK": {
+      "command": [
+        "{wolframscript}",
+        "-file",
+        "{canon}/mma/CheckFullSystem.wls"
+      ],
+      "instructions": "README.md"
+    }
+  }
+}

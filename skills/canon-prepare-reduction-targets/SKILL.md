@@ -37,7 +37,7 @@ regulator values, dimension substitution or frames are specialized here.
 same source basis to the selected `REDUCE_IBP` adapter. An empty target list is
 valid when the affine derivatives already close on the supplied masters.
 The result prepares reduction input; it does not establish reduction coverage,
-UT behavior or canonical form. Point/frame preparation remains `PREPARE_POINT`.
+UT behavior or canonical form.
 
 ## Shared helper contract
 

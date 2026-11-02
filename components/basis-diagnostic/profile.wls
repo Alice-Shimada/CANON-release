@@ -1,0 +1,106 @@
+$HistoryLength=0;
+{canon,input,out}=Take[$ScriptCommandLine,-3];
+Get[FileNameJoin[{canon,"mma","lib","MethodCardCore.wl"}]];
+request=Import[input,"RawJSON"]; opts=request["payload"]; cap=opts["phase_seconds"];
+stream=OpenWrite[FileNameJoin[{out,"events.jsonl"}]];
+event[phase_,state_,extra_:<||>]:=(WriteString[stream,ExportString[Join[<|"phase"->phase,"state"->state,"absolute_time"->AbsoluteTime[]|>,extra],"RawJSON","Compact"->True]<>"\n"];Flush[stream]);
+SetAttributes[measure,HoldRest];
+measure[name_,body_]:=Module[{started=AbsoluteTime[],r},event[name,"start"];r=TimeConstrained[body,cap,$Aborted];If[r===$Aborted,event[name,"timeout",<|"seconds"->AbsoluteTime[]-started|>];Throw[<|"status"->"INCONCLUSIVE","code"->"PHASE_TIMEOUT","last_phase"->name|>,done]];event[name,"end",<|"seconds"->AbsoluteTime[]-started|>];r];
+Clear[structuralRows];
+structuralRows[expressions_,basis_,head_]:=Module[{pat=If[head===Symbol,Alternatives@@basis,Blank[head]],walk,zero=ConstantArray[0,Length[basis]],r},
+ walk[e_]:=Which[e===0,zero,MemberQ[basis,e],UnitVector[Length[basis],First@FirstPosition[basis,e]],FreeQ[e,pat],Throw[$Failed,badlinear],Head[e]===Plus,Total[walk/@(List@@e)],Head[e]===Times,With[{f=Select[List@@e,!FreeQ[#,pat]&],c=Select[List@@e,FreeQ[#,pat]&]},If[Length[f]===1,(Times@@c) walk[First[f]],Throw[$Failed,badlinear]]],True,Throw[$Failed,badlinear]];
+ Catch[walk[#],badlinear]&/@expressions];
+Clear[profileRows];
+profileRows[expressions_,basis_,head_]:=Module[{integral,linearTermQ,vectors,zero},
+ integral=If[head===Symbol,Alternatives@@basis,Blank[head]];
+ linearTermQ[term_]:=MatchQ[term,coefficient_.(item:integral)/;FreeQ[coefficient,integral]];
+ vectors=Dispatch[Thread[basis->IdentityMatrix[Length[basis]]]];zero=ConstantArray[0,Length[basis]];
+ Table[Module[{value,terms,linear,residual,row,tag="row"<>ToString[k]<>"/"},
+ event[tag<>"size","info",<|"byte_count"->ByteCount[expressions[[k]]],"leaf_count"->LeafCount[expressions[[k]]]|>];
+ value=measure[tag<>"Expand",Expand[expressions[[k]],integral]];
+ {terms,linear,residual}=measure[tag<>"select",terms=If[Head[value]===Plus,List@@value,{value}];linear=Total[Select[terms,linearTermQ]];{terms,linear,value-linear}];
+ If[!measure[tag<>"residualTogether",TrueQ[Together[residual]===0]],$Failed,
+ row=measure[tag<>"substitute",linear/.vectors];If[row===0,zero,If[VectorQ[row,FreeQ[#,integral]&]&&Length[row]===Length[basis],row,$Failed]]]],{k,Length[expressions]}]];
+Clear[postfix];
+postfix[e_,vars_,root_]:=Which[IntegerQ[e],"n "<>ToString[e]<>"\n",Head[e]===Rational,postfix[Numerator[e],vars,root]<>postfix[Denominator[e],vars,root]<>"p -1\nm 2\n",MemberQ[vars,e],"v "<>ToString[First@FirstPosition[vars,e]-1]<>"\n",root=!=None&&e===root,"r\n",Head[e]===Plus,StringJoin[postfix[#,vars,root]&/@(List@@e)]<>"a "<>ToString[Length[e]]<>"\n",Head[e]===Times,StringJoin[postfix[#,vars,root]&/@(List@@e)]<>"m "<>ToString[Length[e]]<>"\n",Head[e]===Power&&IntegerQ[e[[2]]],postfix[e[[1]],vars,root]<>"p "<>ToString[e[[2]]]<>"\n",True,Throw[<|"status"->"ERROR","code"->"UNSUPPORTED_EXPRESSION","expression"->ToString[InputForm[e]]|>,done]];
+result=Catch[
+ If[opts["mode"]==="backendfixture",
+  Get[opts["helper_entry"]];x=Unique["x"];y=Unique["y"];r=Sqrt[1+x^2];q=(x+y)^2-x^2-y^2-2x y;
+  z=CanonFlintBasis`FlintBasisZero[{{q/r,0},{0,q r}},{x,y},opts["executable"],FileNameJoin[{out,"zero"}],event];
+  nz=CanonFlintBasis`FlintBasisZero[{{r/(x+1)}},{x,y},opts["executable"],FileNameJoin[{out,"nonzero"}]];
+  inv=CanonFlintBasis`FlintBasisZero[{{1/(x+r)-(x-r)/(x^2-(1+x^2))}},{x,y},opts["executable"],FileNameJoin[{out,"inverse"}]];
+  unsupported=CanonFlintBasis`FlintBasisZero[{{Sqrt[x]+Sqrt[y]}},{x,y},opts["executable"],FileNameJoin[{out,"unsupported"}]];
+  checks=<|"quadratic_zero"->TrueQ[z["zero"]],"quadratic_nonzero"->TrueQ[!nz["zero"]],"branch_consistent_inverse"->TrueQ[inv["zero"]],"multiple_roots_error"->FailureQ[unsupported]|>;
+  <|"status"->"INCONCLUSIVE","code"->"BACKEND_FIXTURES_FINISHED","checks"->checks,"all_pass"->And@@Values[checks]|>,
+ If[opts["mode"]==="finalfixtures",
+  fixtureRoot=FileNameJoin[{canon,"tests","fixtures","final-check"}];
+  hist=CanonMethodCard`ReadWLData[FileNameJoin[{fixtureRoot,"accepted-prefix.wl"}]];
+  ord=CanonMethodCard`ReadWLData[FileNameJoin[{fixtureRoot,"ordered-master-de.wl"}]];
+  seal[a_]:=With[{b=KeyDrop[a,"prefix_id"]},Join[<|"prefix_id"->"sha256:"<>Hash[b,"SHA256","HexString"]|>,b]];
+  good=seal@Join[hist,<|"basis"->Inverse[hist["transformation"]].hist["source_basis"]|>];
+  prep=<|"schema"->"canon-neu/prepared-family/v1","family_ref"->ord["family_id"],"basis_ref"->ord["basis_id"],"variables"->ord["variables"],"regulator"->ord["regulator"]|>;
+  masters=<|"schema"->"canon-neu/master-basis/v1","family_ref"->ord["family_id"],"basis_ref"->ord["basis_id"],"masters"->ord["basis"]|>;
+  man=<|"schema"->"canon-neu/sector-manifest/v1","sectors"->good["sector_trace"]|>;
+  put[name_,a_]:=Module[{p=FileNameJoin[{out,name<>".wl"}]},Put[a,p];<|"path"->p|>];
+  body=<|"prepared_family"->put["prepared",prep],"master_basis"->put["masters",masters],"sector_manifest"->put["manifest",man],"ordered_master_de"->put["ordered",ord]|>;
+  Map[Function[pair,Export[FileNameJoin[{out,First[pair]<>".json"}],<|"schema"->"canon-neu/script-input/v1","task_id"->"T049-"<>First[pair],"step"->"FINAL_CHECK","sector"->Null,"payload"->Join[body,<|"accepted_prefix"->put[First[pair],Last[pair]]|>]|>,"RawJSON"]],{{"positive",good},{"unresolved",hist},{"nonzero",seal@Join[good,<|"basis"->(2 good["basis"])|>]},{"unsupported",seal@Join[good,<|"basis"->((Sqrt[First[ord["variables"]]]+Sqrt[First[ord["variables"]]+1]) good["basis"])|>]}}];
+  <|"status"->"INCONCLUSIVE","code"->"FIXTURES_PREPARED"|>,
+ If[opts["mode"]==="fermat_compare",
+  operand=measure["operand_load",Get[CanonMethodCard`ResolveInputPath[input,opts["operand_path"]]]];
+  expected=Get[CanonMethodCard`ResolveInputPath[input,opts["expected_path"]]];
+  Get[FileNameJoin[{canon,"mma","lib","FermatBlockArithmetic.wl"}]];
+  runtime=measure["fermat_initialize",CanonBlockArithmetic`InitializeFermatBlock[request,input,out]];
+  If[FailureQ[runtime],Throw[<|"status"->"ERROR","code"->"FERMAT_INITIALIZATION_FAILED"|>,done]];
+  frame=measure["fermat_frame",CanonBlockArithmetic`FermatBlockFrame[{{operand["expression"]}}]];
+  normalized=measure["fermat_convert_native_readback",CanonBlockArithmetic`FermatBlockTogether[frame,{{operand["expression"]}}]];
+  If[FailureQ[normalized],Throw[<|"status"->"ERROR","code"->"FERMAT_ARITHMETIC_FAILED"|>,done]];
+  equal=measure["exact_output_comparison",TrueQ[FullSimplify[Together[normalized[[1,1]]-expected]]===0]];
+  Put[normalized,FileNameJoin[{out,"fermat-result.wl"}]];
+  <|"status"->"INCONCLUSIVE","code"->"COMPARISON_FINISHED","exactly_equal_outputs"->equal,"runtime"->runtime|>,
+ If[opts["mode"]==="compare",
+  operand=measure["operand_load",Get[CanonMethodCard`ResolveInputPath[input,opts["operand_path"]]]];
+  expected=Get[CanonMethodCard`ResolveInputPath[input,opts["expected_path"]]];
+  native=measure["native_parse_evaluate_serialize",RunProcess[{opts["executable"],CanonMethodCard`ResolveInputPath[input,opts["postfix_path"]]}]];
+  Export[FileNameJoin[{out,"native.stdout"}],native["StandardOutput"],"Text"];Export[FileNameJoin[{out,"native.stderr"}],native["StandardError"],"Text"];
+  If[native["ExitCode"]=!=0,Throw[<|"status"->"ERROR","code"->"NATIVE_ERROR"|>,done]];
+  nativeExpr=measure["native_readback",parts=ToExpression/@StringSplit[StringTrim[native["StandardOutput"]],"\n"];vrules=Thread[Table[Symbol["v"<>ToString[k-1]],{k,Length[operand["variables"]]}]->operand["variables"]];(parts[[1]]+Sqrt[operand["lambda"]]parts[[2]])/.vrules];
+  equal=measure["exact_output_comparison",TrueQ[FullSimplify[Together[nativeExpr-expected]]===0]];
+  <|"status"->"INCONCLUSIVE","code"->"COMPARISON_FINISHED","exactly_equal_outputs"->equal,"native_zero"->TrueQ[nativeExpr===0]|>,
+ If[opts["mode"]==="fixture",
+  x=Unique["x"]; y=Unique["y"]; src={ii[1],ii[2]};root=Sqrt[x+y];tr={{(x+1)/(x-2),root/(y+1)},{0,(y-3)/(y+2)}};bas=Inverse[tr].src;
+  rows=profileRows[bas,src,ii];fast=structuralRows[bas,src,ii];
+  checks=<|"original_match"->SameQ[rows,CanonMethodCard`IntegralCoefficientRows[bas,src,ii]],"structural_equal"->CanonMethodCard`ZeroMatrixQ[rows-fast],"old_equals_T_new"->CanonMethodCard`ZeroMatrixQ[tr.rows-IdentityMatrix[2]],"nonlinear_rejected"->(structuralRows[{ii[1]ii[2]},src,ii]==={$Failed}),"unknown_rejected"->(structuralRows[{ii[3]},src,ii]==={$Failed}),"constant_rejected"->(structuralRows[{ii[1]+1},src,ii]==={$Failed})|>;
+  If[TrueQ[Lookup[opts,"force_timeout",False]],measure["controlled_timeout",Pause[cap+2]]];
+  <|"status"->"INCONCLUSIVE","code"->"FIXTURE_FINISHED","fixture_checks"->checks|>,
+  prefix=measure["load",CanonMethodCard`ReadWLData[CanonMethodCard`ResolveInputPath[input,opts["accepted_prefix"]["path"]]]];
+  src=prefix["source_basis"];bas=prefix["basis"];tr=prefix["transformation"];n=Length[src];head=Head[First[src]];
+  event["input_size","info",<|"basis_bytes"->ByteCount[bas],"transformation_bytes"->ByteCount[tr],"dimension"->n|>];
+  If[MemberQ[{"baseline","basis_flint"},opts["mode"]],
+   rows=If[opts["mode"]==="basis_flint",measure["basis_coefficients",CanonMethodCard`IntegralCoefficientRows[bas,src,head]],profileRows[bas,src,head]];If[MemberQ[rows,$Failed],Throw[<|"status"->"ERROR","code"->"BASIS_OUT_OF_SPAN"|>,done]];
+   product=measure["sparse_product",Normal[SparseArray[tr].SparseArray[rows]-IdentityMatrix[n,SparseArray]]];
+   If[TrueQ[Lookup[opts,"save_intermediates",False]],measure["save_intermediates",Put[rows,FileNameJoin[{out,"basis-rows.wl"}]];Put[product,FileNameJoin[{out,"basis-residual.wl"}]]]];
+   If[opts["mode"]==="basis_flint",
+    Get[opts["helper_entry"]];
+    fresult=measure["complete_basis_zero_flint",CanonFlintBasis`FlintBasisZero[product,Append[prefix["variables"],prefix["regulator"]],opts["executable"],FileNameJoin[{out,"basis-flint"}],event]];
+    If[FailureQ[fresult],Throw[<|"status"->"ERROR","code"->"UNSUPPORTED_BASIS_ARITHMETIC","reason"->ToString[fresult,InputForm]|>,done]];
+    <|"status"->"INCONCLUSIVE","code"->"FULL_BASIS_GATE_FINISHED","basis_definition"->TrueQ[fresult["zero"]],"timings"->fresult["timings"],"runtime"->fresult["runtime"],"cell_count"->n^2|>,
+    checks=Table[measure["zero/"<>ToString[i]<>"/"<>ToString[j],TrueQ[FullSimplify[Together[product[[i,j]]]]===0]],{i,n},{j,n}];
+    <|"status"->"INCONCLUSIVE","code"->"BASELINE_FINISHED","basis_definition"->And@@Flatten[checks]|>
+   ],
+   rows=measure["structural_extract",structuralRows[bas,src,head]];
+   If[MemberQ[rows,$Failed],Throw[<|"status"->"ERROR","code"->"UNSUPPORTED_LINEAR_STRUCTURE"|>,done]];
+   {i,j}=opts["cell"];expr=measure["operand",If[Lookup[opts,"operand","coefficient"]==="residual",Sum[tr[[i,k]]rows[[k,j]],{k,n}]-KroneckerDelta[i,j],rows[[i,j]]]];
+   vars=Append[prefix["variables"],prefix["regulator"]];
+   powers=DeleteDuplicates[Cases[expr,Power[b_,p_Rational]:>{b,p},Infinity]];
+   roots=DeleteDuplicates[First/@powers];If[Length[roots]>1||!AllTrue[powers,Denominator[Last[#]]===2&],Throw[<|"status"->"ERROR","code"->"UNSUPPORTED_ROOTS"|>,done]];
+   lambda=If[roots==={},0,First[roots]];root=If[roots==={},None,Sqrt[lambda]];
+   formal=expr/.Power[b_,p_Rational]/;b===lambda:>qroot^(2p);
+   ser=measure["serialize",ToString[Length[vars]]<>"\n"<>postfix[lambda,vars,None]<>"e\n"<>postfix[formal,vars,qroot]<>"e\n"];
+   measure["export",Export[FileNameJoin[{out,"operand.postfix"}],ser,"Text"];Put[<|"expression"->expr,"lambda"->lambda,"variables"->vars,"cell"->{i,j},"operand"->Lookup[opts,"operand","coefficient"]|>,FileNameJoin[{out,"operand.wl"}]]];
+   event["operand_size","info",<|"bytes"->ByteCount[expr],"leaves"->LeafCount[expr],"serialized_bytes"->StringLength[ser]|>];
+   normalized=measure["wolfram_FullSimplify_Together",FullSimplify[Together[expr]]];
+   Put[normalized,FileNameJoin[{out,"wolfram-result.wl"}]];
+   <|"status"->"INCONCLUSIVE","code"->"EXPORT_FINISHED","wolfram_zero"->TrueQ[normalized===0]|>
+  ]
+ ]]]]],done];
+Close[stream];result=Join[result,<|"scientific_acceptance"->False|>];Export[FileNameJoin[{out,"result.json"}],result,"RawJSON"];Quit[0];

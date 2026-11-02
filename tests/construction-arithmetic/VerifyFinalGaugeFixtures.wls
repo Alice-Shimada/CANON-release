@@ -1,0 +1,88 @@
+$HistoryLength=0;
+args=If[ListQ[$ScriptCommandLine]&&Length[$ScriptCommandLine]>1,Rest[$ScriptCommandLine],Drop[$CommandLine,First@FirstPosition[$CommandLine,"-script"]+1]];
+{repoRoot,inputPath,outputDir}=ExpandFileName/@args;
+Get[repoRoot<>"/mma/lib/MethodCardCore.wl"];
+task=CanonMethodCard`ReadTask[inputPath,"VERIFY_FINAL_GAUGE_FIXTURES"];
+fixtures=task["payload","fixture_directory"];results=task["payload","result_directory"];
+readJSON[p_]:=Import[p,"RawJSON"];
+same[a_,b_]:=Dimensions[a]===Dimensions[b]&&AllTrue[Flatten[a-b],TrueQ[FullSimplify[Together[#]]===0]&];
+zero[m_]:=same[m,ConstantArray[0,Dimensions[m]]];
+flags={"artifact_identity","source_basis_resident_order","sector_trace_resident_order","candidate_trace_coverage","cursor_complete","accepted_prefix_hash","invertible_cumulative_transformation","basis_definition","transformation_convention","exact_global_gauge","flat_connection","epsilon_factorized","epsilon_free_alphabet","constant_residue_dlog"};
+checks=Association@Table[case["name"]->Module[
+ {name=case["name"],dir,receipt,request,opts,ordered,accepted,computed,basisRows,basisResidual,facts,canonical,gauge,events,frame,input,reference,residues,expected},
+ dir=results<>"/"<>name;receipt=readJSON[dir<>"/result.json"];request=readJSON[case["template"]];opts=request["payload","method_options"];
+ facts=<|"expected_public_status"->(receipt["status"]===case["expected_status"]),
+  "no_fermat_selected"->(!KeyExistsQ[opts,"package_entry"]&&Lookup[opts,"gauge_backend","flint"]=!="fermat")|>;
+ If[receipt["status"]==="ERROR",
+  facts=Join[facts,<|"specific_error"->(receipt["code"]===case["expected_code"]),
+   "no_canonical_outputs"->(!FileExistsQ[dir<>"/canonical-basis.wl"]&&!FileExistsQ[dir<>"/canonical-de.wl"])|>];
+  If[name==="quadratic-old-basis",
+   gauge=readJSON[dir<>"/gauge-flint/gauge-readback.json"];
+   facts=Join[facts,<|"old_basis_specific_rejection"->StringContainsQ[receipt["summary","reason"],"Only one quadratic generator is supported"],
+    "global_gauge_passes_independently_of_rejected_basis"->(TrueQ[gauge["zero"]]&&Lookup[gauge["directions"],"exact_zero"]==={True,True}),
+    "mixed_basis_raw_frame"->(readJSON[fixtures<>"/fixture-index.json"]["mixed_basis_residual_raw_distinct"]===2)|>]];
+  If[case["kind"]==="domain",
+   input=CanonMethodCard`ReadWLData[request["payload","gauge_input","path"]];
+   frame=readJSON[dir<>"/gauge-flint/direction-1/radicand-frame.json"];
+   facts=Join[facts,<|"real_matrix_input"->AllTrue[input["matrices"],MatrixQ],
+    "actual_nonzero_input"->!AllTrue[input["matrices"],zero],
+    "domain_before_native"->!FileExistsQ[dir<>"/gauge-flint/direction-1/native.stdout"],
+    "correct_domain_frame"->Switch[name,"domain-unequal",frame["status"]==="rejected_distinct_radicands"&&frame["canonical_distinct_radicand_count"]===2,
+     "domain-nested",frame["status"]==="rejected_nonrational_or_nested_radicand",
+     "domain-inexact",frame["status"]==="rejected_inexact_or_transcendental_coefficient",_,False],
+    "new_helper_product_reached"->FileExistsQ[dir<>"/probe-events.jsonl"]|>]];
+  If[name==="native-error",facts=Join[facts,<|"actual_native_error_reached"->StringContainsQ[Import[dir<>"/gauge-flint/direction-1/native.stderr","Text"],"test-only injected native failure"],
+    "no_failed_readback_result"->!FileExistsQ[dir<>"/gauge-flint/gauge-readback.json"]|>]];
+  If[MemberQ[{"helper-init-failure","native-pin-mismatch","native-unavailable"},name],facts=Join[facts,<|"unavailable_before_native"->!DirectoryQ[dir<>"/gauge-flint"]|>]];
+  If[name==="helper-init-failure",facts=Join[facts,<|"checked_initialization_gate"->(receipt["summary","reason"]==="Selected FLINT helpers did not initialize.")|>]];
+  facts,
+  ordered=CanonMethodCard`ReadWLData[request["payload","ordered_master_de","path"]];accepted=CanonMethodCard`ReadWLData[request["payload","accepted_prefix","path"]];
+  computed=MapThread[Map[FullSimplify[Together[#]]&,Inverse[accepted["transformation"]].(#1.accepted["transformation"]-D[accepted["transformation"],#2]),{2}]&,{ordered["matrices"],ordered["variables"]}];
+  basisRows=CanonMethodCard`IntegralCoefficientRows[accepted["basis"],ordered["basis"],Head[First[ordered["basis"]]]];
+  basisResidual=Normal[SparseArray[accepted["transformation"]].SparseArray[basisRows]-IdentityMatrix[Length[basisRows],SparseArray]];
+  facts=Join[facts,<|"all_fourteen_flags_present"->(Sort[Keys[receipt["summary","checks"]]]===Sort[flags]),
+   "actual_nonzero_raw_matrices"->!AllTrue[ordered["matrices"],zero],
+   "epsilon_dependent_invertible_map"->(!FreeQ[accepted["transformation"],ordered["regulator"]]&&TrueQ[Together[Det[accepted["transformation"]]]=!=0]),
+   "lower_normalization_retained"->(!TrueQ[FullSimplify[Together[accepted["transformation"][[1,1]]-1]]===0]),
+   "independent_System_Wolfram_gauge_matches_gate"->(same[computed,accepted["matrices"]]===receipt["summary","checks","exact_global_gauge"]),
+   "independent_basis_equation_matches_gate"->(zero[basisResidual]===receipt["summary","checks","basis_definition"]),
+   "resident_source_order"->(ordered["basis"]===accepted["source_basis"]),
+   "complete_prefix_hash"->(accepted["prefix_id"]==="sha256:"<>Hash[KeyDrop[accepted,"prefix_id"],"SHA256","HexString"])|>];
+  If[receipt["status"]==="FAIL",
+   facts=Join[facts,<|"specific_gate_failure"->(receipt["code"]==="FULL_SYSTEM_FAIL"&&
+     Pick[Keys[receipt["summary","checks"]],Values[receipt["summary","checks"]],False]===If[name==="bad-gauge",{"exact_global_gauge"},{"basis_definition"}]),
+    "no_canonical_outputs"->(!FileExistsQ[dir<>"/canonical-basis.wl"]&&!FileExistsQ[dir<>"/canonical-de.wl"])|>];
+   If[name==="bad-gauge",gauge=readJSON[dir<>"/gauge-flint/gauge-readback.json"];
+    facts=Join[facts,<|"nonzero_native_residual_strictly_read"->(!TrueQ[gauge["zero"]]&&Lookup[gauge["directions"],"exact_zero"]==={False,True}&&gauge["directions"][[1]]["normalization","runtime","all_zero"]===False)|>]];
+   facts,
+   canonical=CanonMethodCard`ReadWLData[dir<>"/canonical-de.wl"];expected=CanonMethodCard`ReadWLData[fixtures<>"/"<>case["fixture"]<>"-expected.wl"];
+   residues=Table[ordered["regulator"]*Total[MapThread[#1*D[#2,v]/#2&,{canonical["residue_matrices"],canonical["alphabet"]}]],{v,ordered["variables"]}];
+   facts=Join[facts,<|"ALL_PASS_all_fourteen_true"->(receipt["code"]==="ALL_PASS"&&AllTrue[Values[receipt["summary","checks"]],TrueQ]),
+    "prescribed_nonzero_target"->same[canonical["matrices"],expected["target"]],
+    "independent_original_gauge"->same[computed,expected["target"]],
+    "independent_shared_residue_reconstruction"->same[computed,residues],
+    "constant_residues"->(Cases[canonical["residue_matrices"],_Symbol,Infinity]==={}),
+    "same_prescribed_basis_rows"->same[basisRows,expected["basis_rows"]],
+    "same_prescribed_transformation"->same[accepted["transformation"],expected["transformation"]],
+    "no_Fermat_runtime"->!KeyExistsQ[canonical["gauge_backend"],"fermat_executable"]|>];
+   If[opts["gauge_backend"]==="flint",
+    gauge=readJSON[dir<>"/gauge-flint/gauge-readback.json"];events=ImportString[#,"RawJSON"]&/@Import[dir<>"/final-progress.jsonl","Lines"];
+    facts=Join[facts,<|"actual_flint_backend"->(canonical["gauge_backend","name"]==="flint"),
+     "native_pin_versions_threads"->(canonical["gauge_backend","executable_sha256"]===opts["flint_executable_sha256"]&&canonical["gauge_backend","threads"]===1&&canonical["gauge_backend","header_version"]==="3.4.0"&&canonical["gauge_backend","runtime_version"]==="3.4.0"),
+     "normalizer_and_helper_hashes"->(canonical["gauge_backend","normalization_helper_sha256"]===opts["flint_normalization_helper","sha256"]&&canonical["gauge_backend","gauge_helper_sha256"]===opts["flint_gauge_helper","sha256"]&&canonical["gauge_backend","native_source_sha256"]===opts["flint_source","sha256"]),
+     "all_directions_strict_exact_zero"->(Length[gauge["directions"]]===2&&TrueQ[gauge["zero"]]&&AllTrue[gauge["directions"],TrueQ[#["exact_zero"]]&&#["normalization","runtime","count"]===4&]),
+     "separate_product_and_normalization_events"->AllTrue[{"gauge_product/1","gauge_product/2","gauge_normalize/1","gauge_normalize/2"},MemberQ[Lookup[events,"phase"],#]&],
+     "all_started_operations_closed"->(Count[Lookup[events,"state"],"start"]===Count[Lookup[events,"state"],"end"]),
+     "same_clock_timings_nonnegative"->AllTrue[Values[gauge["timings"]],NumericQ[#]&&#>=0&]|>];
+    If[MemberQ[{"quadratic-final","quadratic-mixed-gauge"},name],facts=Join[facts,<|"basis_frame_actually_mixed"->(Length[DeleteDuplicates[Cases[basisResidual,Power[b_,p_Rational]:>b,Infinity]]]===2&&canonical["basis_arithmetic","raw_distinct_radicand_count"]===2&&canonical["basis_arithmetic","canonical_distinct_radicand_count"]===1),
+     "supported_single_canonical_gauge_frame"->AllTrue[gauge["directions"],#["normalization","radicand_frame","canonical_distinct_radicand_count"]===1&],
+     "changed_mixed_gauge_reaches_equal_radicand_merge"->If[name==="quadratic-mixed-gauge",AnyTrue[gauge["directions"],#["normalization","radicand_frame","raw_distinct_radicand_count"]===2&&#["normalization","radicand_frame","canonical_distinct_radicand_count"]===1&],True],
+     "independent_Wolfram_FINAL_agreement"->same[canonical["matrices"],CanonMethodCard`ReadWLData[results<>"/quadratic-reference/canonical-de.wl"]["matrices"]]|>]],
+    facts=Join[facts,<|"System_Wolfram_reference_selected"->(canonical["gauge_backend","name"]==="wolfram")|>]];
+   facts
+  ]
+ ]],{case,task["payload","cases"]}];
+all=Length[checks]>0&&AllTrue[Values[checks],AssociationQ[#]&&Length[#]>0&&AllTrue[Values[#],TrueQ]&];
+Export[outputDir<>"/checks.json",<|"all_pass"->all,"check_count"->Total[Length/@Values[checks]],"checks"->checks,"scientific_acceptance"->False,
+ "method"->"Independent System Together/FullSimplify inverse gauge, literal prescribed target, full basis equation and shared-residue reconstruction; public fourteen gates/strict readback and scoped failures."|>,"RawJSON"];
+CanonMethodCard`WriteResult[task,outputDir,If[all,"PASS","FAIL"],"FIXTURE_CHECKS",<|"checks"-><|"type"->"json","path"->"checks.json"|>|>,<|"all_pass"->all,"scientific_acceptance"->False|>];Quit[If[all,0,1]];

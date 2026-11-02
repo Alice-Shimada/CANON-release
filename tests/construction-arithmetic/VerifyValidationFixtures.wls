@@ -1,0 +1,87 @@
+$HistoryLength=0;
+args=If[ListQ[$ScriptCommandLine]&&Length[$ScriptCommandLine]>1,Rest[$ScriptCommandLine],Drop[$CommandLine,First@FirstPosition[$CommandLine,"-script"]+1]];
+{repoRoot,inputPath,outputDir}=ExpandFileName/@args;
+Get[repoRoot<>"/mma/lib/MethodCardCore.wl"];
+task=CanonMethodCard`ReadTask[inputPath,"VERIFY_VALIDATION_FIXTURES"];
+results=task["payload","result_directory"];cases=task["payload","cases"];
+readJSON[p_]:=Import[p,"RawJSON"];
+readWL[d_]:=CanonMethodCard`ReadWLData[d["path"]];
+same[a_,b_]:=Dimensions[a]===Dimensions[b]&&AllTrue[Flatten[a-b],TrueQ[FullSimplify[Together[#]]===0]&];
+zero[m_]:=same[m,ConstantArray[0,Dimensions[m]]];
+flags={"artifact_identity","source_basis_resident_order","sector_trace_resident_order","candidate_trace_coverage","cursor_complete","accepted_prefix_hash","invertible_cumulative_transformation","basis_definition","transformation_convention","exact_global_gauge","flat_connection","epsilon_factorized","epsilon_free_alphabet","constant_residue_dlog"};
+normalCheck[case_]:=Module[{name=case["name"],dir,request,input,receipt,call,facts,normalized,rb,native,events,other,expected,frame},
+ dir=results<>"/"<>name;request=readJSON[case["template"]];input=readWL[request["payload","matrix"]];receipt=readJSON[dir<>"/result.json"];call=readJSON[dir<>"/call.json"];
+ facts=<|"actual_MatrixQ_input"->MatrixQ[input],"expected_public_status"->(receipt["status"]===case["expected_status"]),
+ "exact_input_hash"->(call["input_sha256"]===request["payload","matrix","sha256"]),"actual_selected_helper"->(call["helper_sha256"]===request["payload","normalizer","sha256"]),
+ "old_native_pin_retained"->(call["executable_sha256"]===request["payload","native_executable","sha256"]),
+ "same_clock_call_nonnegative"->(NumericQ[call["normalize_seconds"]]&&call["normalize_seconds"]>=0)|>;
+ If[receipt["status"]==="ERROR",
+  facts=Join[facts,<|"scoped_error_code"->(receipt["code"]===case["expected_code"]),"no_normalized_result"->!FileExistsQ[dir<>"/normalized.wl"]|>];
+  If[case["version"]==="new",other=readJSON[results<>"/old-"<>case["group"]<>"/result.json"];facts=Join[facts,<|"old_new_reject_same_domain_and_code"->(other["status"]===receipt["status"]&&other["code"]===receipt["code"])|>]];
+  facts,
+  normalized=CanonMethodCard`ReadWLData[dir<>"/normalized.wl"];rb=readJSON[dir<>"/normalization/readback.json"];native=readJSON[dir<>"/normalization/native.stderr"];
+  events=ImportString[#,"RawJSON"]&/@Import[dir<>"/normalization-events.jsonl","Lines"];
+  facts=Join[facts,<|"independent_System_exact_nonzero_matrix"->same[input,normalized],"genuine_nonzero_output"->If[case["group"]==="synthetic",same[normalized/.Thread[DeleteDuplicates@Cases[input,_Symbol,Infinity]->0],{{1,1}}],!zero[normalized]],
+   "dimensions_and_pair_count"->(Dimensions[input]===Dimensions[normalized]&&native["count"]===Times@@Dimensions[input]&&rb["runtime","count"]===Times@@Dimensions[input]),
+   "native_nonzero_flag_strict_readback"->(native["all_zero"]===False&&rb["runtime","all_zero"]===False),
+   "native_header_runtime_equal"->(native["header_version"]===native["runtime_version"]),
+   "native_stdout_actually_nonzero"->AnyTrue[Import[dir<>"/normalization/native.stdout","Lines"],#=!="0"&],
+   "all_operations_closed"->(Count[Lookup[events,"state"],"start"]===Count[Lookup[events,"state"],"end"]),
+   "phase_timings_nonnegative"->AllTrue[Values[rb["timings"]],NumericQ[#]&&#>=0&],
+   "constant_dummy_slot_exact"->(rb["constant_dummy_slot"]===(rb["variables"]==={})&&rb["native_variable_count"]===Max[1,Length[rb["variables"]]])|>];
+  If[KeyExistsQ[case,"expected_matrix"],expected=readWL[case["expected_matrix"]];facts=Join[facts,<|"independent_retained_prescribed_output"->same[normalized,expected]|>]];
+  If[case["version"]==="new",
+   other=results<>"/old-"<>case["group"];
+   facts=Join[facts,<|"old_new_exact_outputs"->same[normalized,CanonMethodCard`ReadWLData[other<>"/normalized.wl"]],
+    "variables_identity_order_retained"->(rb["variables"]===readJSON[other<>"/normalization/readback.json"]["variables"]),
+    "postfix_protocol_byte_identical"->(FileHash[dir<>"/normalization/matrix.postfix","SHA256"]===FileHash[other<>"/normalization/matrix.postfix","SHA256"]),
+    "strict_native_stdout_byte_identical"->(FileHash[dir<>"/normalization/native.stdout","SHA256"]===FileHash[other<>"/normalization/native.stdout","SHA256"]),
+    "three_new_disjoint_preparation_events"->AllTrue[{"flint_root_collect","flint_formal_substitute","flint_variables_domain"},Count[Lookup[events,"operation"],#]===2&]|>]];
+  If[case["group"]==="mixed-physical",facts=Join[facts,<|"mixed_radical_frame_preserved"->(rb["radicand_frame","raw_distinct_radicand_count"]===2&&rb["radicand_frame","canonical_distinct_radicand_count"]===1)|>]];
+  facts
+ ]
+];
+finalCheck[case_]:=Module[{name=case["name"],dir,receipt,request,opts,ordered,accepted,computed,basisRows,basisResidual,facts,canonical,gauge,events,residues,expected,pointRules,pointMatrix,detWitness},
+ dir=results<>"/"<>name;receipt=readJSON[dir<>"/result.json"];request=readJSON[case["template"]];opts=request["payload","method_options"];
+ ordered=readWL[request["payload","ordered_master_de"]];accepted=readWL[request["payload","accepted_prefix"]];
+ computed=MapThread[Map[FullSimplify[Together[#]]&,Inverse[accepted["transformation"]].(#1.accepted["transformation"]-D[accepted["transformation"],#2]),{2}]&,{ordered["matrices"],ordered["variables"]}];
+ basisRows=CanonMethodCard`IntegralCoefficientRows[accepted["basis"],ordered["basis"],Head[First[ordered["basis"]]]];
+ basisResidual=Normal[SparseArray[accepted["transformation"]].SparseArray[basisRows]-IdentityMatrix[Length[basisRows],SparseArray]];
+ pointRules=Thread[Join[ordered["variables"],{ordered["regulator"]}]->Join[Range[2,Length[ordered["variables"]]+1],{1}]];
+ pointMatrix=accepted["transformation"]/.pointRules;detWitness=FullSimplify[Together[Det[pointMatrix]]];
+ Export[outputDir<>"/"<>name<>"-determinant-witness.json",<|"point_rules"->ToString[pointRules,InputForm],"exact_determinant"->ToString[detWitness,InputForm],"finite_exact_numeric"->(NumericQ[detWitness]&&FreeQ[pointMatrix,_Real|Indeterminate|_DirectedInfinity]),"proved_nonzero"->TrueQ[FullSimplify[detWitness!=0]]|>,"RawJSON"];
+ facts=<|"expected_public_status"->(receipt["status"]===case["expected_status"]),
+ "all_fourteen_flags_present"->(Sort[Keys[receipt["summary","checks"]]]===Sort[flags]),
+ "actual_nonzero_raw_matrices"->!AllTrue[ordered["matrices"],zero],
+ "epsilon_dependent_invertible_map"->(!FreeQ[accepted["transformation"],ordered["regulator"]]&&NumericQ[detWitness]&&FreeQ[pointMatrix,_Real|Indeterminate|_DirectedInfinity]&&TrueQ[FullSimplify[detWitness!=0]]),
+ "lower_normalization_retained"->(!TrueQ[FullSimplify[Together[accepted["transformation"][[1,1]]-1]]===0]),
+ "independent_System_Wolfram_gauge_matches_gate"->(same[computed,accepted["matrices"]]===receipt["summary","checks","exact_global_gauge"]),
+ "independent_basis_equation_matches_gate"->(zero[basisResidual]===receipt["summary","checks","basis_definition"]),
+ "resident_source_order"->(ordered["basis"]===accepted["source_basis"]),
+ "complete_prefix_hash"->(accepted["prefix_id"]==="sha256:"<>Hash[KeyDrop[accepted,"prefix_id"],"SHA256","HexString"]),
+ "no_fermat_selected"->(opts["gauge_backend"]==="flint"&&opts["basis_backend"]==="flint")|>;
+ If[receipt["status"]==="FAIL",
+  facts=Join[facts,<|"specific_gate_failure"->(receipt["code"]==="FULL_SYSTEM_FAIL"&&Pick[Keys[receipt["summary","checks"]],Values[receipt["summary","checks"]],False]===If[name==="bad-gauge",{"exact_global_gauge"},{"basis_definition"}]),
+   "no_canonical_outputs"->(!FileExistsQ[dir<>"/canonical-basis.wl"]&&!FileExistsQ[dir<>"/canonical-de.wl"])|>];
+  If[name==="bad-gauge",gauge=readJSON[dir<>"/gauge-flint/gauge-readback.json"];facts=Join[facts,<|"nonzero_native_residual_strictly_read"->(!TrueQ[gauge["zero"]]&&Lookup[gauge["directions"],"exact_zero"]==={False,True}&&gauge["directions"][[1]]["normalization","runtime","all_zero"]===False)|>]];
+  facts,
+  canonical=CanonMethodCard`ReadWLData[dir<>"/canonical-de.wl"];expected=readWL[case["expected_matrix"]];gauge=readJSON[dir<>"/gauge-flint/gauge-readback.json"];
+  residues=Table[ordered["regulator"]*Total[MapThread[#1*D[#2,v]/#2&,{canonical["residue_matrices"],canonical["alphabet"]}]],{v,ordered["variables"]}];
+  facts=Join[facts,<|"ALL_PASS_all_fourteen_true"->(receipt["code"]==="ALL_PASS"&&AllTrue[Values[receipt["summary","checks"]],TrueQ]),
+   "prescribed_nonzero_target"->same[canonical["matrices"],expected["target"]],"independent_original_gauge"->same[computed,expected["target"]],
+   "independent_shared_residue_reconstruction"->same[computed,residues],"constant_residues"->(Cases[canonical["residue_matrices"],_Symbol,Infinity]==={}),
+   "same_prescribed_basis_rows"->same[basisRows,expected["basis_rows"]],"same_prescribed_transformation"->same[accepted["transformation"],expected["transformation"]],
+   "actual_FLINT_no_Fermat_runtime"->(canonical["gauge_backend","name"]==="flint"&&!KeyExistsQ[canonical["gauge_backend"],"fermat_executable"]),
+   "normalizer_and_native_hashes"->(canonical["gauge_backend","normalization_helper_sha256"]===opts["flint_normalization_helper","sha256"]&&canonical["gauge_backend","executable_sha256"]===opts["flint_executable_sha256"]),
+   "all_directions_strict_exact_zero"->(TrueQ[gauge["zero"]]&&AllTrue[gauge["directions"],TrueQ[#["exact_zero"]]&])|>];
+  If[name==="quadratic-mixed-gauge",facts=Join[facts,<|"basis_frame_actually_mixed"->(Length[DeleteDuplicates[Cases[basisResidual,Power[b_,p_Rational]:>b,Infinity]]]===2&&canonical["basis_arithmetic","raw_distinct_radicand_count"]===2&&canonical["basis_arithmetic","canonical_distinct_radicand_count"]===1),
+   "actual_gauge_equal_radicand_merge"->AnyTrue[gauge["directions"],#["normalization","radicand_frame","raw_distinct_radicand_count"]===2&&#["normalization","radicand_frame","canonical_distinct_radicand_count"]===1&]|>]];
+  facts
+ ]
+];
+checks=<||>;
+Do[checks[case["name"]]=If[case["kind"]==="normalization",normalCheck[case],finalCheck[case]];Export[outputDir<>"/partial-checks.json",checks,"RawJSON"],{case,cases}];
+all=Length[checks]>0&&AllTrue[Values[checks],AssociationQ[#]&&Length[#]>0&&AllTrue[Values[#],TrueQ]&];
+Export[outputDir<>"/checks.json",<|"all_pass"->all,"check_count"->Total[Length/@Values[checks]],"checks"->checks,"scientific_acceptance"->False,
+ "method"->"Independent System Together/FullSimplify matrix equality, unchanged prescribed target/basis/transformation, inverse gauge and shared residue reconstruction; scoped old/new matrix-boundary failures and protocol identity."|>,"RawJSON"];
+CanonMethodCard`WriteResult[task,outputDir,If[all,"PASS","FAIL"],"FIXTURE_CHECKS",<|"checks"-><|"type"->"json","path"->"checks.json"|>|>,<|"all_pass"->all,"scientific_acceptance"->False|>];Quit[If[all,0,1]];

@@ -1,0 +1,1 @@
+Fixture-only verifier for the five-master/two-variable synthetic input in test_batch_sector_cuts.py. It reads hash-bound batch outputs and compares literal expected basis, rational blocks and proper-subsector lists. It runs no physical input, discovery, canonical/UT gate or reducer. Append this test-only manifest after the complete caller/batch stack for this readback only.

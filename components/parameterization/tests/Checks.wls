@@ -1,9 +1,8 @@
 #!/usr/bin/env wolframscript
 $HistoryLength = 0;
-{canon, package, pointPackage, tree, receipt} = Rest[$ScriptCommandLine];
+{canon, package, tree, receipt} = Rest[$ScriptCommandLine];
 Get[FileNameJoin[{canon, "mma", "lib", "MethodCardCore.wl"}]];
 Get[FileNameJoin[{package, "Parameterization.wl"}]];
-Get[FileNameJoin[{pointPackage, "PointDE.wl"}]];
 checks = <||>;
 check[name_, value_] := (checks[name] = TrueQ[value]; Print[name, ": ", checks[name]]);
 zero[e_] := And @@ (TrueQ[Cancel[Together[#]] === 0] & /@ Flatten[{e}]);
@@ -80,27 +79,5 @@ discovered = Get[FileNameJoin[{tree, "discovery", "master-basis.wl"}]];
 check["supplied_master_reference_uses_default_discovery", Length[discovered["masters"]] === 1 &&
   SymbolName[Head[First[discovered["masters"]]]] === "Q" && (List @@ First[discovered["masters"]]) === {1,1}];
 
-point = Get[FileNameJoin[{tree, "point", "prepared-point.wl"}]];
-targets = Get[FileNameJoin[{tree, "point", "targets.wl"}]];
-check["neutral_family_consumed_by_point_preparation", point["variables"] === {x[1]} &&
-  point["expressions"] === {2 B[1,1,0,0,0]} && point["frame_derivatives"] === {{{-1/4}}}];
-check["point_targets_bind_family_and_source_basis", targets["schema"] === "canon-neu/reduction-targets/v1" &&
-  targets["family_ref"] === "synthetic-bubble" && targets["basis_ref"] === "bubble-master" && targets["masters"] === {B[1,1,0,0,0]}];
-sample = Get[FileNameJoin[{tree, "point-de-result", "de-sample.wl"}]];
-check["neutral_family_binds_point_reduction", sample["matrices"] === {{{-eps}}} && sample["reduction_scope", "kind"] === "declared-point-reduction"];
-master = Get[FileNameJoin[{tree, "vector-masters.wl"}]];
-candidates = Get[FileNameJoin[{tree, "vector-candidates.wl"}]];
-pointSpec = Get[FileNameJoin[{tree, "vector-point.wl"}]];
-legacyFamily = Join[KeyDrop[vector, {"chart_id", "chart_type", "propagator_momenta", "propagator_masses_squared"}],
-  <|"schema" -> "canon-neu/twistor-family/v1", "propagators" -> (#^2 & /@ vector["propagator_momenta"])|>];
-legacy = CanonPointDE`PreparePoint[legacyFamily, master, candidates, pointSpec];
-check["legacy_saved_family_reader_preserved", !FailureQ[legacy] && legacy["expressions"] === point["expressions"] &&
-  legacy["candidate_derivatives"] === point["candidate_derivatives"]];
-scalarLimit = CanonPointDE`PreparePoint[scalar, master, candidates, pointSpec];
-massLimit = CanonPointDE`PreparePoint[Join[vector, <|"propagator_masses_squared" -> {7,0,0,0,0}|>], master, candidates, pointSpec];
-check["unsupported_point_geometry_is_explicit", FailureQ[scalarLimit] && scalarLimit[[1]] === "UNSUPPORTED_POINT_DE_CHART" &&
-  FailureQ[massLimit] && massLimit[[1]] === "UNSUPPORTED_POINT_DE_MASSES"];
-chartLimit = CanonPointDE`PreparePoint[vector, master, candidates, Join[pointSpec, <|"chart_id" -> "other-chart"|>]];
-check["point_chart_identity_enforced", FailureQ[chartLimit] && chartLimit[[1]] === "CHART_MISMATCH"];
 Export[receipt, checks, "RawJSON"];
 Exit[If[And @@ Values[checks], 0, 1]];

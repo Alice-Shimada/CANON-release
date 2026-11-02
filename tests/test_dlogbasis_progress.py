@@ -132,6 +132,12 @@ If[Environment["CANON_DLOG_FIXTURE_PAUSE"] === "family_load", Pause[120]];
             self.assertEqual((result["status"], result["code"]),
                              ("PROVISIONAL", "INTEGRAL_CANDIDATES"))
             self.assertEqual(result["summary"]["entry_sha256"], hashlib.sha256(self.entry.read_bytes()).hexdigest())
+            self.assertEqual(result["summary"]["candidate_count"], 1)
+            self.assertEqual(result["summary"]["available_candidate_count"], 3)
+            for key in ("affine_finite_constant_residues_verified",
+                        "constant_leading_singularity_certified",
+                        "uniform_transcendentality_certified", "canonical_basis_certified"):
+                self.assertIs(result["summary"][key], False)
             check = self.work / (name + "-check.wls")
             check.write_text('''
 Get[FileNameJoin[{Environment["CANON_DLOG_FIXTURE_CANON"],"mma","lib","MethodCardCore.wl"}]];
@@ -155,6 +161,91 @@ Export[factsPath,facts,"RawJSON"]; Exit[If[And@@Values[facts],0,1]];
             Path(os.environ["CANON_TEST_EVIDENCE"]).write_text(json.dumps({
                 "scope": "neutral stub DlogBasis provider serialization; no installed search",
                 "cases": evidence}, indent=2) + "\n")
+
+    def diagnostic_roundtrip(self, tag, provider_expression, expected_status, expected_code):
+        # Replace only the neutral stub's public search, retaining its declared options.
+        self.implementation.write_text(self.implementation.read_text() +
+            '\nDownValues[DlogBasis`DlogBasisSearch] = {};\n'
+            'DlogBasis`DlogBasisSearch[family_, sector_, OptionsPattern[]] := ' +
+            provider_expression + ';\n')
+        expected = self.work / (tag + '-expected.wl')
+        expected.write_text('<|"provider_result" -> ' + provider_expression + '|>\n')
+        command, _, output = self.command(tag)
+        completed = subprocess.run(command, cwd=ROOT, env=self.environment,
+                                   capture_output=True, text=True, timeout=30)
+        self.assertEqual(completed.returncode, 0, completed.stdout + completed.stderr)
+        result = json.loads((output / 'result.json').read_text())
+        self.assertEqual((result['status'], result['code']), (expected_status, expected_code))
+        descriptor = result['artifacts']['diagnostic']
+        self.assertEqual(descriptor['type'], 'mathematica-expression')
+        diagnostic = output / descriptor['path']
+        self.assertTrue(diagnostic.is_file())
+        check = self.work / (tag + '-readback.wls')
+        check.write_text('''
+Get[FileNameJoin[{Environment["CANON_DLOG_FIXTURE_CANON"],"mma","lib","MethodCardCore.wl"}]];
+{artifactPath, expectedPath, factsPath}=CanonMethodCard`ScriptArguments[];
+artifact=CanonMethodCard`ReadWLData[artifactPath]; expected=CanonMethodCard`ReadWLData[expectedPath];
+actual=artifact["provider_result"]; data=If[FailureQ[actual],actual[[2]],actual];
+facts=<|"exact_provider_result"->SameQ[actual,expected["provider_result"]],
+  "schema"->(artifact["schema"]==="canon-neu/integral-proposal-diagnostic/v1"),
+  "method"->(artifact["method_id"]==="dlogbasis-refine-search"),
+  "public_entry"->(artifact["public_entry"]==="DlogBasis`DlogBasisSearch"),
+  "revision"->(artifact["tool_provenance","tool_revision"]==="neutral-v1"),
+  "entry_hash"->(artifact["tool_provenance","entry_sha256"]===
+    FileHash[artifact["tool_provenance","entry"],"SHA256","HexString"]),
+  "implementation_hashes"->And@@Map[Function[item,
+    item["sha256"]===FileHash[item["path"],"SHA256","HexString"]],
+    artifact["tool_provenance","implementation_files"]],
+  "absent_fields_preserved"->And@@Map[!KeyExistsQ[data,#]&,
+    {"DimensionOnlyNormalization","RemainingVariables","ResidualVariables"}]|>;
+Export[factsPath,facts,"RawJSON"]; Exit[If[And@@Values[facts],0,1]];
+''')
+        facts_path = self.work / (tag + '-facts.json')
+        checked = subprocess.run([KERNEL, '-noinit', '-noprompt', '-script', str(check),
+            str(diagnostic), str(expected), str(facts_path)],
+            capture_output=True, text=True, timeout=30,
+            env=dict(self.environment, CANON_DLOG_FIXTURE_CANON=str(ROOT)))
+        self.assertEqual(checked.returncode, 0, checked.stdout + checked.stderr)
+        if os.environ.get('CANON_TEST_EVIDENCE'):
+            evidence_path = Path(os.environ['CANON_TEST_EVIDENCE'])
+            evidence_path.with_name(evidence_path.stem + '-' + tag + evidence_path.suffix).write_text(
+                json.dumps({'scope': 'neutral stub serialization; no installed search',
+                    'case': tag, 'result': result, 'facts': json.loads(facts_path.read_text())},
+                    indent=2) + '\n')
+        return result
+
+    def test_empty_candidates_preserve_nested_diagnostic(self):
+        result = self.diagnostic_roundtrip('empty', r'''
+<|"ScientificStatus"->"NeutralUnresolvedCuts", "CandidateCombinations"->{},
+  "CandidateLattice"-><|"CandidateCount"->6|>, "RepresentedCandidates"->Range[3],
+  "CandidateChartCompleteQ"->False, "AffineFiniteConstantResiduesVerifiedQ"->False,
+  "ConstantLeadingSingularityCertifiedQ"->False, "UniformTranscendentalityCertifiedQ"->False,
+  "CanonicalBasisCertifiedQ"->False,
+  "GeneralizedCuts"->{Failure["NeutralUnsupportedPair",<|
+    "UnsupportedBackendData"-><|"backend"->"sentinel",
+      "cover"->HoldComplete[NeutralDiagnostics`u^2+2]|>,
+    "Nested"->Failure["NeutralInner",<|"payload"->17/23|>]|>]},
+  "Opaque"->HoldComplete[NeutralDiagnostics`u^2-5]|>
+''', 'INCONCLUSIVE', 'METHOD_EXHAUSTED')
+        summary = result['summary']
+        self.assertEqual(summary['reason'],
+                         'DlogBasisSearch produced no candidates within the requested budget')
+        self.assertEqual(summary['candidate_count'], 0)
+        self.assertEqual(summary['represented_candidate_count'], 3)
+        for key in ('candidate_chart_complete', 'affine_finite_constant_residues_verified',
+                    'constant_leading_singularity_certified',
+                    'uniform_transcendentality_certified', 'canonical_basis_certified'):
+            self.assertIs(summary[key], False)
+
+    def test_direct_failure_preserves_exact_diagnostic(self):
+        result = self.diagnostic_roundtrip('failure', r'''
+Failure["NeutralSearchFailure",<|"MessageTemplate"->"Neutral provider failure",
+  "NestedCut"->Failure["NeutralNestedCut",<|
+    "Sentinel"->{1/3,HoldComplete[NeutralDiagnostics`u]}|>],
+  "Opaque"->HoldComplete[NeutralDiagnostics`u^2-5]|>]
+''', 'ERROR', 'DLOGBASIS_SEARCH_FAILED')
+        self.assertEqual(set(result['summary']), {'failure_tag', 'failure', 'entry'})
+        self.assertEqual(result['summary']['failure_tag'], 'NeutralSearchFailure')
 
     def records(self, output):
         path = output / "dlogbasis-progress.jsonl"

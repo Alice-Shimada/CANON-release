@@ -67,12 +67,10 @@ The optional [parameterization](../components/parameterization/README.md) packag
 retains user-defined vector or scalar-product charts and supplies a neutral
 family view and physical derivatives. Select the discovery/reduction adapter
 independently; the front end does not write native reducer jobs.
-The [point-DE package](../components/point-de/README.md)
-constructs point derivatives for its declared vector geometry and supplied
-integral candidates. The [reconstruction package](../components/dlog-reconstruction/README.md)
-consumes point DEs with explicit training/validation roles. These packages have
-their own input scope and do not change the preparation requirements above for
-default consumers.
+The optional [reconstruction package](../components/dlog-reconstruction/README.md)
+consumes caller-supplied DE samples with explicit training/validation roles.
+It has its own input scope and does not change default preparation or the
+exact global acceptance criteria. A numerical point-DE producer is not bundled.
 
 ## Supplied prepared-input example
 

@@ -1,0 +1,46 @@
+$HistoryLength=0;
+args=If[ListQ[$ScriptCommandLine]&&Length[$ScriptCommandLine]>1,Rest[$ScriptCommandLine],Drop[$CommandLine,First@FirstPosition[$CommandLine,"-script"]+1]];
+{repoRoot,inputPath,outputDir}=ExpandFileName/@args;
+Get[repoRoot<>"/mma/lib/MethodCardCore.wl"];
+task=CanonMethodCard`ReadTask[inputPath,"VERIFY_NATIVE_INVERSE"];
+results=task["payload","result_directory"];cases=task["payload","cases"];
+j[p_]:=Import[p,"RawJSON"];
+wl[p_]:=CanonMethodCard`ReadWLData[p];
+same[a_,b_]:=Dimensions[a]===Dimensions[b]&&AllTrue[Flatten[a-b],TrueQ[FullSimplify[Together[#]]===0]&];
+zero[a_]:=same[a,ConstantArray[0,Dimensions[a]]];
+flags={"artifact_identity","source_basis_resident_order","sector_trace_resident_order","candidate_trace_coverage","cursor_complete","accepted_prefix_hash","invertible_cumulative_transformation","basis_definition","transformation_convention","exact_global_gauge","flat_connection","epsilon_factorized","epsilon_free_alphabet","constant_residue_dlog"};
+checks=<||>;
+Do[
+ name=case["name"];dir=results<>"/"<>name;req=j[case["template"]];receipt=j[dir<>"/result.json"];opts=req["payload","method_options"];
+ facts=<|"public_expected_status"->(receipt["status"]===case["expected_status"]),"no_fermat_backend_selected"->(!KeyExistsQ[opts,"package_entry"]&&Lookup[opts,"gauge_backend","flint"]=!="fermat")|>;
+ If[case["kind"]==="normalize",
+  input=wl[req["payload","matrix","path"]];folders=FileNames["flint-normalization-*",dir];nativeDir=First[folders];
+  runtime=j[dir<>"/arithmetic-runtime.json"];
+  config=j[opts["runtime_config","path"]];
+  facts=Join[facts,<|"real_matrix_input"->MatrixQ[input],"native_executable_hash_pinned"->(runtime["flint_runtime","executable_sha256"]===config["flint_executable","sha256"]),"native_source_hash_pinned"->(runtime["flint_runtime","source_sha256"]===config["flint_source","sha256"]),"helper_unchanged"->(runtime["flint_runtime","helper_sha256"]===config["flint_helper","sha256"]),"one_native_thread"->(runtime["flint_runtime","threads"]===1),"no_unselected_fermat_or_finiteflow"->(!KeyExistsQ[runtime,"fermat_runtime"]&&!KeyExistsQ[runtime,"finiteflow_runtime"]),"actual_inverse_postfix"->StringContainsQ[Import[nativeDir<>"/matrix.postfix","Text"],"p -1\n"]|>];
+  If[case["expected_status"]==="ERROR",
+   facts=Join[facts,<|"specific_native_failure"->(receipt["code"]==="ARITHMETIC_NORMALIZATION_FAILED"&&StringContainsQ[Import[nativeDir<>"/native.stderr","Text"],"ERROR: zero denominator"]),"no_normalized_output"->!FileExistsQ[dir<>"/normalized.wl"],"no_success_readback"->!FileExistsQ[nativeDir<>"/readback.json"]|>];
+   If[case["fixture"]==="zero-rational",facts=Join[facts,<|"independent_zero_denominator"->TrueQ[Together[Denominator[First@Flatten[input]]]===0]|>]],
+   normalized=wl[dir<>"/normalized.wl"];readback=j[nativeDir<>"/readback.json"];
+   facts=Join[facts,<|"independent_System_rational_quadratic_identity"->same[normalized,input],"nonzero_output"->!zero[normalized],"strict_readback_pair_count"->(readback["runtime","count"]===Times@@Dimensions[input]),"versions_3_4"->(readback["runtime","header_version"]==="3.4.0"&&readback["runtime","runtime_version"]==="3.4.0"),"native_nonzero_flag"->(readback["runtime","all_zero"]===False),"four_distinct_timing_fields"->(Sort[Keys[readback["timings"]]]===Sort[{"flint_radicand_canonicalize","flint_serialize","flint_native","flint_readback"}])|>];
+   If[MemberQ[{"rational","benchmark"},case["fixture"]],
+    bases=Cases[input,Power[b_,n_Integer]/;n<0:>b,Infinity];
+    facts=Join[facts,<|"actual_rational_branch_no_generator"->(readback["radicand_frame","canonical_distinct_radicand_count"]===0),"nontrivial_nonzero_inverse_operand"->AnyTrue[bases,Length[Expand[#]]>2&&!TrueQ[Together[#]===0]&]|>]];
+   If[case["fixture"]==="constants",facts=Join[facts,<|"constant_dummy_slot_no_variable_leak"->(readback["constant_dummy_slot"]===True&&Cases[normalized,_Symbol,Infinity]==={})|>]];
+   If[case["mode"]==="new",old=wl[results<>"/"<>case["fixture"]<>"-old/normalized.wl"];
+    oldDir=First[FileNames["flint-normalization-*",results<>"/"<>case["fixture"]<>"-old"]];
+    facts=Join[facts,<|"old_new_exact_equality"->same[normalized,old],"identical_postfix_bytes"->(FileHash[nativeDir<>"/matrix.postfix","SHA256"]===FileHash[oldDir<>"/matrix.postfix","SHA256"]),"identical_native_coefficients"->(Import[nativeDir<>"/native.stdout","Text"]===Import[oldDir<>"/native.stdout","Text"])|>]]
+  ],
+  ordered=wl[req["payload","ordered_master_de","path"]];accepted=wl[req["payload","accepted_prefix","path"]];can=wl[dir<>"/canonical-de.wl"];
+  computed=MapThread[Map[FullSimplify[Together[#]]&,Inverse[accepted["transformation"]].(#1.accepted["transformation"]-D[accepted["transformation"],#2]),{2}]&,{ordered["matrices"],ordered["variables"]}];
+  rows=CanonMethodCard`IntegralCoefficientRows[accepted["basis"],ordered["basis"],Head[First[ordered["basis"]]]];
+  residues=Table[ordered["regulator"]*Total[MapThread[#1*D[#2,v]/#2&,{can["residue_matrices"],can["alphabet"]}]],{v,ordered["variables"]}];
+  facts=Join[facts,<|"all_fourteen_gates"->(Sort[Keys[receipt["summary","checks"]]]===Sort[flags]&&AllTrue[Values[receipt["summary","checks"]],TrueQ]&&receipt["code"]==="ALL_PASS"),"independent_original_inverse_gauge"->same[computed,accepted["matrices"]],"independent_basis_equation"->zero[accepted["transformation"].rows-IdentityMatrix[Length[rows]]],"independent_shared_residue_reconstruction"->same[computed,residues],"canonical_equals_independent_gauge"->same[can["matrices"],computed],"constant_residues"->(Cases[can["residue_matrices"],_Symbol,Infinity]==={}),"nontrivial_invertible_map"->(!FreeQ[accepted["transformation"],ordered["regulator"]]&&!TrueQ[Together[Det[accepted["transformation"]]]===0]),"no_Fermat_runtime"->!KeyExistsQ[can["gauge_backend"],"fermat_executable"]|>];
+  If[case["mode"]==="new",ref=wl[results<>"/final-"<>case["fixture"]<>"-reference/canonical-de.wl"];
+   facts=Join[facts,<|"new_native_backend"->(can["gauge_backend","name"]==="flint"&&can["gauge_backend","executable_sha256"]===opts["flint_executable_sha256"]&&can["gauge_backend","native_source_sha256"]===opts["flint_source","sha256"]),"independent_Wolfram_FINAL_agreement"->same[can["matrices"],ref["matrices"]]|>],facts=Join[facts,<|"reference_is_System_Wolfram"->(can["gauge_backend","name"]==="wolfram")|>]]
+ ];
+ checks[name]=facts;
+,{case,cases}];
+all=Length[checks]===Length[cases]&&Length[checks]>0&&AllTrue[Values[checks],AllTrue[Values[#],TrueQ]&];
+Export[outputDir<>"/checks.json",<|"all_pass"->all,"check_count"->Total[Length/@Values[checks]],"checks"->checks,"scientific_acceptance"->False|>,"RawJSON"];
+CanonMethodCard`WriteResult[task,outputDir,If[all,"PASS","FAIL"],"NATIVE_INVERSE_CHECKS",<|"checks"-><|"type"->"json","path"->"checks.json"|>|>,<|"all_pass"->all,"scientific_acceptance"->False|>];Quit[If[all,0,1]];

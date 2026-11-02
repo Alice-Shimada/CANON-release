@@ -44,6 +44,13 @@ For each later resident sector, use the same runner with step
 `sector_manifest`, directly slices the matching rows and columns, and emits only
 `sector_basis` and `sector_cut_de` without rebuilding the differential equation.
 
+When several later sectors need slices from the same ordered DE, the optional
+[batch-sector-cuts component](../../components/batch-sector-cuts/README.md)
+provides `SLICE_CUT_DE_BATCH`. It loads and validates that DE once and writes the
+same standard cut/basis artifacts with a direct sector index. Reuse those
+hash-bound outputs in subsequent requests; batching does not advance canonical
+acceptance.
+
 For a DE-only route, run
 [PREPARE_REDUCTION_TARGETS](../canon-prepare-reduction-targets/SKILL.md) on the
 ordered masters and prepared family, then pass its `reduction_targets` to

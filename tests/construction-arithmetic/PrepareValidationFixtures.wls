@@ -1,0 +1,24 @@
+$HistoryLength=0;
+args=If[ListQ[$ScriptCommandLine]&&Length[$ScriptCommandLine]>1,Rest[$ScriptCommandLine],Drop[$CommandLine,First@FirstPosition[$CommandLine,"-script"]+1]];
+{repoRoot,inputPath,outputDir}=ExpandFileName/@args;
+Get[repoRoot<>"/mma/lib/MethodCardCore.wl"];
+task=CanonMethodCard`ReadTask[inputPath,"PREPARE_VALIDATION_FIXTURES"];
+{x,y}=Symbol/@{"CANON`DEData`x","CANON`DEData`y"};
+put[name_,m_]:=(CanonMethodCard`WriteWLArtifact[m,outputDir,name<>".wl"];<|"name"->name,"path"->name<>".wl"|>);
+cases={};
+Do[AppendTo[cases,put[First[pair],Last[pair]]],{pair,{
+ {"rational",{{(x^2-1)/(x-1),-2/3}}},{"quadratic",{{Sqrt[1+x],-1/(1+x)^(3/2)}}},
+ {"constants",{{-2/3,5,0}}},{"numeric-root",{{Sqrt[2],1/Sqrt[2]}}},
+ {"Pi",{{Pi+x}}},{"E",{{E+x}}},{"I",{{I+x}}},{"Sin",{{Sin[x]+x}}},
+ {"Real",{{1.+x}}},{"Infinity",{{Infinity+x}}},{"ComplexInfinity",{{ComplexInfinity}}},{"Indeterminate",{{Indeterminate}}},
+ {"unequal",{{Sqrt[1+x]+Sqrt[1+y]}}},{"nested",{{Sqrt[1+Sqrt[1+x]]}}},{"cubic",{{x^(1/3)}}},
+ {"power-bound",{{x^10001}}},{"mixed-invalid",{{Sin[x]+x^10001}}}
+}}];
+config=task["payload","synthetic"];axes=config["variables"];width=config["powers_per_variable"];
+vars=Table[Symbol["CANON`DEData`bench"<>ToString[i]],{i,axes+1}];tuples=Tuples[Range[0,width-1],axes];
+poly=Total[MapIndexed[First[#2]*Times@@MapThread[Power,{Take[vars,axes],#1}]&,tuples]];
+matrix={{poly/(1+Last[vars]),poly/(1+Last[vars])^2}};
+put["synthetic",matrix];
+Export[outputDir<>"/index.json",<|"cases"->cases,"synthetic"-><|"term_count"->Length[tuples],"variables"->axes+1,"dimensions"->Dimensions[matrix],"leaf_count"->LeafCount[matrix],
+ "config"->config,"operand_sha256"->FileHash[outputDir<>"/synthetic.wl","SHA256","HexString"],"scope"->"One fixed generated exact 1x2 rational matrix; no physical input and no size tuning."|>|>,"RawJSON"];
+CanonMethodCard`WriteResult[task,outputDir,"PASS","FIXTURES_PREPARED",<|"index"-><|"type"->"json","path"->"index.json"|>|>,<|"scientific_acceptance"->False|>];Quit[0];

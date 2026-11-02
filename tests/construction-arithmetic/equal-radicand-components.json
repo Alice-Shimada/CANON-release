@@ -1,0 +1,38 @@
+{
+  "schema": "canon-neu/components/v1",
+  "workflow": "EQUAL-RADICANDS.md",
+  "steps": {
+    "PREPARE_RADICAND_FIXTURES": {
+      "command": [
+        "{python}",
+        "{package}/run.py",
+        "{package}/PrepareRadicandFixtures.wls"
+      ],
+      "instructions": "EQUAL-RADICANDS.md"
+    },
+    "VERIFY_RADICAND_FIXTURES": {
+      "command": [
+        "{python}",
+        "{package}/run.py",
+        "{package}/VerifyRadicandFixtures.wls"
+      ],
+      "instructions": "EQUAL-RADICANDS.md"
+    },
+    "NORMALIZE_FLINT_FIXTURE": {
+      "command": [
+        "{python}",
+        "{package}/run.py",
+        "{package}/NormalizeFlintFixture.wls"
+      ],
+      "instructions": "EQUAL-RADICANDS.md"
+    },
+    "BUILD_FULL_DE": {
+      "command": [
+        "{wolframscript}",
+        "-file",
+        "{canon}/mma/BuildFullSectorDE.wls"
+      ],
+      "instructions": "../../skills/canon-build-full-de/SKILL.md"
+    }
+  }
+}

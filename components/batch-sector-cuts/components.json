@@ -1,0 +1,27 @@
+{
+  "schema": "canon-neu/components/v1",
+  "workflow": "WORKFLOW.md",
+  "steps": {
+    "SLICE_CUT_DE_BATCH": {
+      "command": [
+        "{wolframscript}",
+        "-file",
+        "{package}/SliceSectorCutDEBatch.wls",
+        "{canon}"
+      ],
+      "instructions": "README.md",
+      "interface": {
+        "inputs": [
+          "ordered_master_de",
+          "sector_manifest"
+        ],
+        "outputs": [
+          "sector_index",
+          "sector_basis_<id>",
+          "sector_cut_de_<id>"
+        ],
+        "scope": "Exact resident-sector quotients of one checked ordered DE; no canonical or UT certification."
+      }
+    }
+  }
+}

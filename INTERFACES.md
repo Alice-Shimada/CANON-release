@@ -151,8 +151,7 @@ Agents supply family definitions, not derivative records. See
 the ordered derivative-target union, source `masters`, and symbolic `point: {}`
 (WL empty list). It accepts the same affine derivatives as `BUILD_CUT_DE`.
 For both steps, an explicit `prepared_derivatives` descriptor resolves from the
-request; otherwise the source resolves from `prepared_family`. Point/frame
-preparation retains the optional package's `PREPARE_POINT` interface.
+request; otherwise the source resolves from `prepared_family`.
 
 `DISCOVER/PASS` must also provide:
 
@@ -344,7 +343,6 @@ sampled evidence into the default exact-global-gauge acceptance scope.
 | `parameterization` | `PREPARE` | Symbolic neutral family, reducer-family export view and prepared metadata; no native reducer project |
 | `reducers/kira` | `DISCOVER`, `REDUCE_IBP` | Kira-owned project generation/execution/import, standard masters/sectors/rules |
 | `reducers/blade`, `reducers/fire7`, `reducers/neatibp` | `DISCOVER`, `REDUCE_IBP`, `BUILD_CUT_DE` within the configured adapter capability | Declared native execution or saved-output import and normalization; solver/export requirements remain explicit |
-| `point-de` | `PREPARE_POINT`, `BUILD_POINT_DE`, `COLLECT_DE_SAMPLES` | Prepared derivatives/targets, a full point connection and a sample-set index |
 | `dlog-reconstruction` | `RECONSTRUCT_DLOG`, `PROPOSE_LETTERS`, `CHECK_RECONSTRUCTION` | Provisional constant residues and raw analytic letters; separate finite-sample verification |
 | `local-jobs` | `SUBMIT_JOB`, `COLLECT_JOB`, `CANCEL_JOB`, `WATCH_COMPLETION`, `CANCEL_WATCH` | Operational job/watch handles, terminal checkpoints and callback events |
 
@@ -414,10 +412,10 @@ same complete `ordered_master_de`, `sector_basis` and `sector_cut_de` artifacts.
 Keep all directions and the declared exact coefficient domain; finite-field
 samples cannot be presented as a symbolic DE. Later independent scientific gates
 retain their existing acceptance role.
-Use fixed-point reductions with `BUILD_POINT_DE` and their explicit kinematics
-binding; a constant coefficient at one point does not establish a symbolic rule.
+Fixed-point reductions require a separately supplied consumer and explicit
+kinematics binding; a coefficient at one point does not establish a symbolic rule.
 
-### Point-DE and reconstruction handoff
+### Supplied DE samples and reconstruction handoff
 
 A WL `canon-neu/de-sample/v1` Association contains `family_id`, `basis_id`,
 `chart_id`, `frame_id`, an explicit `scope` Association, ordered `variables`,
@@ -426,12 +424,10 @@ be indexed symbols such as `x[1]`. Matrices still include the regulator. The
 convention is `D[basis, variables[[i]]] = matrices[[i]] . basis`. Root signs,
 permutations and normalization belong to the declared basis/frame.
 
-Point construction differentiates before specializing kinematics and includes
-the derivative of a nonconstant frame: for `Jnew = R Jold`,
-`Anew = (D[R] + R Aold) Inverse[R]`. Reduced targets must include candidate
-projections, candidate derivatives and ordered-master derivatives. A point
-reduction must identify that same point; globally symbolic rules are explicitly
-declared separately. Discovery's initiate-only job is not a DE reduction job.
+The caller supplies these samples in one consistent analytic basis/frame.
+The release includes their reconstruction/checking consumer, not a numerical
+point-DE producer. The source convention and any frame derivative must already
+be represented in the supplied directional matrices.
 
 A WL `canon-neu/de-sample-set/v1` Association carries the shared identity,
 scope, variable, regulator and convention fields plus `training`, `validation`

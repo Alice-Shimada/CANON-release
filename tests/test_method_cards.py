@@ -2362,17 +2362,8 @@ If[
             )
 
     def test_retired_workflow_narratives_cannot_claim_current_authority(self) -> None:
-        architecture = (ROOT / "ARCHITECTURE.md").read_text(encoding="utf-8")
-        self.assertIn("Historical CANON_neu architecture (retired)", architecture)
-        self.assertIn("Do not restore it or cite it as the current architecture", architecture)
-        self.assertIn("`AGENTS.md`", architecture)
-        self.assertIn("`README.md`", architecture)
-        self.assertIn("`statemng`", architecture)
-
-        worklist = (ROOT / "WORKLIST.md").read_text(encoding="utf-8")
-        self.assertIn("Historical CANON scientific worklist (not a state dashboard)", worklist)
-        self.assertIn("not the current task state or its authority", worklist)
-        self.assertIn("`statemng`", worklist)
+        for retired in ("ARCHITECTURE.md", "WORKLIST.md", "docs/history"):
+            self.assertFalse((ROOT / retired).exists())
 
         interfaces = (ROOT / "INTERFACES.md").read_text(encoding="utf-8")
         for retired in ("`delegate`", "`subreport`", "`state.json`"):

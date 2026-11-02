@@ -1,0 +1,38 @@
+{
+  "schema": "canon-neu/components/v1",
+  "workflow": "WORKFLOW.md",
+  "steps": {
+    "NORMALIZE_FLINT_BOUNDARY": {
+      "command": [
+        "{python}",
+        "{package}/../run.py",
+        "{package}/NormalizeStreamFixture.wls"
+      ],
+      "instructions": "README.md"
+    },
+    "PREPARE_STREAM_FIXTURE": {
+      "command": [
+        "{python}",
+        "{package}/../run.py",
+        "{package}/PrepareStreamFixture.wls"
+      ],
+      "instructions": "README.md"
+    },
+    "VERIFY_FAST_SERIALIZER": {
+      "command": [
+        "{python}",
+        "{package}/../run.py",
+        "{package}/VerifyStreamFixture.wls"
+      ],
+      "instructions": "README.md"
+    },
+    "FINAL_CHECK": {
+      "command": [
+        "{python}",
+        "{package}/../final-host.py",
+        "{package}/../../../mma/CheckFullSystem.wls"
+      ],
+      "instructions": "README.md"
+    }
+  }
+}

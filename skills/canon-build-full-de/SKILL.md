@@ -31,3 +31,10 @@ boundaries, and one completion for every declared core group. Use
 inference in SOLVE_TAIL, or
 supply a `canon-neu/declared-alphabet/v1` artifact with exact rational or
 algebraic letters.  This step makes no canonical or tail-solvability claim.
+
+For an observed general-construction normalization bottleneck, the optional
+`method_options.normalization_backend = "finiteflow"` selects installed
+`FFTogether` through a hash-bound arithmetic runtime configuration. Read
+[construction arithmetic](../../docs/construction-arithmetic.md) for its exact
+coefficient domain, resource settings and failure contract. The default remains
+`"together"`; independent scientific checks are unchanged.

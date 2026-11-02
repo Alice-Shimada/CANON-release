@@ -1,8 +1,0 @@
-{
-  "schema": "canon-neu/script-input/v1", "task_id": "EXAMPLE-BUILD-POINT",
-  "step": "BUILD_POINT_DE", "sector": null,
-  "payload": {
-    "prepared_point": {"type": "mathematica-expression", "path": "prepared/prepared-point.wl"},
-    "ibp_reduction": {"type": "mathematica-expression", "path": "reduction.wl", "symbolic": true}
-  }
-}

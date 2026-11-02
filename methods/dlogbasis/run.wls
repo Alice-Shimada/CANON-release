@@ -106,6 +106,24 @@ If[powerDefinition["max_dots_per_propagator"] < powerDefinition["max_added_dots"
 ];
 
 methodId = "dlogbasis-refine-search";
+
+diagnosticArtifacts[providerResult_] := Module[{path},
+  path = Block[{$ContextPath = {"System`"}},
+    CanonMethodCard`WriteWLArtifact[
+      <|"schema" -> "canon-neu/integral-proposal-diagnostic/v1",
+        "method_id" -> methodId,
+        "public_entry" -> "DlogBasis`DlogBasisSearch",
+        "tool_provenance" -> <|
+          "tool" -> "DlogBasis-refine", "tool_revision" -> packageRevision,
+          "entry" -> entry, "entry_sha256" -> entryHash,
+          "implementation_files" -> packageFiles,
+          "runtime" -> $Version <> "; " <> $SystemID|>,
+        "provider_result" -> providerResult|>,
+      outputDir, "integral-proposal-diagnostic.wl"]
+  ];
+  <|"diagnostic" -> <|"type" -> "mathematica-expression",
+    "path" -> FileNameTake[path]|>|>
+];
 singularExecutable = Lookup[methodOptions, "singular_executable", "Singular"];
 If[StringContainsQ[singularExecutable, {"/", "\\"}],
   singularExecutable = CanonMethodCard`ResolveInputPath[inputPath, singularExecutable]
@@ -137,7 +155,7 @@ result = DlogBasis`DlogBasisSearch[
 recordPhase["dlogbasis_search", "returned", <|"failure" -> FailureQ[result]|>];
 If[FailureQ[result],
   CanonMethodCard`WriteProviderResult[
-    task, outputDir, "ERROR", "DLOGBASIS_SEARCH_FAILED", <||>,
+    task, outputDir, "ERROR", "DLOGBASIS_SEARCH_FAILED", diagnosticArtifacts[result],
     <|"failure_tag" -> ToString[First[result]],
       "failure" -> ToString[result, InputForm], "entry" -> entry|>
   ];
@@ -216,7 +234,7 @@ summary = <|
 
 If[candidateRecords === {},
   CanonMethodCard`WriteProviderResult[
-    task, outputDir, "INCONCLUSIVE", "METHOD_EXHAUSTED", <||>,
+    task, outputDir, "INCONCLUSIVE", "METHOD_EXHAUSTED", diagnosticArtifacts[result],
     Append[
       summary,
       "reason" -> "DlogBasisSearch produced no candidates within the requested budget"

@@ -22,7 +22,7 @@ their native integrations have not been validated in this release.
 - [Automatic physical derivatives](docs/physical-derivatives.md)
 - [Next-action routing for agents](skills/canon-workflow/SKILL.md)
 - [Saved examples](examples/README.md)
-- [Reading a basis, transformation, DE, and alphabet](docs/results.md)
+- [Reading the canonical basis, alphabet, and logarithmic matrix](docs/results.md)
 - [Codex setup](docs/hosts/codex.md), for that host only
 
 After configuring a host, give its main agent a request such as:
@@ -45,9 +45,10 @@ For a first look without running a calculation, read a saved result in a fresh
 Wolfram session, with the checkout as the working directory:
 
 ```wl
-basis = Get["examples/one-loop/canonical-basis.wl"];
-de = Get["examples/one-loop/canonical-de.wl"];
-{basis["basis"], de["alphabet"], de["matrices"]}
+basis = Get["examples/three-loop/canonical-basis.wl"];
+alphabet = Get["examples/three-loop/alphabet.wl"];
+Atilde = Get["examples/three-loop/Atilde.wl"];
+{Length[basis], alphabet, Dimensions[Atilde]}
 ```
 
 ## Scientific scope
@@ -92,20 +93,30 @@ failure means that the selected search did not find a solution.
 The implementation does not guarantee a canonical basis for every family,
 complete automatic algebraic-letter discovery, master completeness, or physical
 boundary constants. A canonical DE alone does not fix all UT normalizations.
-The [scientific audit](docs/scientific-audit-20260908.md) gives the detailed scope.
+The [method cards](methods/README.md) describe the implemented methods and their scope.
 
 ## Examples
 
-| Example | Masters / sectors | Included result |
-| --- | --- | --- |
-| [One-loop sector 5](examples/one-loop/README.md) | 1 / 1 | Small prepared input and saved canonical output |
-| [Massless planar 2l5p pentabox](examples/2l5p/README.md) | 61 / 46 | Complete five-variable basis, DE, and 24 active letters |
-| [Unpublished three-loop family](examples/unpublished-40/README.md) | 40 / 28 | Complete two-variable system and residues for `{s,u,1-u}` |
+The three primary examples in the AI4UT manuscript are distributed as plain
+Wolfram expressions. Each family directory contains exactly three files:
+`canonical-basis.wl`, `alphabet.wl`, and `Atilde.wl`.
 
-These are existing successful results, packaged with their historical method and
-check records. They were not rerun for this release preparation. In particular,
-the 2l5p record uses its original flatness scope, and the 40-master example comes
-from the earlier resident CANON workflow and keeps its original export schema.
+| Family | Masters / sectors | Variables / active letters |
+| --- | --- | --- |
+| [Off-shell double box with one internal mass](examples/README.md#off-shell-double-box) | 37 / 24 | 5 / 21 |
+| [Massless two-loop five-point pentabox](examples/README.md#massless-pentabox) | 61 / 46 | 5 / 24 |
+| [Three-loop family](examples/README.md#three-loop-family) | 40 / 28 | 2 / 3 |
+
+The matrices obey `d J = eps d Atilde . J`, with
+`Atilde = Sum[R[a] Log[W[a]], {a, Length[alphabet]}]` and
+`W[a] = alphabet[[a]]`. Rows and columns follow the supplied basis order.
+The [example guide](examples/README.md) defines the integrals, kinematics and
+normalizations. The [result guide](docs/results.md) shows how to read the files.
+
+These are the final saved local results used for the article. Each has an
+existing `FINAL_CHECK: PASS / ALL_PASS` covering the exact global gauge identity,
+symbolic flatness and common constant residues. Release preparation exports the
+saved expressions and checks their readback; it does not rerun the families.
 
 ## Interfaces and extension
 
@@ -142,10 +153,14 @@ independently of the selected reducer. A profile can select `DISCOVER`,
 references. See the [mixed profile](components/profiles/mixed-reducers.json) and
 the [Kira adapter](components/reducers/kira/README.md); Blade, FIRE7 and NeatIBP
 adaptation packages document their own native execution/export requirements.
-Optional [point-DE](components/point-de/README.md),
-[dlog reconstruction](components/dlog-reconstruction/README.md), and
+Optional [dlog reconstruction](components/dlog-reconstruction/README.md) from
+caller-supplied samples and
 [local execution/notification](components/local-jobs/README.md) packages can be
-selected independently. All original scientific components remain the defaults.
+selected independently. Optional [batch sector slicing](components/batch-sector-cuts/README.md)
+reuses an existing ordered DE. [Construction arithmetic](docs/construction-arithmetic.md)
+and the [FLINT final checker](components/flint-final/README.md) provide explicit
+exact-arithmetic choices; their native executables are installed separately.
+The default providers remain available without selecting these packages.
 
 The agent owns planning and acceptance. `statemng` stores research tasks and
 artifacts in `.state-management/<task-name>/`; it does not choose scientific
@@ -154,8 +169,7 @@ methods. See [AGENTS.md](AGENTS.md) and the
 
 External source snapshots and their own licenses are in [external/](external/README.md),
 with revisions in [sources.json](external/sources.json). Install only the programs
-needed by the selected route. Historical architecture notes are under
-[docs/history/](docs/history/README.md).
+needed by the selected route.
 
 ## Citation and development
 

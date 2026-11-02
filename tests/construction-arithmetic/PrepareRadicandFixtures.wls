@@ -1,0 +1,59 @@
+$HistoryLength=0;
+args=If[ListQ[$ScriptCommandLine]&&Length[$ScriptCommandLine]>1,Rest[$ScriptCommandLine],Drop[$CommandLine,First@FirstPosition[$CommandLine,"-script"]+1]];
+{repoRoot,inputPath,outputDir}=ExpandFileName/@args;
+Get[repoRoot<>"/mma/lib/MethodCardCore.wl"];
+task=CanonMethodCard`ReadTask[inputPath,"PREPARE_RADICAND_FIXTURES"];
+{s,a,b,eps,f,x,y}=Symbol/@{"CANON`DEData`s","CANON`DEData`Q3sq","CANON`DEData`Q4sq","CANON`DEData`eps","CANON`DEData`f","CANON`DEData`x","CANON`DEData`y"};
+lf=-4*a*b+(-a-b+s)^2;
+le=a^2-2*a*b+b^2-2*a*s-2*b*s+s^2;
+norm[m_]:=Map[Together,m,{2}];
+put[name_,value_]:=(CanonMethodCard`WriteWLArtifact[value,outputDir,name<>".wl"];<|"path"->name<>".wl"|>);
+variables={s,a,b};sector=<|"id"->2,"propagator_count"->1|>;family="T026-equal-radicand-fixture";basisID="fixture/current";
+t0={{1+s,0},{0,1}};p=a/(1+s);
+uf={{1,0},{p,eps^3*Sqrt[lf]}};ue={{1,0},{p,eps^3*Sqrt[le]}};
+wf=norm[t0.Inverse[uf]];we=norm[t0.Inverse[ue]];
+target={eps*{{1/s,1/(1+s)},{0,2/s}},eps*DiagonalMatrix[{1/a,2/a}],eps*DiagonalMatrix[{1/b,2/b}]};
+raw=MapThread[norm[(D[we,#2]+we.#1).Inverse[we]]&,{target,variables}];
+source=MapThread[norm[Inverse[t0].(#1.t0-D[t0,#2])]&,{raw,variables}];
+basis={f[1],f[2]};
+accepted=<|"schema"->"canon-neu/accepted-prefix/v1","prefix_id"->"fixture/lower","family_id"->family,
+ "source_basis"->{f[1]},"basis"->{f[1]/(1+s)},"transformation"->{{1+s}},"variables"->variables,"regulator"->eps,"matrices"->(#[[1;;1,1;;1]]&/@source)|>;
+cut=<|"schema"->"canon-neu/sector-cut-de/v1","sector"->sector,"family_id"->family,"basis_id"->basisID,
+ "coefficient_domain"->"exact-algebraic-functions","basis"->{f[2]},"variables"->variables,"regulator"->eps,"matrices"->(#[[2;;2,2;;2]]&/@raw)|>;
+pool=<|"schema"->"canon-neu/core-candidates/v1","sector"->sector,"family_id"->family,"basis_id"->basisID,
+ "coefficient_domain"->"exact-algebraic-functions","basis"->{f[2]},"variables"->variables,"regulator"->eps,
+ "convention"->"old_basis = transformation . new_basis","source_basis"->basis,"candidates"->{<|
+ "candidate_id"->"fixture/candidate","member_candidate_ids"->{"fixture/member"},"construction_rejection"->None,
+ "transformation"->{{1/(eps^3*Sqrt[lf])}},"new_basis_rows"->{{eps^3*Sqrt[lf]}},
+ "full_new_basis_rows"->{{p/(1+s),eps^3*Sqrt[lf]}},"transformed_matrices"->(#[[2;;2,2;;2]]&/@target)|>}|>;
+core=<|"schema"->"canon-neu/core-transform/v1","sector"->sector,"family_id"->family,"basis_id"->basisID,
+ "basis"->{f[2]},"variables"->variables,"regulator"->eps,"candidate_id"->"fixture/candidate","transformation"->{{1/(eps^3*Sqrt[lf])}},"checks"-><|"pass"->True|>|>;
+refs=<|"ordered_master_de"->put["mixed-ordered",<|"schema"->"canon-neu/ordered-master-de/v1","family_id"->family,"basis"->basis,"variables"->variables,"regulator"->eps,"matrices"->raw|>],
+ "sector_cut_de"->put["mixed-cut",cut],"core_candidates"->put["mixed-pool",pool],"core_transform"->put["mixed-core",core],
+ "accepted_prefix"->put["mixed-accepted",accepted],"declared_alphabet"->Null|>;
+request=<|"schema"->"canon-neu/script-input/v1","task_id"->"T026:mixed-full","step"->"BUILD_FULL_DE","sector"->sector,
+ "payload"->Join[refs,<|"method_options"->task["payload","method_options"]|>]|>;
+Export[outputDir<>"/mixed-full.json",request,"RawJSON"];
+put["mixed-expected",<|"target"->target,"raw"->raw,"raw_transformation"->we,"mixed_rows"->uf,"mixed_transformation"->norm[Inverse[uf]],"source_transform"->t0,"source_matrices"->source|>];
+probes={};
+probe[name_,input_,expected_:None,positive_:True]:=Module[{refs},
+ refs=<|"input"->put[name<>"-input",input],"positive"->positive|>;
+ If[expected=!=None,refs=Join[refs,<|"expected"->put[name<>"-expected",expected]|>]];
+ AppendTo[probes,Join[<|"name"->name|>,refs]];
+];
+probe["physical-spellings",{{Sqrt[lf]+Sqrt[le],-1/le^(3/2),lf^(3/2),(Sqrt[lf]+a)/(Sqrt[le]-a)}},
+ {{2*Sqrt[lf],-Sqrt[lf]/lf^2,lf*Sqrt[lf],(lf+a^2+2*a*Sqrt[lf])/(lf-a^2)}}];
+probe["rational-equivalent",{{Sqrt[(x^2-1)/(x-1)]+Sqrt[1+x],-1/(1+x)^(3/2)}},{{2*Sqrt[1+x],-Sqrt[1+x]/(1+x)^2}}];
+probe["principal-square",{{Sqrt[x^2+2*x+1]+Sqrt[(x+1)^2],-1/Sqrt[(x+1)^2]}},{{2*Sqrt[(x+1)^2],-Sqrt[(x+1)^2]/(x+1)^2}}];
+probe["rational-retained",{{(x^2-1)/(x-1),-2/3,0}},{{x+1,-2/3,0}}];
+probe["single-retained",{{Sqrt[1+x],-1/(1+x)^(3/2)}},{{Sqrt[1+x],-Sqrt[1+x]/(1+x)^2}}];
+probe["unequal",{{Sqrt[1+x]+Sqrt[1+y]}},None,False];
+probe["square-related",{{Sqrt[1+x]+Sqrt[y^2*(1+x)]}},None,False];
+probe["sign-related",{{Sqrt[1+x]+Sqrt[-1-x]}},None,False];
+probe["nested",{{Sqrt[1+Sqrt[1+x]]}},None,False];
+probe["inexact",{{Sqrt[1.+x]}},None,False];
+probe["transcendental",{{Sqrt[1+Sin[x]]}},None,False];
+Export[outputDir<>"/probes.json",probes,"RawJSON"];
+Export[outputDir<>"/radicand-equality.json",<|"structurally_distinct"->(lf=!=le),"exact_difference_zero"->TrueQ[Together[lf-le]===0],
+ "factored"->ToString[lf,InputForm],"expanded"->ToString[le,InputForm],"scope"->"Manufactured mixed-spelling fixture, not the unsaved physical full-gauge matrix."|>,"RawJSON"];
+CanonMethodCard`WriteResult[task,outputDir,"PASS","FIXTURES_PREPARED",<|"probes"-><|"type"->"json","path"->"probes.json"|>|>,<|"scientific_acceptance"->False|>];

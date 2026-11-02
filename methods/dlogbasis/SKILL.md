@@ -153,3 +153,14 @@ executable Kernel SHA-256 values; the loader alone does not identify the impleme
 Provisional output is not a UT result, and `METHOD_EXHAUSTED` is not evidence
 that the family has no UT basis. Return the search bounds and stopped gate to
 the workflow entry for the next assigned step.
+
+
+For `ERROR/DLOGBASIS_SEARCH_FAILED` and `INCONCLUSIVE/METHOD_EXHAUSTED`, the
+optional `diagnostic` artifact is `integral-proposal-diagnostic.wl`, with schema
+`canon-neu/integral-proposal-diagnostic/v1`. It records `method_id`, `public_entry`,
+`tool_provenance` and the exact `provider_result` returned by the public search,
+including opaque `Failure` expressions and nested cut/backend records. Read it
+with ``CanonMethodCard`ReadWLData``; absent provider fields remain absent. This is
+serialization evidence only: it does not infer residual variables, certify
+leading singularities or UT, or change status, code, reason or certification
+flags. Nonempty candidates continue to retain their full `method_evidence`.

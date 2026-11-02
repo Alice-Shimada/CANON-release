@@ -29,8 +29,15 @@
       "commit": "c753f6dabd59cad84cf12e15b449416a0f0e44e9",
       "files": 61,
       "bytes": 5624649,
-      "source": "original committed repository tree; upstream examples and assets retained; no local compilation, installed outputs, nested Git metadata or fetched foundation libraries",
-      "tree": "3cb61d9b75e01806ce94f7ae0e80a15fdd799639"
+      "source": "Upstream source snapshot at the recorded commit/tree, with the listed CANON distribution patch; licenses and upstream examples retained.",
+      "tree": "3cb61d9b75e01806ce94f7ae0e80a15fdd799639",
+      "distribution_edits": [
+        {
+          "path": "src/CANONICA.m",
+          "reason": "Propagate failed dlog-form and independent-factor construction as False before downstream list operations.",
+          "sha256": "d1a40f8dbce4cd403d07a79160cc6e0b055fd5a1ff8444e1d89b9fef8caeb67f"
+        }
+      ]
     },
     {
       "name": "Libra",

@@ -33,7 +33,18 @@ regulator-free letters, including exact Wolfram algebraic expressions, and
 retains only letters with nonzero shared residue matrices. Alphabet inference
 occurs in SOLVE_TAIL; final checking uses the accepted alphabet.
 
-For large rational/algebraic systems, set `method_options.gauge_backend` to
+For exact rational functions or one unnested principal quadratic generator,
+`method_options.gauge_backend: "flint"` checks every entry of
+`A_i T - D_i T - T B_i = 0` using the installed exact FLINT engine. Set
+`flint_executable`, its optional `flint_executable_sha256`, and `flint_threads: 1`.
+See [the FLINT component](../../components/flint-final/README.md) for checked
+helper/source bindings and the complete arithmetic domain. The separate
+`basis_backend: "flint"` checks the basis definition. Neither selection invokes
+Fermat. Equal rational radicands may have different algebraic spellings; their
+exact equality is checked without identifying sign- or square-related roots.
+All fourteen acceptance gates remain required, including invertibility of T.
+
+For callers selecting Fermatica, set `method_options.gauge_backend` to
 `fermat` and `method_options.package_entry` to the Fermatica entry. `FERMATPATH`
 must identify the Fermat executable. This explicitly selected backend proves
 `A_i T - D_i T - T B_i = 0` in the algebraic quotient using exact polynomial

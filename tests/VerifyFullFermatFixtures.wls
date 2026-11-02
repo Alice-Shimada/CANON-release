@@ -1,0 +1,49 @@
+#!/usr/bin/env wolframscript
+$HistoryLength=0;
+{repoRoot,inputPath,outputDir}=ExpandFileName /@ Rest[$ScriptCommandLine];
+Get[repoRoot<>"/mma/lib/MethodCardCore.wl"];
+Get[FileNameJoin[{repoRoot,"mma","lib","FermatBlockArithmetic.wl"}]];
+task=CanonMethodCard`ReadTask[inputPath,"VERIFY_FERMAT_FIXTURES"];
+If[!DirectoryQ[outputDir],CreateDirectory[outputDir,CreateIntermediateDirectories->True]];
+base=task["payload","workspace"];
+load[path_]:=CanonMethodCard`ReadWLData[path];
+same[a_,b_]:=Dimensions[a]===Dimensions[b]&&AllTrue[Flatten[a-b],TrueQ[FullSimplify[Together[#]]===0]&];
+cases={{"quadratic","fixtures/zero-expected.wl","zero-native-output"},
+ {"rational","extra-fixtures/rational-zero-expected.wl","rational-zero-output"},
+ {"default-no-prefix","fixtures/no-prefix-expected.wl","no-prefix-default-output"}};
+checks=Association@Table[First[record]->Module[{e,a,c,w,v,res},
+ {label,expected,folder}=record;e=load[base<>"/"<>expected];
+ a=load[base<>"/"<>folder<>"/full-sector-de.wl"];c=First[a["candidates"]];
+ w=e["raw_transformation"];v=a["variables"];res=Import[base<>"/"<>folder<>"/result.json","RawJSON"];
+ <|"public_pass"->(res["status"]==="PASS"),
+ "known_target"->same[c["transformed_matrices"],e["target"]],
+ "source_matrix_equality"->same[a["source_matrices"],e["source_matrices"]],
+ "row_map"->same[c["new_basis_rows"],e["mixed_rows"]],
+ "inverse_direction"->same[c["full_transformation"],e["mixed_transformation"]],
+ "raw_composition"->same[a["accepted_prefix_transformation"].c["full_transformation"],w],
+ "independent_gauge_identity"->AllTrue[MapThread[#1.w-D[w,#2]-w.#3&,{e["raw"],v,c["transformed_matrices"]}],CanonMethodCard`ZeroMatrixQ],
+ "variables"->(v===e["variables"]),"backend"->(a["block_arithmetic","backend"]===If[label==="default-no-prefix","wolfram","fermat"])|>
+ ],{record,cases}];
+rejections=<|"unsupported-cube"->"UNSUPPORTED_FERMAT_BLOCK_DOMAIN",
+ "lower-nonzero"->"UNSUPPORTED_FERMAT_BLOCK_SCOPE","upper-nonzero"->"UNSUPPORTED_FERMAT_BLOCK_SCOPE",
+ "no-prefix"->"UNSUPPORTED_FERMAT_BLOCK_SCOPE","inexact-upper"->"UNSUPPORTED_FERMAT_BLOCK_SCOPE",
+ "inexact-rows"->"INVALID_FULL_DE_INPUT","malformed-rows"->"INVALID_FULL_DE_INPUT"|>;
+KeyValueMap[Function[{name,code},With[{r=Import[base<>"/"<>name<>"-output/result.json","RawJSON"]},
+ AssociateTo[checks,name-><|"scoped_error"->(r["status"]==="ERROR"&&r["code"]===code),
+ "no_full_artifact"->!FileExistsQ[base<>"/"<>name<>"-output/full-sector-de.wl"]|>]]],rejections];
+runtime=CanonBlockArithmetic`InitializeFermatBlock[task,inputPath,outputDir];
+{x,y}=Symbol/@{"CANON`DEData`x","CANON`DEData`y"};b=1+x+y;r=Sqrt[b];
+frame=CanonBlockArithmetic`FermatBlockFrame[{{r}}];
+unit=<|"quotient_cancellation"->(CanonBlockArithmetic`FermatBlockTogether[frame,{{(r+x)/(b-x^2)-1/(r-x)}}]==={{0}}),
+ "native_dot_cancellation"->(CanonBlockArithmetic`FermatBlockDot[frame,{{{r,1}},{{1/r},{-1}}}]==={{0}}),
+ "native_sum_cancellation"->(CanonBlockArithmetic`FermatBlockPlus[frame,{{{r}},{{-b/r}}}]==={{0}}),
+ "nested_root_rejected"->FailureQ[CanonBlockArithmetic`FermatBlockFrame[{{Sqrt[1+Sqrt[x]]}}]],
+ "multiple_roots_rejected"->FailureQ[CanonBlockArithmetic`FermatBlockFrame[{{Sqrt[x],Sqrt[y]}}]],
+ "actual_native_version"->(!FailureQ[runtime]&&StringQ[runtime["executable_version"]]&&runtime["executable_version"]=!="")|>;
+AssociateTo[checks,"binomial-operators"->unit];
+all=AllTrue[Values[checks],AllTrue[Values[#],TrueQ]&];
+Export[outputDir<>"/fixture-checks.json",<|"all_pass"->all,"checks"->checks,
+ "check_count"->Total[Length/@Values[checks]],"runtime"->runtime,"scope"->"capability fixtures only"|>,"RawJSON"];
+CanonMethodCard`WriteResult[task,outputDir,If[all,"PASS","FAIL"],"FERMAT_FIXTURE_CHECKS",
+ <|"checks"-><|"type"->"json","path"->"fixture-checks.json"|>|>,<|"all_pass"->all,"scientific_acceptance"->False|>];
+Quit[If[all,0,1]];

@@ -1,0 +1,21 @@
+$HistoryLength=0;
+args=If[ListQ[$ScriptCommandLine]&&Length[$ScriptCommandLine]>1,Rest[$ScriptCommandLine],Drop[$CommandLine,First@FirstPosition[$CommandLine,"-script"]+1]];
+{repoRoot,inputPath,outputDir}=ExpandFileName/@args;
+Get[repoRoot<>"/mma/lib/MethodCardCore.wl"];
+task=CanonMethodCard`ReadTask[inputPath,"NORMALIZE_FLINT_BOUNDARY"];
+helper=CanonMethodCard`ResolveArtifactPath[inputPath,task["payload","normalizer"]];
+exe=CanonMethodCard`ResolveArtifactPath[inputPath,task["payload","native_executable"]];
+If[FailureQ[helper]||FailureQ[exe]||Quiet@Check[Get[helper];True,False]=!=True||DownValues[CanonFlintNormalize`Normalize]==={},
+ CanonMethodCard`WriteResult[task,outputDir,"ERROR","BACKEND_UNAVAILABLE",<||>,<|"scientific_acceptance"->False|>];Quit[1]];
+source=CanonMethodCard`ResolveArtifactPath[inputPath,task["payload","matrix"]];
+matrix=If[FailureQ[source],$Failed,CanonMethodCard`ReadWLData[source]];
+If[!MatrixQ[matrix],CanonMethodCard`WriteResult[task,outputDir,"ERROR","INVALID_MATRIX_INPUT",<||>,<||>];Quit[1]];
+started=AbsoluteTime[];
+logger[label_,state_,extra_]:=Module[{stream=OpenAppend[outputDir<>"/normalization-events.jsonl"]},WriteString[stream,ExportString[Join[<|"operation"->label,"state"->state,"elapsed_seconds"->N[AbsoluteTime[]-started]|>,extra],"RawJSON","Compact"->True]<>"\n"];Close[stream]];
+result=CanonFlintNormalize`Normalize[matrix,exe,outputDir<>"/normalization",logger];
+Export[outputDir<>"/call.json",<|"normalize_seconds"->N[AbsoluteTime[]-started],"input_sha256"->FileHash[source,"SHA256","HexString"],
+ "input_dimensions"->Dimensions[matrix],"input_leaf_count"->LeafCount[matrix],"helper_sha256"->FileHash[helper,"SHA256","HexString"],"executable_sha256"->FileHash[exe,"SHA256","HexString"],
+ "clock_scope"->"Same-kernel AbsoluteTime; normalize call excludes kernel/input loading but includes all internal phases and native/readback. Host whole-call accounting is separate."|>,"RawJSON"];
+If[FailureQ[result],CanonMethodCard`WriteResult[task,outputDir,"ERROR",result[[1]],<||>,<|"reason"->ToString[result,InputForm],"scientific_acceptance"->False|>];Quit[1]];
+CanonMethodCard`WriteWLArtifact[result["matrix"],outputDir,"normalized.wl"];
+CanonMethodCard`WriteResult[task,outputDir,"PASS","NORMALIZED",<|"normalized"-><|"type"->"mathematica-expression","path"->"normalized.wl"|>|>,<|"scientific_acceptance"->False|>];Quit[0];

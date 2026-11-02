@@ -1,0 +1,53 @@
+{
+  "schema": "canon-neu/components/v1",
+  "workflow": "WORKFLOW.md",
+  "steps": {
+    "NORMALIZE_FLINT_BOUNDARY": {
+      "command": [
+        "{python}",
+        "{package}/../run.py",
+        "{package}/NormalizeSerialized.wls"
+      ],
+      "instructions": "README.md"
+    },
+    "PREPARE_SERIALIZER_IDENTIFIERS": {
+      "command": [
+        "{python}",
+        "{package}/../run.py",
+        "{package}/PrepareIdentifierFixtures.wls"
+      ],
+      "instructions": "README.md"
+    },
+    "TEST_FULLFORM_CONVERTER": {
+      "command": [
+        "{python}",
+        "{package}/converter_probe.py"
+      ],
+      "instructions": "README.md"
+    },
+    "VERIFY_FAST_SERIALIZER": {
+      "command": [
+        "{python}",
+        "{package}/../run.py",
+        "{package}/VerifyFastSerializer.wls"
+      ],
+      "instructions": "README.md"
+    },
+    "FINAL_CHECK": {
+      "command": [
+        "{python}",
+        "{package}/../final-host.py",
+        "{package}/../../../mma/CheckFullSystem.wls"
+      ],
+      "instructions": "README.md"
+    },
+    "BUILD_FULL_DE": {
+      "command": [
+        "{python}",
+        "{package}/../run.py",
+        "{package}/frozen-build/BuildFullSectorDE.wls"
+      ],
+      "instructions": "README.md"
+    }
+  }
+}

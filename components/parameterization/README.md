@@ -79,11 +79,9 @@ software selection, process settings, project directory or native configuration.
 
 `PREPARE` returns `PASS/PARAMETERIZATION_READY`. It writes no native project and
 does not discover masters or reduce integrals. Adapters consume the same neutral
-view and apply their documented capability limits. The point-DE package accepts
-the vector form only within its own four-dimensional massless-internal domain;
-scalar-product charts and nonzero internal masses produce explicit limitations.
-Saved `twistor-family/v1` data remain readable there independently of the old
-intake package.
+view and apply their documented capability limits. The symbolic
+`prepared_family` and `prepared_derivatives` feed the standard target,
+reduction and DE interfaces with matching source identities.
 
 A failed JSON export returns `FAIL/REDUCER_FAMILY_EXPORT_FAILED` before publishing
 the prepared-family descriptor.
@@ -104,17 +102,15 @@ bounded fixtures, not a newly executed native reduction. Paths in the spec are
 relative to that spec, while request descriptors are relative to their JSON.
 Moving the complete directory tree preserves references.
 
-For the bounded scientific and relocation tests, provide the selected point-DE
-package and a fresh output directory:
+For the bounded scientific and relocation tests, provide a fresh output directory:
 
 ```sh
-python3 /path/to/parameterization/tests/run.py --canon /path/to/CANON --point-de /path/to/point-de --output /path/to/new-test-run
+python3 /path/to/parameterization/tests/run.py --canon /path/to/CANON --output /path/to/new-test-run
 ```
 
 The suite uses one Wolfram kernel at a time, supplied analytic bubble rules and
 no native reduction process. It verifies arbitrary and indexed charts,
-explicit masses and invariant dimensions, neutral point-DE consumption,
-legacy reader compatibility, and the default discovery/DE consumers after
+explicit masses and invariant dimensions, and the default discovery/DE consumers after
 relocation. Its generated selection manifest chooses phases independently.
 
 An existing output artifact is never silently reused as a new preparation result.

@@ -1,0 +1,1 @@
+Run PROFILE_BASIS_DEFINITION only for explicitly requested diagnostics. Inspect the bounded receipt and phase events. A timeout is INCONCLUSIVE. No diagnostic result grants any FINAL_CHECK gate or scientific acceptance. Keep the active scientific job unchanged. Benchmark only supported exact coefficient inputs; compare actual operands including conversion and process overhead.

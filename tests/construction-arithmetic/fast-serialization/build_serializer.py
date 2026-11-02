@@ -1,0 +1,9 @@
+#!/usr/bin/env python3
+"""Compile only the structural converter with the caller's installed compiler."""
+import argparse,hashlib,json,os,shutil,subprocess,time
+from pathlib import Path
+p=argparse.ArgumentParser();p.add_argument('--work',type=Path,required=True);a=p.parse_args();w=a.work.resolve();c=json.loads((w/'build-config.json').read_text());os.sched_setaffinity(0,{c['cpu']});env=os.environ.copy();env.update(c['environment']);compiler=shutil.which(c['compiler']);assert compiler
+source=Path(c.get('source',str(w/'serializer/fullform_postfix.cpp')));source=source if source.is_absolute() else w/source;output=Path(c.get('executable',str(w/'serializer/fullform_postfix')));output=output if output.is_absolute() else w/output;output.parent.mkdir(parents=True,exist_ok=True);argv=[compiler,*c['flags'],str(source),'-o',str(output)];started=time.monotonic();r=subprocess.run(argv,env=env,capture_output=True,text=True,timeout=c['timeout_seconds']);(w/'compiler.stdout').write_text(r.stdout);(w/'compiler.stderr').write_text(r.stderr)
+def sha(p):return hashlib.sha256(Path(p).read_bytes()).hexdigest()
+record={'argv':argv,'returncode':r.returncode,'wall_seconds':time.monotonic()-started,'source':{'path':str(source),'sha256':sha(source)},'compiler':{'path':compiler,'sha256':sha(compiler),'version':subprocess.run([compiler,'--version'],env=env,capture_output=True,text=True,check=True).stdout},'cpu':sorted(os.sched_getaffinity(0)),'threads':c['environment'],'dependencies_built':False,'new_arithmetic_engine':False}
+assert r.returncode==0,r.stderr;record['executable']={'path':str(output),'sha256':sha(output)};record['version']=subprocess.run([str(output),'--version'],env=env,capture_output=True,text=True,check=True).stdout;(w/'build-provenance.json').write_text(json.dumps(record,indent=2)+'\n')

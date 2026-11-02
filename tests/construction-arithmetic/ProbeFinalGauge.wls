@@ -1,0 +1,14 @@
+$HistoryLength=0;
+args=If[ListQ[$ScriptCommandLine]&&Length[$ScriptCommandLine]>1,Rest[$ScriptCommandLine],Drop[$CommandLine,First@FirstPosition[$CommandLine,"-script"]+1]];
+{repoRoot,inputPath,outputDir}=ExpandFileName/@args;
+Get[repoRoot<>"/mma/lib/MethodCardCore.wl"];
+task=CanonMethodCard`ReadTask[inputPath,"PROBE_FINAL_GAUGE"];
+options=task["payload","method_options"];
+Do[path=CanonMethodCard`ResolveArtifactPath[inputPath,options[key]];If[FailureQ[path],Quit[1]];Get[path],{key,{"flint_normalization_helper","flint_gauge_helper"}}];
+input=CanonMethodCard`LoadArtifact[task,inputPath,"gauge_input"];
+If[!AssociationQ[input]||!MatrixQ[input["transformation"]]||!AllTrue[Join[input["matrices"],input["target"]],MatrixQ],
+ CanonMethodCard`WriteResult[task,outputDir,"ERROR","INVALID_FIXTURE_INPUT",<||>,<||>];Quit[1]];
+logger[name_,state_,extra_]:=Module[{stream=OpenAppend[outputDir<>"/probe-events.jsonl"]},WriteString[stream,ExportString[Join[<|"phase"->name,"state"->state,"absolute_time"->AbsoluteTime[]|>,extra],"RawJSON","Compact"->True]<>"\n"];Close[stream]];
+result=CanonFlintGauge`FlintGaugeIdentity[input["matrices"],input["variables"],input["transformation"],input["target"],options["flint_executable"],outputDir<>"/gauge-flint",logger];
+If[FailureQ[result],CanonMethodCard`WriteResult[task,outputDir,"ERROR",If[result[[1]]==="UNSUPPORTED_FLINT_DOMAIN","UNSUPPORTED_GAUGE_ARITHMETIC","GAUGE_ARITHMETIC_FAILED"],<||>,<|"reason"->ToString[result,InputForm],"scientific_acceptance"->False|>];Quit[1]];
+CanonMethodCard`WriteResult[task,outputDir,"PASS","GAUGE_PROBE",<||>,<|"zero"->result["zero"],"scientific_acceptance"->False|>];Quit[0];

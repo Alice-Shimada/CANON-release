@@ -19,6 +19,7 @@ is not required for every task.
 | Produce IBP reductions | The selected adapter's installed software and dependencies; the default uses [Kira](../external/Kira/README.rst), with Fermat when required by that installation |
 | Generate integral candidates | [DlogBasis-refine](../external/DlogBasis-refine/README.md), entry `external/DlogBasis-refine/DlogBasis.wl`, a working [FiniteFlow](../external/FiniteFlow/README.md) Wolfram interface and native library, and [Singular](../external/Singular/README.md) for the module-lift step; all must be available where the Wolfram kernel executes |
 | Use Fermat-assisted exact algebra | [Fermatica](../external/Fermatica/README.md) and an installed [Fermat](../external/Fermat/README.md); provide `FERMATPATH` |
+| Use exact FLINT construction or final checks | An installed quadratic-pair utility built from `components/basis-diagnostic/flint_pair.cpp` against FLINT; supply its executable/source identities and one native thread. See [construction arithmetic](construction-arithmetic.md) and [the final-check component](../components/flint-final/README.md) for the supported domain and request fields |
 | Use the fixed INITIAL reference method | [INITIAL](../external/INITIAL/README.md), FiniteFlow, and the explicit reference/configuration files described in [external dependencies](../external/README.md) |
 
 The directories in `external/` contain source snapshots for user installation,
@@ -66,8 +67,8 @@ artifacts. Rebind the installation paths for new runs.
 
 Optional packages require no installation or global registry. Select their
 manifest paths, including paths outside CANON, and keep manifest includes and
-artifact references relative to the files declaring them. Point-DE and dlog
-reconstruction use the declared Wolfram runtime. The local-job/notification
+artifact references relative to the files declaring them. Dlog
+reconstruction uses the declared Wolfram runtime. The local-job/notification
 package uses the Python standard library, POSIX process groups and
 `waitid(WNOWAIT)`; callback commands and any host client they invoke are
 caller-provided. No notification

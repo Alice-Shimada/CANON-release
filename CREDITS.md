@@ -34,10 +34,9 @@ as CANON. Package documentation provides the appropriate citations:
 - [Kira](external/Kira/README.rst)
 - [Singular](external/Singular/README.md)
 
-The [scientific audit](docs/scientific-audit-20260908.md) maps the implemented
-methods to the literature and states their scope. Historical examples identify
-their original method versions; a legacy method name is not a claim that the
-current release exposes that method.
+The [method catalog](methods/README.md) and individual cards state the
+implemented methods, references and scope. The [example guide](examples/README.md)
+identifies the saved mathematical results used in the article.
 
 ## Licensing
 

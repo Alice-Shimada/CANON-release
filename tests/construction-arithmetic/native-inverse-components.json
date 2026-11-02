@@ -1,0 +1,22 @@
+{
+  "schema": "canon-neu/components/v1",
+  "workflow": "NATIVE-INVERSE.md",
+  "steps": {
+    "NORMALIZE_FLINT_FIXTURE": {
+      "command": [
+        "{python}",
+        "{package}/run.py",
+        "{package}/NormalizeFlintFixture.wls"
+      ],
+      "instructions": "NATIVE-INVERSE.md"
+    },
+    "VERIFY_NATIVE_INVERSE": {
+      "command": [
+        "{python}",
+        "{package}/run.py",
+        "{package}/VerifyNativeInverse.wls"
+      ],
+      "instructions": "NATIVE-INVERSE.md"
+    }
+  }
+}
