@@ -200,7 +200,43 @@ timing, timeout/abort flags and attempted ansatz, with raw package messages and
 the complete attempt list. They do not change `SOLVE_TAIL` options.
 
 Libra retains `package_entry` and `dependent_row_strategy`; its explicit
-hierarchy input is described in [the card](methods/libra/SKILL.md). Explicit
+hierarchy input is described in [the card](methods/libra/SKILL.md). The default
+route has one kinematic variable. For at least two variables, the presence of
+`direction_sequence` selects a finite multivariable proposal. It contains
+one-based indexes into the cut's ordered `variables`; empty, partial and repeated
+sequences are valid. Every directional transformation updates the entire
+connection, and every direction must be Fuchsian at the endpoint, including
+infinity. One shared kinematically constant regulator factor is obtained by
+collecting exact equations in all declared variables and calling public
+`GaussSolve` once. Remaining free parameters default to all ones.
+Both Libra routes accept an exact `reference_regulator` (default `1/2`, encoded
+as a JSON integer or numerator/denominator object) and explicit
+`free_parameter_strategy="bounded-rational-search"`, with optional positive
+`free_parameter_max_trials` (default 64). The finite policy tries ones, zeros,
+then unit points and stops at the first validated invertible factor. The card
+records exact reference and trial evidence; it never retries references or
+weakens independent acceptance. See [the option contract](methods/libra/SKILL.md#exact-reference-and-free-parameter-choices).
+
+With `direction_sequence`, `factorization_max_equations` defaults to 4096 and
+requires a positive integer. It counts nonzero monomial coefficients before
+deduplication; exceeding it stops before solving, without truncation.
+The solver drops proportional duplicates by removing only exact numeric content,
+preserving symbolic factors and first-occurrence order. Selected factors are
+checked against the original coefficient equations. The summary keeps the raw
+`factorization_equation_count` and adds `factorization_solver_equation_count`
+after deduplication (`null` until construction finishes).
+`max_wall_seconds` defaults to 60 and requires a finite positive number, bounding
+the whole multivariable proposal. That route supports only
+`normalization_strategy="none"`. Its successful `core_candidates` retains the
+complete cumulative transformation, original variable order and full matrix
+list. It remains provisional until the existing independent checks. Stopped
+attempts return `INCONCLUSIVE/METHOD_EXHAUSTED` with `libra_diagnostic`: exact
+matrices, local transformations, retained connection, stage and bounds in WL.
+The JSON summary contains scalar metadata and flags; `TIME_BUDGET` with
+`timed_out=true` identifies an unfinished attempt. Multivariable input without
+`direction_sequence` remains `INCONCLUSIVE/OUT_OF_SCOPE` before package loading.
+
+For the single-variable route, explicit
 `normalization_strategy="bounded"` adds finite public subspace/projector/balance
 normalization before Fuchsify/FactorOut. The default `none` preserves the legacy
 route. Positive integer budgets `normalization_max_steps`,
@@ -211,6 +247,8 @@ residue intercepts and regulator-independent linear poles. Each candidate must
 preserve the exact source gauge, avoid increasing generic pole ranks and
 strictly decrease total integer offsets. Its trace, bounds and stopped stage
 describe that finite route; they never certify all possible bases.
+Normalization evidence sets `timed_out=true` for `SECONDS_BUDGET` and false for
+other outcomes, preserving the distinction between interruption and method limits.
 
 Unknown options in these core cards and the official compatibility provider return
 `ERROR/INVALID_OPTIONS`; they are not silently ignored. The official provider

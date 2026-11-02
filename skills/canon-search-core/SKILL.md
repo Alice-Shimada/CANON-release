@@ -24,11 +24,9 @@ Apply this list in order. Stop at the first matching item.
    user's request; worker assignments specify only their local operations.
 2. **Only a DE was supplied and the physical family cannot be recovered from
    available inputs:** use the direct-DE choices in section 3. State which
-   physical definition is unavailable. When propagators, momenta, masses and
-   kinematic relations are available, generate the required family files from
-   those definitions and continue with the integral route.
-3. **A bounded route already has an applicable, recorded limitation:** retain
-   its input, bounds and actual result, then change the failing hypothesis.
+   physical definition is unavailable.
+3. **A bounded route already has a recorded scientific or capability limitation:**
+   retain its input, bounds and actual result, then change the failing hypothesis.
    Rank shortage can motivate new integral directions; a failed diagonal core
    calls for different same-sector rows or normalization; a passing core with
    failed lower couplings calls for a full representative or tail correction.
@@ -116,19 +114,22 @@ replacement is a new complete proposal; exhaustive subset search is not required
 
 ## 3. Select an applicable direct-DE method
 
-Select one applicable untried method using the current evidence and remaining
-budget. The table gives useful triggers, not a mandatory provider chain. A
-particular method explicitly requested by the user retains priority within its
-contract. Keep section 1's bounded integral-search priority for defined families.
+Choose an applicable construction from section 1's goal, geometry, inputs and
+remaining budget. Honor a requested method within its contract. The table gives
+applicability examples, not execution order or required earlier failures.
+Do not repeat an unchanged completed attempt. Libra's
+[optional controls and cost](../../methods/libra/SKILL.md#optional-controls-and-cost)
+describes its optional controls.
 
 | Condition | Method |
 |---|---|
-| One or a few normalized UT seeds have explicit evidence and full reduced rows, a rational one-variable cut, a declared alphabet, and a finite derivative allocation | [INITIAL](../../methods/initial/SKILL.md), `SEARCH_CORE` at `methods/initial/run.wls`. A small credible seed set makes this a direct candidate alongside CANONICA, Libra and epsilon-zero; it need not wait for CANONICA failure. |
-| A rational/horizontal method failed, or an argument based on epsilon=0 is being used to exclude an epsilon form; no diagnosis exists for this input | Run `DIAGNOSE_CORE` using the [residue-balance card](../../methods/residue-balance/SKILL.md), then select from its actual result. |
+| One or a few normalized UT seeds have explicit evidence and full reduced rows, a rational one-variable cut, a declared alphabet, and a finite derivative allocation | [INITIAL](../../methods/initial/SKILL.md), `SEARCH_CORE` at `methods/initial/run.wls`. |
+| Relevant structural applicability remains unknown after a rational/horizontal failure or while reviewing an epsilon-zero obstruction | [DIAGNOSE_CORE](../../methods/residue-balance/SKILL.md) can clarify that scope. Known applicability permits selecting the supported construction directly. |
 | Diagnosis identifies one essential variable, possibly after exact homogeneous-scale separation, and residue-balance is untried | [residue-balance](../../methods/residue-balance/SKILL.md); allow regulator-singular transformations and check all original variables. |
 | CANONICA `nonrationalinv` is recorded, residue-balance is exhausted or outside scope, and the DE is regular at epsilon zero | [epsilon-zero](../../methods/epsilon-zero/SKILL.md), with finite polynomial/prefactor bounds |
-| The cut DE is rational and CANONICA has not failed on this input | [CANONICA](../../methods/canonica/SKILL.md) |
-| The rational cut DE has one variable and Libra is applicable and untried | [Libra](../../methods/libra/SKILL.md); explicitly enable bounded normalization when integer residue offsets obstruct epsilon factorization. |
+| A rational cut with a justified CANONICA core attempt | [CANONICA](../../methods/canonica/SKILL.md); retain the recursive or directed-block ansatz and bounds. |
+| A rational one-variable cut, especially a small block or supported integer-offset normalization hypothesis | [Libra](../../methods/libra/SKILL.md); explicitly enable bounded normalization for the integer offsets. |
+| An already Fuchsian rational multivariable cut, or a justified finite directional proposal | [Libra](../../methods/libra/SKILL.md#explicit-multivariable-direction-sequence); explicitly use `direction_sequence: []` for joint factorization alone, or the selected finite sequence. |
 | The rational cut DE is regular at epsilon zero and epsilon-zero is untried | [epsilon-zero](../../methods/epsilon-zero/SKILL.md) |
 | These choices are exhausted or inapplicable | Return exact failures and remaining scope to the coordinator; reconsider a changed integral hypothesis under section 1. |
 
@@ -177,9 +178,10 @@ diagnostic, never a reason to require a different family or extra masters.
 - Missing fields, bad paths, incomplete kinematic rules or unreduced integrals:
   repair the named input/runtime/coverage problem and resume the affected step.
   These do not consume a method's scientific attempt.
-- Rank shortage, CORE_FAIL or METHOD_EXHAUSTED: preserve the measured scope and
-  select the next applicable untried branch. Failure of one method is not a ban
-  on other methods, and one sector's failure does not reject an entire family.
+- Rank shortage, CORE_FAIL or METHOD_EXHAUSTED: first apply the main route's
+  [result routing](../canon-workflow/SKILL.md#5-result-routing), which separates
+  timeout/cancellation from scientific limits. Retain completed failures and
+  choose a changed hypothesis or another applicable construction.
 - Passing core but unresolved full tail: use [canon-solve-tail](../canon-solve-tail/SKILL.md).
   Reconsider a full integral representative when indicated instead of repeating
   an unchanged tail solve.

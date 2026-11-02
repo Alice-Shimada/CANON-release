@@ -56,6 +56,28 @@ class ViewTests(unittest.TestCase):
             with self.subTest(size=size):
                 self.run_view(raw, chunk_bytes=size)
 
+    def test_large_exact_coefficient_preserves_bytes(self):
+        for coefficient in ("9" * 5000, "9" * 2500 + "\\\n" + "9" * 2500):
+            with self.subTest(wrapped="\\" in coefficient):
+                rule = "j[2, 0] -> " + coefficient + "*j[1, 0]"
+                report, view = self.run_view(fixture(rule), chunk_bytes=127)
+                self.assertEqual(report["selected_rules"], 1)
+                self.assertIn(rule.encode(), view)
+
+    @unittest.skipUnless(hasattr(sys, "set_int_max_str_digits"), "requires integer conversion limit")
+    def test_oversized_indices_and_powers_decline_view(self):
+        previous = sys.get_int_max_str_digits()
+        try:
+            sys.set_int_max_str_digits(4300)
+            for rule in ("j[" + "9" * 5000 + ", 0] -> 0",
+                         "j[2, 0] -> x^" + "9" * 5000 + "*j[1, 0]",
+                         "j[2, 0] -> j[" + "9" * 5000 + ", 0]"):
+                with self.subTest(rule_prefix=rule[:25]):
+                    with self.assertRaisesRegex(Unsupported, "integer token"):
+                        self.run_view(fixture(rule))
+        finally:
+            sys.set_int_max_str_digits(previous)
+
     def test_zero_rule_and_master_identity_need_no_rule(self):
         raw = fixture("j[2, 0] -> 0")
         report, _ = self.run_view(raw, contract(raw, [[1, 0], [2, 0]]))

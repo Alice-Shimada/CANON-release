@@ -89,8 +89,10 @@ For integral-basis discovery from a family (UT or canonical), choose a small
 proposal from the geometry and current evidence: selected dots and normalization,
 a justified Gram construction, or a bounded DlogBasis-refine search. Integral
 proposals continue through candidate IBP reduction and the same checks.
-CANONICA supplies rational DE transformations and Libra the implemented
-single-variable route when a direct-DE approach is justified. A supplied-DE-only
+CANONICA supplies rational DE transformations. Libra supplies a single-variable
+route and an explicit finite multivariable direction sequence followed by shared
+regulator factorization. These are complementary direct-DE constructions within
+the same core and full-system checks. A supplied-DE-only
 task can start there. With explicitly normalized UT seeds, a declared alphabet
 and a rational one-variable cut, [INITIAL](methods/initial/SKILL.md) also supplies
 a bounded core candidate through `methods/initial/run.wls` with explicit

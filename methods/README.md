@@ -17,19 +17,16 @@ sectors.
 
 ## Routing boundary
 
-A card describes one bounded operation on declared scientific inputs, not all
-capabilities of a package. The workflow selects the unfinished operation; its
-step skill selects an applicable card. The card returns an artifact or a precise
-limit to that caller. It does not schedule workers, accept tasks, or silently
-switch to another provider. A documented finite sequence such as Libra's
-`Fuchsify` and `FactorOut` may implement one operation.
+A card provides scientific background and the call contract for one bounded
+operation. The agent chooses from the goal, geometry and retained evidence;
+applicability examples and cost notes do not impose a provider order or extra
+trial. Input/output contracts, actual capability bounds, user limits and the
+named independent checks remain binding. Internal stages such as Libra's
+`Fuchsify` and `FactorOut` implement the selected operation.
 
-Read each card's role, activation conditions, input scope, permitted changes,
-attempt bounds, and output/checker together. Cards are alternatives only when
-those contracts fit the same unresolved operation. A passing provider diagnostic
-does not replace the named independent checker. A screen/checker can issue a
-scoped check result; a router only proposes an action. The
-[template](method-card-template/SKILL.md) describes these roles.
+Cards return artifacts or scoped limits, without scheduling workers, accepting
+tasks or silently switching providers. A provider diagnostic cannot replace its
+checker. The [template](method-card-template/SKILL.md) distinguishes these roles.
 
 The groups below describe workflow availability, not quality or package-wide
 support. Main methods remain subject to core-selection rules. Specialized cards
@@ -41,12 +38,12 @@ template contains no implemented scientific method.
 |---|---|---|
 | CANONICA core | Main direct-DE candidate provider | Current cut only; `core_candidates` go to `CHECK_CORE` |
 | CANONICA tail backend | Internal implementation of `SOLVE_TAIL`, not a second mode of the core card | Full cumulative transform goes to `CHECK_CANONICAL`; configuration follows the tail skill |
-| Libra core | Main direct-DE candidate provider | Single-variable rational cut; optional bounded normalization and automatic or explicit dependent-row strategy, then `CHECK_CORE` |
+| Libra core | Main direct-DE candidate provider | Single-variable rational cut with optional bounded normalization, or explicit multivariable direction sequence and joint coefficient factorization; then `CHECK_CORE` |
 | Libra structured repair | Specialized opt-in transformation provider | Frozen `1x1` prefix plus direct-sum `2x2` tail; `CHECK_STRUCTURED_REPAIR` |
 | INITIAL seeded core | Main direct-DE candidate provider with explicit normalized seeds | Rational one-variable cut, declared alphabet and finite derivative allocation; `CHECK_CORE` |
 | Prepared-basis router / tail screen | Specialized opt-in decision / independent screening | Separate contracts; neither calls a solver or authorizes unrestricted repair |
 
-Multivariable Libra automation, multivariable or elliptic INITIAL workflows,
+General multivariable Libra normalization and automatic direction search, multivariable or elliptic INITIAL workflows,
 and automatic UT seed/normalization discovery are not implemented. Upstream package
 capabilities alone do not extend an adapter's contract.
 
@@ -54,31 +51,31 @@ capabilities alone do not extend an adapter's contract.
 
 The diagram shows scientific artifact handoffs. The coordinator selects the
 next unfinished operation using the workflow entry; arrows do not imply an
-automatic scheduler. A defined-family search starts with the bounded integral
-proposal. DE preparation and candidate preparation use their own inputs; the
-proposal does not require the cut DE or candidate derivative `exact_strategy`.
-Direct-DE cards require the core-selection exception or an explicit request.
+automatic scheduler. [Core selection](../skills/canon-search-core/SKILL.md)
+chooses a bounded integral proposal or direct-DE construction from the goal,
+geometry and available inputs. DE and candidate preparation use their own inputs;
+an integral proposal does not require the cut DE or derivative `exact_strategy`.
 
 ```mermaid
 flowchart TD
     W["canon-workflow: completion, evidence and budget"] --> F["Defined family: PREPARE"]
     W -->|"Existing matching ALL_PASS"| H["Submit / review / accept / deliver"]
-    W --> X["Direct-DE exception or explicit request"]
-    F --> D["DlogBasis-refine: bounded integral proposals"]
+    W --> X["Core selection: direct-DE construction"]
+    F --> D["Selected bounded integral proposal"]
     F --> P["DISCOVER / master IBP / BUILD_CUT_DE"]
     D --> I["Prepare candidate derivatives / ReduceCandidateIBP"]
     I --> R["RouteCoreCandidates: independent rank pool"]
     P --> R
+    P --> S
     X --> S["SLICE_CUT_DE or supplied basis and cut"]
-    S --> C["CANONICA / Libra / epsilon-zero / seeded INITIAL: core proposals"]
+    S --> C["Selected direct-DE card: core proposals"]
     R --> K["CHECK_CORE: ordered independent checks"]
     C --> K
     K -->|"CORE_PASS"| B["BUILD_FULL_DE: include accepted lower prefix"]
     K -->|"Input error"| E["Correct input; repair is not eligible"]
-    K -->|"Valid pool fails / budget ends"| M["Core selection: next applicable bounded method"]
+    K -->|"Valid pool fails / finite candidate limit"| M["Core selection: changed bounded hypothesis"]
     M --> C
-    M --> G["Gram guidance: explicit geometry/contact hypothesis"]
-    G --> I
+    M --> D
     B --> T["SOLVE_TAIL: complete sector transform"]
     T --> Q["CHECK_CANONICAL: full sector and prefix"]
     Q --> A["COMMIT_SECTOR / NEXT_SECTOR"]
@@ -88,7 +85,8 @@ flowchart TD
 ```
 
 CANONICA's core card configures one recursive or directed-block core attempt.
-Libra can explicitly prepend bounded integer-offset normalization. INITIAL
+Libra can explicitly prepend bounded single-variable integer-offset normalization
+or take a finite multivariable direction sequence with joint factorization. INITIAL
 consumes a small explicitly normalized seed set and returns the same core
 artifact. These are choices inside SEARCH_CORE. The CANONICA
 backend used internally by `SOLVE_TAIL` has a separate option contract. A
@@ -101,7 +99,7 @@ scientific acceptance. A passing core alone does not certify a full sector.
 | [DlogBasis-refine](dlogbasis/SKILL.md) | Defined-family integral proposals; `PROPOSE_INTEGRAL_CANDIDATES` | `prepared_family`, family/sector identities, dimension and power-counting policies, budget, normalization, installed tool options | `integral_candidates`; candidate IBP bridge, `RouteCoreCandidates.wls`, then `CHECK_CORE` |
 | [Gram/off-cut guidance](gram/SKILL.md) | Supported Gram/numerator construction, cut/IBP rank mismatch, dimensional continuation, or off-cut correction | Actual family geometry, bounded numerator/contact hypothesis, and existing failure report when available | Manually constructed `integral_candidates`; same IBP/core/full-prefix gates. No standalone runner |
 | [CANONICA](canonica/SKILL.md) | Rational core transformation in one or more variables; `SEARCH_CORE` | `sector_basis`, `sector_cut_de`, package entry or Wolfram installation | `core_candidates`; `CHECK_CORE` |
-| [Libra](libra/SKILL.md) | Small rational one-variable core; `SEARCH_CORE` | `sector_basis`, `sector_cut_de`, package options; optional explicit dependent-row hierarchy | `core_candidates`; `CHECK_CORE` |
+| [Libra](libra/SKILL.md) | Small rational core; single-variable default or finite multivariable direction sequence; `SEARCH_CORE` | `sector_basis`, `sector_cut_de`, package options; optional explicit dependent-row hierarchy | `core_candidates`; `CHECK_CORE` |
 | [INITIAL](initial/SKILL.md) | One or a few normalized UT seeds for a rational one-variable core; `SEARCH_CORE` at `methods/initial/run.wls` | `sector_basis`, `sector_cut_de`, seed request, full seed rows or existing IBP bridge, normalization evidence, alphabet and component/budget options | `core_candidates`; `CHECK_CORE` |
 | [Epsilon-zero polynomial](epsilon-zero/SKILL.md) | Rational core regular at epsilon zero, with the card's finite polynomial ansatz; `SEARCH_CORE` | `sector_cut_de`, optional `declared_alphabet` and reconstruction prime | `core_candidates`; `CHECK_CORE` |
 | [Residue balances](residue-balance/SKILL.md) | One essential rational variable, optionally after exact homogeneous-scale separation; `DIAGNOSE_CORE`, `SEARCH_CORE` | `sector_basis`, `sector_cut_de`, optional finite bounds | Provisional `core_diagnosis` or `core_candidates`; candidates require `CHECK_CORE` |

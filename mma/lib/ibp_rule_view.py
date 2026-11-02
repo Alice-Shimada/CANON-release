@@ -31,11 +31,18 @@ class InputChanged(Unsupported):
     """A bound input changed; native loading must not use different bytes."""
 
 
+def integer_token(raw: bytes) -> int:
+    try:
+        return int(raw)
+    except ValueError as exc:
+        raise Unsupported("integer token exceeds the native reader's supported range") from exc
+
+
 def integral(raw: bytes, head: str, arity: int) -> tuple[int, ...]:
     match = INTEGRAL.fullmatch(raw.strip())
     if not match or match[1].decode() != head:
         raise Unsupported("expected explicit declared integral head")
-    indices = tuple(int(x) for x in match[2].split(b","))
+    indices = tuple(integer_token(x) for x in match[2].split(b","))
     if len(indices) != arity:
         raise Unsupported("integral arity mismatch")
     return indices
@@ -119,7 +126,7 @@ class RHS:
             return kind
         if value and value.isdigit():
             self.advance()
-            return "Z" if int(value) == 0 else "S"
+            return "Z" if not value.strip(b"0") else "S"
         if value == self.head:
             self.advance()
             self.take(b"[")
@@ -131,7 +138,7 @@ class RHS:
                     self.advance()
                 if not self.current or not self.current.isdigit():
                     raise Unsupported("noninteger integral index")
-                indices.append(sign * int(self.current))
+                indices.append(sign * integer_token(self.current))
                 self.advance()
                 if self.current != b",":
                     break
@@ -155,7 +162,7 @@ class RHS:
                 self.advance()
             if not self.current or not self.current.isdigit():
                 raise Unsupported("only integer powers supported")
-            exponent = sign * int(self.current)
+            exponent = sign * integer_token(self.current)
             self.advance()
             if kind == "L" and exponent != 1:
                 raise Unsupported("nonlinear master power")
