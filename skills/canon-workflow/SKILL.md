@@ -44,6 +44,17 @@ user request. Delivery records the methods used, applicable route exceptions and
 any unmet workflow requirements. Unused optional methods are normal; only an
 unmet applicable requirement is a workflow deviation.
 
+### Method citations in the final report
+
+Every final report, including a partial or inconclusive result, must name each
+scientific method and package used and give its GitHub repository or a primary
+literature citation (DOI, arXiv identifier or full bibliographic reference).
+For a method implemented in CANON, a GitHub link to its code at the revision
+used is sufficient. Use the method cards, [method credits](../../CREDITS.md)
+and upstream citation guidance to identify the sources. Before delivery, the
+coordinator checks the entries against the run record and identifies methods
+inherited from reused results. Include the references in the user-facing report.
+
 ## 2. Locate the first unfinished step
 
 Execute named steps through `python3 run_step.py INPUT.json OUTPUT_DIR`, passing

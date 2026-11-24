@@ -66,9 +66,9 @@ After `PASS/ALL_PASS`, finish the existing task: the worker registers the final
 basis, DE and receipt, submits, and returns; the coordinator reviews, accepts
 when the criteria are met, delivers, and stops this scope. Review uses the
 existing receipt. Additional verification requires a specific unresolved check,
-changed inputs or implementation, or a separate user request. Delivery records
-the methods used and any unmet applicable workflow requirements; optional
-methods need not be exhausted.
+changed inputs or implementation, or a separate user request. The coordinator
+must include the [method citations](../canon-workflow/SKILL.md#method-citations-in-the-final-report)
+in the final report and record any unmet applicable workflow requirements.
 Apply the [workflow completion rule](../canon-workflow/SKILL.md) if only a subset
 was requested/completed, the inputs changed, or the user separately requested
 another deliverable.
