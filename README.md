@@ -5,6 +5,8 @@
 
 # CANON
 
+[Chinese (Simplified)](README.zh-CN.md)
+
 **Agent-assisted construction of canonical differential equations for Feynman integrals.**
 
 CANON combines scientific reasoning with explicit Wolfram Language interfaces:
