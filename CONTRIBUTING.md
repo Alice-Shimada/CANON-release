@@ -1,6 +1,6 @@
 # Contributing
 
-Use the repository's [issue tracker](https://github.com/Alice-Shimada/CANON/issues)
+Use the repository's [issue tracker](https://github.com/Alice-Shimada/CANON-release/issues)
 for bugs and usage questions, and pull requests for proposed changes.
 
 For a bug report, include the CANON revision, the relevant input or a small

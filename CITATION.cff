@@ -32,8 +32,8 @@ authors:
     given-names: Yang
     orcid: "https://orcid.org/0000-0001-9151-8486"
     website: "https://inspirehep.net/authors/1062340"
-repository-code: "https://github.com/Alice-Shimada/CANON"
-url: "https://github.com/Alice-Shimada/CANON"
+repository-code: "https://github.com/Alice-Shimada/CANON-release"
+url: "https://github.com/Alice-Shimada/CANON-release"
 license: MIT
 keywords:
   - Feynman integrals
