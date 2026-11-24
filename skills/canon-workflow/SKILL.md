@@ -28,8 +28,8 @@ First match the result to the user's requested scope and current inputs.
 
 **Finish the handoff:** the worker registers the final artifacts, submits, and
 returns. The coordinator reviews the existing receipt, accepts when its criteria
-are met, delivers the result, and stops this scope. Pending acceptance is a
-review step.
+are met, [exports the final PDF report](#export-the-final-pdf-report), delivers
+the result, and stops this scope. Pending acceptance is a review step.
 
 A task completed for diagnostic or partial evidence certifies only its stated
 criteria; it does not close an unresolved scientific gate. The coordinator
@@ -44,6 +44,23 @@ user request. Delivery records the methods used, applicable route exceptions and
 any unmet workflow requirements. Unused optional methods are normal; only an
 unmet applicable requirement is a workflow deviation.
 
+### Export the final PDF report
+
+At report export the coordinator must generate a PDF and include a link or path
+to it in the final handoff. This applies to completed, partial, and inconclusive
+results, including retrospective reports based on existing artifacts.
+
+The PDF must contain a sector-by-sector method summary in the recorded sector
+order. Give each identified sector in the requested scope its own entry,
+including unresolved sectors and sectors that share a method. State the sector
+ID, the method actually used or attempted, the sector-specific construction or
+normalization, and the validation status and scope. For reused constructions,
+name the source family and sector and briefly describe the adaptation. When
+the records are incomplete, identify the missing information.
+
+Use the saved run records and receipts for retrospective reports. Before delivery,
+verify that the PDF opens and visibly includes an entry for every sector in scope.
+
 ### Method citations in the final report
 
 Every final report, including a partial or inconclusive result, must name each
@@ -53,7 +70,7 @@ For a method implemented in CANON, a GitHub link to its code at the revision
 used is sufficient. Use the method cards, [method credits](../../CREDITS.md)
 and upstream citation guidance to identify the sources. Before delivery, the
 coordinator checks the entries against the run record and identifies methods
-inherited from reused results. Include the references in the user-facing report.
+inherited from reused results. Include the references in the exported PDF.
 
 ## 2. Locate the first unfinished step
 

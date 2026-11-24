@@ -67,8 +67,10 @@ basis, DE and receipt, submits, and returns; the coordinator reviews, accepts
 when the criteria are met, delivers, and stops this scope. Review uses the
 existing receipt. Additional verification requires a specific unresolved check,
 changed inputs or implementation, or a separate user request. The coordinator
-must include the [method citations](../canon-workflow/SKILL.md#method-citations-in-the-final-report)
-in the final report and record any unmet applicable workflow requirements.
+must [export the final PDF report](../canon-workflow/SKILL.md#export-the-final-pdf-report)
+with the sector-by-sector method summary and
+[method citations](../canon-workflow/SKILL.md#method-citations-in-the-final-report).
+Record any unmet applicable workflow requirements in that report.
 Apply the [workflow completion rule](../canon-workflow/SKILL.md) if only a subset
 was requested/completed, the inputs changed, or the user separately requested
 another deliverable.
