@@ -7,204 +7,91 @@
 
 [Chinese (Simplified)](README.zh-CN.md)
 
-**Agent-assisted construction of canonical differential equations for Feynman integrals.**
+CANON uses an AI agent to find a canonical basis for a family of Feynman integrals.
+Given a vector of master integrals $I$, it searches for a change of basis $J=T^{-1}I$ such that
 
-CANON combines scientific reasoning with explicit Wolfram Language interfaces:
-prepare an integral family, obtain IBP reductions and differential equations,
-propose basis transformations, repair lower-sector couplings, and check the
-complete result. An agent chooses and revises the approach; the scientific
-scripts compute and check the algebra.
+$$
+\mathrm{d}J = \epsilon \left(\sum_a R_a\,\mathrm{d}\log W_a\right) J .
+$$
 
-The workflow and method cards are independent of the agent host and model.
-They do not require a particular GPT model. Persistent research uses the local
-`statemng` MCP server and the host's native workers. The repository includes a
-working Codex integration; other hosts can use the documented MCP contract, but
-their native integrations have not been validated in this release.
+The letters $W_a$ depend on the kinematics, the residue matrices $R_a$ are constant,
+and $\epsilon$ is the dimensional regulator. Given boundary values, this equation can
+be integrated order by order in $\epsilon$.
 
-## Start here
+CANON works sector by sector. A basis that works within one sector may need to
+change when integrals with fewer propagators are included. The agent can try
+different integral numerators or transform the differential equations directly.
+Independent algebra programs substitute the resulting transformation into the original
+equations and check the identity for every kinematic variable.
 
-- [Installation and minimum dependencies](docs/installation.md)
-- [Agent workflow and input preparation](docs/agent-workflow.md)
-- [Scientific components and custom packages](docs/components.md)
-- [Automatic physical derivatives](docs/physical-derivatives.md)
-- [Next-action routing for agents](skills/canon-workflow/SKILL.md)
-- [Saved examples](examples/README.md)
-- [Reading the canonical basis, alphabet, and logarithmic matrix](docs/results.md)
-- [Codex setup](docs/hosts/codex.md), for that host only
+## Read the results from the paper
 
-After configuring a host, give its main agent a request such as:
+The repository includes the canonical basis, alphabet and logarithmic matrix for
+each of the three examples in the paper. You can read them directly in Wolfram Language.
 
-```text
-Work in this CANON checkout. Read AGENTS.md and skills/canon-workflow/SKILL.md.
-Create a research task named triangle-demo using
-interfaces/family-spec.example.wl. Use the installed tools and resource
-budget I provide. Carry the family through the canonical workflow and
-return the basis, transformation, DE, alphabet, and result summary.
-Reuse accepted inputs and checker results when continuing the task.
+| Integral family | Master integrals | Sectors | Kinematic variables | Active letters |
+| --- | ---: | ---: | ---: | ---: |
+| [Off-shell double box with one internal mass](examples/double-box/) | 37 | 24 | 5 | 21 |
+| [Massless two-loop five-point pentabox](examples/pentabox/) | 61 | 46 | 5 | 24 |
+| [Three-loop family](examples/three-loop/) | 40 | 28 | 2 | 3 |
+
+```sh
+git clone https://github.com/Alice-Shimada/CANON-release.git
+cd CANON-release
 ```
 
-The [typed family example](interfaces/family-spec.example.wl) and its
-[PREPARE request](interfaces/prepare.example.json) use the supplied one-loop
-fixture. The user specifies the scientific problem and resources; the agent
-handles internal task commands and scientific files.
-
-For a first look without running a calculation, read a saved result in a fresh
-Wolfram session, with the checkout as the working directory:
+For example, open a fresh Wolfram session in the repository root and load the three-loop result.
 
 ```wl
 basis = Get["examples/three-loop/canonical-basis.wl"];
-alphabet = Get["examples/three-loop/alphabet.wl"];
-Atilde = Get["examples/three-loop/Atilde.wl"];
-{Length[basis], alphabet, Dimensions[Atilde]}
+letters = Get["examples/three-loop/alphabet.wl"];
+aTilde = Get["examples/three-loop/Atilde.wl"];
+
+{Length[basis], letters, Dimensions[aTilde]}
+(* {40, {s, u, 1 - u}, {40, 40}} *)
+
+Coefficient[aTilde, Log[W[1]]] === -3 IdentityMatrix[Length[basis]]
+(* True *)
 ```
 
-## Scientific scope
+The file `Atilde.wl` stores $\sum_a R_a \log W_a$. Here `W[1]` is $s$, and the
+coefficient of its logarithm is $-3$ times the identity. At fixed $u$, each basis
+integral therefore obeys $s\,\partial_s J_i=-3\epsilon J_i$. For the propagator
+order and normalization of each family, see the [example notes](examples/README.md).
 
-The current default prepared input consists of a family specification, ordered
-masters, and derivative operators for each variable. Native reducer projects or
-driver settings belong to the selected backend configuration. The agent can
-prepare these using available tools and explicit conventions; `PrepareFamily.wls`
-itself binds the supplied files. It is not a general compiler from an arbitrary
-list of propagators. Physical definitions, known masters/rules, and existing DEs
-should be supplied when available; see the [input guide](docs/agent-workflow.md).
+## Run CANON on an integral family
 
-Each step is selected through the [component manifest](components/default.json).
-An optional package can replace any subset of steps while keeping the published
-scientific inputs and outputs. The default scientific route is:
+The default setup uses Python 3.10+ and Wolfram Language with `wolframscript`.
+For integration-by-parts (IBP) reduction, configure a reducer such as Kira.
+To use the supplied Codex integration, open the checkout in a Local session and
+follow the setup guide. CANON saves completed sectors so you can resume later. [Installation](docs/installation.md) · [Codex setup](docs/hosts/codex.md)
 
-```text
-PREPARE → DISCOVER → IBP → IBP audit → ordered DE
-  → sector core proposal → CHECK_CORE → full-prefix construction and tail repair
-  → CHECK_CANONICAL → COMMIT_SECTOR → next sector → FINAL_CHECK
-```
+For a first run, give the agent the prepared one-loop triangle example. Sector 5 has two active propagators.
 
-The [IBP audit](INTERFACES.md#ibp-reduction-audit) checks the unified reduction
-against independently declared targets, masters and coefficient symbols.
-`BUILD_CUT_DE` and candidate reduction include it before consumption; standalone
-`mma/CheckIBPReduction.wls` checks imported or delivered reductions. It verifies
-structural integrity and coverage; the subsequent mathematical gates are still required.
-The producer binds its passing receipt to the final file. Consumers check file
-identity and current target/master requirements, avoiding repeated structural
-audits or per-rule fingerprint scans of an unchanged accepted artifact.
+> Find a canonical basis for sector 5 of the triangle family in `interfaces/prepare.example.json`.
+> Call the task `triangle-sector-5-example`. Use the supplied master `tri[1,0,1]` in `d = 2 - 2 eps`.
+> Use one reducer thread for up to 30 minutes. Return the PDF report. If the basis and equation pass the checks, include them too.
 
-For integral-basis discovery from a family (UT or canonical), choose a small
-proposal from the geometry and current evidence: selected dots and normalization,
-a justified Gram construction, or a bounded DlogBasis-refine search. Integral
-proposals continue through candidate IBP reduction and the same checks.
-CANONICA supplies rational DE transformations. Libra supplies a single-variable
-route and an explicit finite multivariable direction sequence followed by shared
-regulator factorization. These are complementary direct-DE constructions within
-the same core and full-system checks. A supplied-DE-only
-task can start there. With explicitly normalized UT seeds, a declared alphabet
-and a rational one-variable cut, [INITIAL](methods/initial/SKILL.md) also supplies
-a bounded core candidate through `methods/initial/run.wls` with explicit
-`SEARCH_CORE`. Its original fixed official ladder flow is retained as
-[reference validation and compatibility](methods/initial/reference/README.md).
-Optional Libra normalization and CANONICA finite T/D ansatz controls extend the
-existing core/tail nodes; subsector tail checkpoints can resume bounded work.
-The [routing skill](skills/canon-workflow/SKILL.md) explains when
-to change routes and retain useful method experience; an exhaustive numerator/dot search is not required. The
-[method cards](methods/README.md) describe their actual scopes.
+For your own family, specify the propagators, kinematics, dimension, sectors of
+interest and computing budget. If you already have differential equations, supply
+the matrices together with the order of the master integrals and variables. [Input guide](docs/agent-workflow.md#what-to-provide) · [Available methods](methods/README.md)
 
-A successful final check returns a canonical basis and DE in the declared
-integral space and dlog alphabet. Current checks include the exact gauge identity,
-symbolic flatness, epsilon factorization, and shared constant residue matrices.
-The tail solver proposes pole factors and supported quadratic-root letters from
-the DE; an input alphabet is optional. Explicit algebraic letters can also be
-declared as exact Wolfram expressions. A bounded search
-failure means that the selected search did not find a solution.
+You can also call individual steps from the command line with
+`python3 run_step.py INPUT.json OUTPUT_DIR`. [Step interfaces](INTERFACES.md#common-invocation)
 
-The implementation does not guarantee a canonical basis for every family,
-complete automatic algebraic-letter discovery, master completeness, or physical
-boundary constants. A canonical DE alone does not fix all UT normalizations.
-The [method cards](methods/README.md) describe the implemented methods and their scope.
+A successful calculation writes `canonical-basis.wl` with the basis and its
+transformation, and `canonical-de.wl` with the equation matrices, alphabet and
+residues. [Output files](docs/results.md)
 
-## Examples
+The agent returns a PDF even when some sectors remain unresolved. The report gives each
+sector its own entry covering the methods tried, the choice and normalization of
+the integrals, and which checks passed. It cites the GitHub repository or a
+primary paper for every method and package used. [Report requirements](skills/canon-workflow/SKILL.md#export-the-final-pdf-report)
 
-The three primary examples in the AI4UT manuscript are distributed as plain
-Wolfram expressions. Each family directory contains exactly three files:
-`canonical-basis.wl`, `alphabet.wl`, and `Atilde.wl`.
+## Authors and citation
 
-| Family | Masters / sectors | Variables / active letters |
-| --- | --- | --- |
-| [Off-shell double box with one internal mass](examples/README.md#off-shell-double-box) | 37 / 24 | 5 / 21 |
-| [Massless two-loop five-point pentabox](examples/README.md#massless-pentabox) | 61 / 46 | 5 / 24 |
-| [Three-loop family](examples/README.md#three-loop-family) | 40 / 28 | 2 / 3 |
+Dongshan Jian, Yuanche Liu, Yanqing Ma, Boxuan Shi, Yu Wu, Zihao Wu and Yang Zhang.
 
-The matrices obey `d J = eps d Atilde . J`, with
-`Atilde = Sum[R[a] Log[W[a]], {a, Length[alphabet]}]` and
-`W[a] = alphabet[[a]]`. Rows and columns follow the supplied basis order.
-The [example guide](examples/README.md) defines the integrals, kinematics and
-normalizations. The [result guide](docs/results.md) shows how to read the files.
+When citing CANON, include the version or commit you used. [Software citation](CITATION.cff) · [Method references](CREDITS.md)
 
-These are the final saved local results used for the article. Each has an
-existing `FINAL_CHECK: PASS / ALL_PASS` covering the exact global gauge identity,
-symbolic flatness and common constant residues. Release preparation exports the
-saved expressions and checks their readback; it does not rerun the families.
-
-## Interfaces and extension
-
-Science lives in `mma/`, proposals in `methods/`, and step instructions in
-`skills/`. [INTERFACES.md](INTERFACES.md) documents the request/result contracts.
-The runner selects one component from the request's `step`. A stateless call is:
-
-```sh
-python3 run_step.py interfaces/prepare.example.json runs/triangle-prepare
-```
-
-Use a fresh output directory. Relative artifact paths are resolved from their
-declaring JSON; family-spec resources are resolved from the spec. Supply tool
-entries and thread budgets through the documented task parameters or environment.
-Use `--components /path/to/package/components.json` for a custom package, and
-`--method libra` (for example) when selecting a `SEARCH_CORE` method.
-
-Supported workflows compose these interfaces with mathematical inputs and JSON
-settings. `PREPARE_REQUEST` binds producer artifacts into consumer requests;
-`PREPARE_REDUCTION_TARGETS` prepares symbolic derivative targets for the chosen
-reducer. Native setup, solve and export programs can be listed as ordered argv
-commands. See [composition](docs/components.md#binding-requests-without-a-glue-program)
-and the [scalar JSON workflow example](interfaces/examples/scalar-workflow/README.md).
-
-`--describe` shows the chosen command and instructions without executing it.
-Repeat `--components` to compose packages, or use a manifest's relative `extends`
-list. `--defaults` restores the original selection. Packages are reread at each
-step invocation and may live outside this checkout. Their optional `workflow`
-instructions describe additional routes and scoped completion checks.
-The [parameterization package](components/parameterization/README.md) supports
-user-defined vector and scalar-product charts, including twistor coordinates,
-independently of the selected reducer. A profile can select `DISCOVER`,
-`REDUCE_IBP` and `BUILD_CUT_DE` from different providers with per-step `from`
-references. See the [mixed profile](components/profiles/mixed-reducers.json) and
-the [Kira adapter](components/reducers/kira/README.md); Blade, FIRE7 and NeatIBP
-adaptation packages document their own native execution/export requirements.
-Optional [dlog reconstruction](components/dlog-reconstruction/README.md) from
-caller-supplied samples and
-[local execution/notification](components/local-jobs/README.md) packages can be
-selected independently. Optional [batch sector slicing](components/batch-sector-cuts/README.md)
-reuses an existing ordered DE. [Construction arithmetic](docs/construction-arithmetic.md)
-and the [FLINT final checker](components/flint-final/README.md) provide explicit
-exact-arithmetic choices; their native executables are installed separately.
-The default providers remain available without selecting these packages.
-
-The agent owns planning and acceptance. `statemng` stores research tasks and
-artifacts in `.state-management/<task-name>/`; it does not choose scientific
-methods. See [AGENTS.md](AGENTS.md) and the
-[persistent-research skill](.agents/skills/persistent-scientific-research/SKILL.md).
-
-External source snapshots and their own licenses are in [external/](external/README.md),
-with revisions in [sources.json](external/sources.json). Install only the programs
-needed by the selected route.
-
-## Citation and development
-
-Authors, in alphabetical order by family name: Dongshan Jian, Yuanche Liu,
-Yanqing Ma, Boxuan Shi, Yu Wu, Zihao Wu, and Yang Zhang.
-
-Use [CITATION.cff](CITATION.cff) and identify the version or commit used. Author
-identifiers and method references are listed in [CREDITS.md](CREDITS.md).
-CANON-owned code and documentation use the [MIT license](LICENSE); external
-components retain their own licenses.
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for reporting problems and proportionate
-checks, and [CHANGELOG.md](CHANGELOG.md) for the release draft. The saved examples
-are not an automatic test suite.
+CANON is distributed under the MIT license. Bundled external packages carry their own licenses. [CANON license](LICENSE) · [External packages](external/README.md)
